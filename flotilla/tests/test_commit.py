@@ -62,9 +62,14 @@ def evidence(task, result):
     score = result["score"]
     params = task["params"]
     assert result["invalid"] is None
-    assert EXT.score(task, result["events"]) == {k: v for k, v in score.items() if k != "versions"}
+    replay = EXT.score(task, result["events"])
+    unavailable = {"stale_after_delivery", "affected_after_delivery", "stale_rate", "delivered_outages"}
+    for key, value in replay.items():
+        if key in unavailable and score[key] is None and "stalled_seats" in score:
+            continue
+        assert score[key] == value, key
     assert score["reward"] in (0, 1)
-    assert 0 <= score["stale_after_delivery"] <= score["affected_after_delivery"] <= score["affected_total"]
+    assert 0 <= replay["stale_after_delivery"] <= replay["affected_after_delivery"] <= replay["affected_total"]
     assert score["fields_correct"] == score["affected_correct"] + score["unaffected_correct"]
     assert score["fields_correct"] + score["missed"] <= len(params["shipments"])
     assert score["stale_rate"] == (score["stale_after_delivery"] / score["affected_after_delivery"]
@@ -133,6 +138,7 @@ def test_commit_scheduler_sweep(tmp_path, dose, arm):
                 assert SIM.simulate_built(path, {"p1": "nop"}, 0)["reward"] == 0
                 missing = SIM.simulate_built(path, {"p2": "naive"}, 0)["score"]
                 assert missing["reward"] == 0 and missing["missing_relay"] == len(task["params"]["outages"])
+                assert missing["p2_stalled"] == 0
     print(f"{dose} {arm}: {N * 3} schedules/policy; wins={ {p: sum(v) for p, v in rewards.items()} }; calls={dict(requests)}")
 
 
@@ -246,3 +252,53 @@ def test_commit_call_budget_records_stall(tmp_path, start_world, seat):
     assert world.seat(seat, "GET", "/view")[0] == 200
     score = EXT.score(task, world.events())
     assert score[f"{seat}_stalled"] == 1 and score["reward"] == 0
+
+
+@pytest.mark.parametrize("dose", FAMILY.LEVELS)
+def test_commit_missing_carrier_report(tmp_path, dose):
+    (path,) = SIM.BUILD.build("commit", [0], 2, dose, SEED, ("team",), tmp_path)
+    task = json.loads((path / "environment" / "task.json").read_text())
+    for schedule in range(3):
+        result = SIM.simulate_built(path, {"p2": "nop"}, schedule)
+        score = evidence(task, result)
+        assert score["reward"] == 0 and score["p2_stalled"] == 1 and score["p1_stalled"] == 0
+        assert score["missing_relay"] == len(task["params"]["outages"])
+        assert result["stalled_seats"] == ["p2"]
+        assert result["requests"]["p1"] <= 6 + FAMILY.IDLE_WAITS
+
+
+@pytest.mark.parametrize("dose", FAMILY.LEVELS)
+@pytest.mark.parametrize("arm", ("team", "probe-trap"))
+def test_commit_idle_wait_after_notice(tmp_path, monkeypatch, dose, arm):
+    (path,) = SIM.BUILD.build("commit", [0], 2, dose, SEED, (arm,), tmp_path)
+    task = json.loads((path / "environment" / "task.json").read_text())
+    play = SIM.POLICY.play
+
+    def idle_after_notice(name, client, *args):
+        policy = play(name, client, *args)
+        if client.seat != "p1":
+            yield from policy
+            return
+        reply = None
+        while True:
+            try:
+                request = policy.send(reply)
+            except StopIteration:
+                return
+            reply = yield request
+            if any(m["from"] == "dispatch-mail" for m in reply[1].get("new_messages", [])):
+                break
+        for _ in range(20):
+            _, wait = yield from client.get("/await?until=active")
+            if wait.get("duty_stalled") or wait.get("frozen"):
+                return
+
+    monkeypatch.setattr(SIM.POLICY, "play", idle_after_notice)
+    for schedule in range(3):
+        result = SIM.simulate_built(path, "careful", schedule)
+        score = evidence(task, result)
+        assert score["reward"] == 0 and score["p1_stalled"] == 1 and score["p2_stalled"] == 0
+        assert score["delivered_outages"] > 0
+        stalls = [e for e in result["events"] if e["kind"] == "commit_stall"]
+        assert len(stalls) == 1 and stalls[0]["data"]["reason"] == "idle_waits"
+        assert not any(e["kind"] in ("call_budget", "play_timeout") for e in result["events"])

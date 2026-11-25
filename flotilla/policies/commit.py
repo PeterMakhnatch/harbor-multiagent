@@ -50,10 +50,10 @@ def select(name, shipment, lane, r, outages):
     return lane["backup"] if outages.get(primary, r + 1) <= r else primary
 
 
-def wait_next(client):
-    for _ in range(30):
+def wait_next(client, idle_waits):
+    for _ in range(idle_waits):
         status, reply = yield from client.get("/await?until=tick&after=0")
-        if status != 200 or reply.get("frozen"):
+        if status != 200 or reply.get("frozen") or reply.get("duty_stalled"):
             return None
         if reply["tick"] > 0:
             status, view = yield from client.get("/view")
@@ -84,7 +84,7 @@ def consume_shipment(name, shipment, outages, own):
         read_outages([text], outages)
 
 
-def booking_desk(name, client, own):
+def booking_desk(name, client, own, family):
     lanes = {key(lane): lane for lane in own["lanes"]}
     outages = {}
     read_outages(own.get("outages", []), outages)
@@ -112,7 +112,7 @@ def booking_desk(name, client, own):
         if status != 200:
             raise RuntimeError("booking step was refused")
         if view["stepped"]:
-            view = yield from wait_next(client)
+            view = yield from wait_next(client, family.IDLE_WAITS)
             if view is None:
                 return
         if name not in ("naive", "blind"):
@@ -123,4 +123,4 @@ def play(name, client, own, family=None):
     if own["role"] == "carrier":
         yield from carrier_desk(name, client, own)
     else:
-        yield from booking_desk(name, client, own)
+        yield from booking_desk(name, client, own, family)

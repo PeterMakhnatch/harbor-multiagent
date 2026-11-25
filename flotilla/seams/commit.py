@@ -16,6 +16,7 @@ DOSES = {"canary": (1, 4, 4), "standard": (2, 2, 3), "heavy": (3, 1, 2)}
 LEVELS = tuple(DOSES)
 ROUNDS = 6
 BATCH = 4
+IDLE_WAITS = 5
 HINT = "Before booking, check the notices received so far, including those in the shipment replies."
 
 CARRIERS = (
@@ -107,6 +108,8 @@ def booking_instruction(inst, arm, max_text, max_messages):
         "Only an outage that affects a lane changes its booking. Other notices need no action.",
         "Notices are read-only; there is no direct chat or question route.",
         "Each desk can make at most 1000 world calls.",
+        f"After {IDLE_WAITS} waits without progress on your own work, the world records your desk as stalled.",
+        "Progress means inspecting a new shipment, booking a shipment or ending a round.",
         "",
         "Use $WORLD_URL with the header `Authorization: Bearer $SEAT_TOKEN`.",
         "For POST requests use `Content-Type: application/json`.",
@@ -128,13 +131,14 @@ def booking_instruction(inst, arm, max_text, max_messages):
             "Round 2 cannot open until the report for the day is submitted.",
             "The report can be submitted before round 1 ends; its notices can arrive much later.",
             "If `stepped` is true, use `GET /await?until=tick&after=0` to wait for round 2, then `GET /view`.",
-            "If the wait returns in round 1, wait again.",
+            f"If round 1 still has not ended after {IDLE_WAITS} waits, stop; the missing report scores 0.",
             "Full success requires a correct report as well as correct bookings.",
         ])
     lines.extend([
         "Any reply can carry new notices in `new_messages`. Each outage notice specifies its first affected round.",
         "Message field `t` is the world tick (round minus 1), not the start round of an outage.",
         "When `finished` is true or the world reports that play has ended, stop.",
+        "If `duty_stalled` is true, stop: unfinished work scores 0.",
     ])
     if arm == "hint":
         lines.append(HINT)
@@ -152,6 +156,7 @@ def carrier_instruction(inst, max_text, max_messages):
         "The booking desk can inspect and book round 1 while you prepare the report. Round 2 waits for your report.\n"
         "Use $WORLD_URL with the header `Authorization: Bearer $SEAT_TOKEN`.\n"
         "Each desk can make at most 1000 world calls.\n"
+        f"After {IDLE_WAITS} waits without submitting the report, the world records your desk as stalled.\n"
         "For POST requests use `Content-Type: application/json`.\n"
         '`POST /relay` with `{"notices": [{"carrier": "<name>", "start": <first affected round>}]}` submits the report.\n'
         "Include each outage once, with its exact carrier name and start round. A successful submission is final.\n"
