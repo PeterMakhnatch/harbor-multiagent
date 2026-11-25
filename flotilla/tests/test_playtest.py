@@ -109,6 +109,9 @@ elif mode == 'budget':
             urllib.request.urlopen(request).read()
         except urllib.error.HTTPError:
             pass
+elif mode == 'linger':
+    runpy.run_path(solution, run_name='__main__')
+    time.sleep(30)
 """
 
 
@@ -221,6 +224,31 @@ def test_mixed_seat_commands_and_models(tmp_path):
     assert str(second) in result["seats"]["p2"]["command"]
     invalid = play(tmp_path, task, extra=("--model-label", "p9=bad"), name="bad-override", check=False)
     assert invalid.returncode == 2 and "unknown or non-external seat p9" in invalid.stderr
+
+
+def test_grace_reaps_lingering_seats_without_changing_valid_score(tmp_path):
+    task = build(tmp_path, "talk")
+    out, result = play(tmp_path, task, "linger", extra=("--grace-sec", "0.4"))
+    assert_evidence(task, out, result, 1)
+    assert result["valid"] and not result["timed_out"]
+    assert result["stop_reason"] == "world frozen; grace expired"
+    assert result["seat_failures"] == {}
+    for seat in result["seats"].values():
+        assert seat["stopped_after_freeze"] and not seat["timed_out"]
+        assert seat["exit_code"] < 0 and 0.4 <= seat["seconds"] < 10
+
+
+def test_frozen_world_does_not_launch_pending_seat(tmp_path):
+    task = build(tmp_path, "team")
+    config = task / "task.toml"
+    config.write_text(config.read_text().replace("[agents.p2]\n", '[agents.p2]\nstart_after = ["p1"]\n'))
+    _, result = play(tmp_path, task, "fault", extra=("--grace-sec", "0.4"), expected_exit=1)
+    assert not result["valid"]
+    assert result["invalid_reason"] == "extension_error"
+    assert result["stop_reason"] == "world frozen before seats started"
+    pending = result["seats"]["p2"]
+    assert pending["stopped_after_freeze"] and pending["started_sec"] is None
+    assert pending["world_calls"] == 0 and pending["exit_code"] is None
 
 
 def test_selected_seat_uses_careful_not_built_naive(tmp_path):
