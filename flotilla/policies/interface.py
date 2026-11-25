@@ -99,6 +99,8 @@ def select(name, client, own, group, choices, state, messages, family):
     g = group["name"]
     if g in choices:
         return choices[g]
+    if g in state.get("writer_settings", {}):
+        return tuple(state["writer_settings"][g])
     fallback = guess(name, own, group, family)
     if name in ("naive", "lone", "focal", "blind"):
         return fallback
@@ -125,7 +127,8 @@ def play(name, client, own, family):
     if own["role"] == "all":
         choices = yield from publish_catalogs(name, client, own["desks"], family)
     counts, complete = yield from read_work(client)
-    if own["messaging"] and name not in ("naive", "lone", "focal", "blind"):
+    coordinate = own["messaging"] and not own.get("imports_settings") and name not in ("naive", "lone", "focal", "blind")
+    if coordinate:
         for group in own["groups"]:
             if group["hidden"] or name == "ask":
                 status, _ = yield from client.post("/messages", {"to": group["desk"],
@@ -138,7 +141,7 @@ def play(name, client, own, family):
     desks = {g["desk"] for g in own["groups"]} - {"p1", "export"}
     state = yield from wait_status(client, lambda reply: desks <= set(reply["finished"]))
     messages = []
-    if own["messaging"] and name not in ("naive", "lone", "focal", "blind"):
+    if coordinate:
         _, inbox = yield from client.get("/messages")
         messages = inbox["messages"]
     for group in own["groups"]:

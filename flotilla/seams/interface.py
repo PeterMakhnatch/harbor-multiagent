@@ -8,13 +8,14 @@ from itertools import combinations
 FAMILY = "interface"
 TITLE = "Replenishment batch"
 SEATS = {"canary": 3, "standard": 3, "heavy": 3}
-ARMS = ("solo", "solo-seam", "team", "team-nosaved", "team-hint", "probe-control", "probe-trap-key",
-        "probe-trap-unit", "probe-trap-key-hint")
-EXTRA_ARMS = ("silent", "team-parallel")
+ARMS = ("solo", "solo-seam", "team", "team-fullrecord", "team-nosaved", "hint", "probe-control",
+        "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint")
+EXTRA_ARMS = ("silent", "team-parallel", "solo-seam-key", "solo-seam-unit")
 TWINS = (("probe-control", "probe-trap-key"), ("probe-control", "probe-trap-unit"))
-PAIRS = (("team", "team-hint"), ("team", "team-nosaved"), ("probe-trap-key", "probe-trap-key-hint"))
-ARM_WORDS = ("probe-control", "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint",
-             "solo-seam", "team-hint", "team-nosaved", "team-parallel", "interface")
+PAIRS = (("team", "hint"), ("team", "team-nosaved"), ("probe-trap-key", "probe-trap-key-hint"))
+ARM_WORDS = ("probe-control", "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint", "hint",
+             "solo-seam", "solo-seam-key", "solo-seam-unit", "team-fullrecord", "team-nosaved", "team-parallel",
+             "interface")
 HINT = "Before fixing an order, obtain the desk's actual key form and unit from its visible catalog or a direct question."
 FORMS = ("SITE/ITEM", "ITEM/SITE", "SITE:ITEM", "ITEM:SITE", "SITE-ITEM", "ITEM-SITE")
 CONVENTIONS = tuple((form, unit) for form in FORMS for unit in ("each", "case"))
@@ -251,7 +252,7 @@ def extension_arm(inst, arm, max_text, max_messages):
     if arm not in (*ARMS, *EXTRA_ARMS):
         raise ValueError(f"unknown arm {arm}")
     solo = arm == "solo"
-    export = arm == "solo-seam"
+    export = arm.startswith("solo-seam")
     probe = arm.startswith("probe-")
     messaging = not (solo or export or arm == "silent")
     text_limit, message_limit = min(max_text, 1000), min(max_messages, 20)
@@ -264,12 +265,12 @@ def extension_arm(inst, arm, max_text, max_messages):
         group = original | {"hidden": arm == "team-parallel" or original["name"] in inst["hidden"]}
         if solo or export:
             group["desk"] = "p1" if solo else "export"
-        if probe:
+        if probe or arm in ("solo-seam-key", "solo-seam-unit"):
             convention = inst["buyer"]
             if group["name"] == inst["target"]:
-                if arm == "probe-trap-unit":
+                if arm in ("probe-trap-unit", "solo-seam-unit"):
                     convention = inst["unit_trap"]
-                elif arm in ("probe-trap-key", "probe-trap-key-hint"):
+                elif arm in ("solo-seam-key", "probe-trap-key", "probe-trap-key-hint"):
                     convention = inst["key_trap"]
             group["support"] = [inst["buyer"], inst["key_trap"], inst["unit_trap"]]
             group["saved"] = convention
@@ -281,11 +282,18 @@ def extension_arm(inst, arm, max_text, max_messages):
              "messaging": messaging}
     if arm == "team-nosaved":
         del buyer["saved"]
+    if arm == "team-fullrecord":
+        buyer["imports_settings"] = True
     if solo:
         buyer["desks"] = list(desks)
     common = common_text(groups, owner, messaging, text_limit, message_limit)
     briefings = {"p1": buyer}
-    instructions = {"p1": common + buyer_text(buyer, arm.endswith("-hint"))}
+    instructions = {"p1": common + buyer_text(buyer, arm == "hint" or arm.endswith("-hint"))}
+    if arm == "team-fullrecord":
+        instructions["p1"] += (
+            "\nThe order writer imports the catalog's committed setting after the desk finishes. "
+            "Its setting for each group is returned in `writer_settings` in work replies. "
+            "Use that setting for the group's order.\n")
     if solo:
         instructions["p1"] += desk_text(desks, messaging, solo)
     scripted = []
@@ -297,7 +305,8 @@ def extension_arm(inst, arm, max_text, max_messages):
             if probe:
                 scripted.append(seat)
     params = {"groups": groups, "buyer": inst["buyer"], "target": inst["target"], "stream": inst["stream"],
-              "prebuilt": prebuilt, "text_limit": text_limit, "message_limit": message_limit}
+              "prebuilt": prebuilt, "text_limit": text_limit, "message_limit": message_limit,
+              "fullrecord": arm == "team-fullrecord"}
     return {"params": params, "briefings": briefings, "instructions": instructions, "messaging": messaging,
             "push": messaging, "scripted_seats": scripted, "scripted_policies": dict.fromkeys(scripted, "careful")}
 

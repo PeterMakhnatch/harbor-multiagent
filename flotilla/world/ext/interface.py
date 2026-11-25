@@ -152,6 +152,14 @@ class Interface:
             if settings:
                 ids.append(self.receipt("export_view", seat, {"settings": settings}))
                 reply = {**reply, "export_settings": settings}
+        if seat == "p1" and self.params["fullrecord"]:
+            settings = {name: declared_convention(self.groups[name], file)
+                        for (kind, name), file in self.files.items()
+                        if kind == "catalog" and self.groups[name]["desk"] in self.done}
+            settings = {name: convention for name, convention in settings.items() if convention is not None}
+            if settings:
+                ids.append(self.receipt("writer_view", seat, {"settings": settings}))
+                reply = {**reply, "writer_settings": settings}
         if status == 200 and path == "/next":
             ids.append(self.receipt("work_events", seat, reply))
         if status == 200 and path == "/staging" and "group" in query:
@@ -284,8 +292,8 @@ def score(task, events):
                for message_id in e["data"]["ids"]}
         announcements = [m for m in messages if m["from"] == group["desk"] and declared_cat is not None
                          and announced(group, declared_cat, m["text"])]
-        export = any(e["kind"] == "export_view" and e["seat"] == "p1" and e["data"]["item"] in items
-                     and name in e["data"]["settings"] for e in before)
+        export = any(e["kind"] in ("export_view", "writer_view") and e["seat"] == "p1"
+                     and e["data"]["item"] in items and name in e["data"]["settings"] for e in before)
         exposed = bool(views) or export or any(m["id"] in ids for m in announcements)
         saved = tuple(params["buyer"])
         kept = declared_order == saved and declared_cat is not None and declared_cat != saved
@@ -307,7 +315,8 @@ def score(task, events):
     rest = [entry["valid"] for name, entry in details.items() if name != target]
     mean = sum(e["valid"] for e in details.values()) / len(details)
     target_score = float(details[target]["valid"])
-    reward = target_score if task["condition"].startswith("probe-") else mean
+    reward = target_score if task["condition"].startswith("probe-") or task["condition"] in (
+        "solo-seam-key", "solo-seam-unit") else mean
     missing = sorted({seat for seat in task["seats"] if not any(e["kind"] == "work_done" and e["seat"] == seat
                                                                for e in events)})
     return {"reward": reward, "group_mean": mean, "groups": details, "target": target_score,
