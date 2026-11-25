@@ -75,6 +75,13 @@ class Freight:
             self.record_action("commit_opening_ack", seat, {"round": self.round})
             self.advance()
             return {"round_ready": self.round > 1}
+        if seat == "p1" and self.stepped and not self.report_ready:
+            self.idle_waits[seat] += 1
+            if self.idle_waits[seat] >= self.host.family.IDLE_WAITS:
+                self.record_action("commit_stall", "p2", {"round": self.round, "reason": "report_waits"})
+                self.finish()
+                return {"duty_stalled": True}
+            return None
         if not self.pending(seat):
             return None
         self.idle_waits[seat] += 1
@@ -135,6 +142,7 @@ class Freight:
         if not self.stepped or not self.report_ready or not self.opening_acknowledged:
             return
         self.stepped = False
+        self.idle_waits["p1"] = 0
         self.fetched.clear()
         self.host.advance()
         if self.round > self.rounds:

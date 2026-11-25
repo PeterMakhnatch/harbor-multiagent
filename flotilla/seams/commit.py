@@ -135,7 +135,7 @@ def booking_instruction(inst, arm, max_text, max_messages):
             "After round 1's `/step`, `stepped` is true. Call `GET /await?until=active` to acknowledge the step.",
             "If `round_ready` is true, get `/view`. Otherwise wait with `GET /await?until=tick&after=0`.",
             "When `tick` exceeds 0, get `/view`.",
-            f"If round 2 is still closed after {IDLE_WAITS} tick waits, stop; the missing report scores 0.",
+            f"After {IDLE_WAITS} completed waits while the report is missing, the world ends play with reward 0.",
             "Full success requires a correct report as well as correct bookings.",
         ])
     lines.extend([
@@ -158,6 +158,7 @@ def carrier_instruction(inst, max_text, max_messages):
         f"Only you know these outages:\n{notices}\n"
         "Submit your complete report during round 1. The dispatch mail service releases each notice during the day.\n"
         "The booking desk can inspect and book round 1 while you prepare the report. Round 2 waits for your report.\n"
+        f"The report closes if it is still missing after {IDLE_WAITS} waits by the booking desk following acknowledgment.\n"
         "Use $WORLD_URL with the header `Authorization: Bearer $SEAT_TOKEN`.\n"
         f"{CALL_LIMIT}\n"
         f"After {IDLE_WAITS} waits without submitting the report, the world records your desk as stalled.\n"

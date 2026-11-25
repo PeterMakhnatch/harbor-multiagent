@@ -283,7 +283,8 @@ def test_commit_missing_carrier_report(tmp_path, dose):
         score = evidence(task, result)
         assert score["reward"] == 0 and score["p2_stalled"] == 1 and score["p1_stalled"] == 0
         assert score["missing_relay"] == len(task["params"]["outages"])
-        assert result["stalled_seats"] == ["p2"]
+        stalls = [e for e in result["events"] if e["kind"] == "commit_stall"]
+        assert [(e["seat"], e["data"]["reason"]) for e in stalls] == [("p2", "report_waits")]
         assert result["requests"]["p1"] <= 7 + FAMILY.IDLE_WAITS
 
 
@@ -322,3 +323,59 @@ def test_commit_idle_wait_after_notice(tmp_path, monkeypatch, dose, arm):
         stalls = [e for e in result["events"] if e["kind"] == "commit_stall"]
         assert len(stalls) == 1 and stalls[0]["data"]["reason"] == "idle_waits"
         assert not any(e["kind"] in ("call_budget", "play_timeout") for e in result["events"])
+
+
+@pytest.mark.parametrize("dose", FAMILY.LEVELS)
+def test_commit_missing_final_step(tmp_path, monkeypatch, dose):
+    (path,) = SIM.BUILD.build("commit", [0], 2, dose, SEED, ("team",), tmp_path)
+    task = json.loads((path / "environment" / "task.json").read_text())
+    play = SIM.POLICY.play
+
+    def no_final_step(name, client, *args):
+        policy = play(name, client, *args)
+        if client.seat != "p1":
+            yield from policy
+            return
+        reply = None
+        while True:
+            try:
+                request = policy.send(reply)
+            except StopIteration:
+                return
+            if request.path == "/step" and request.body["round"] == FAMILY.ROUNDS:
+                status, _ = yield from client.post("/book", request.body)
+                assert status == 200
+                return
+            reply = yield request
+
+    monkeypatch.setattr(SIM.POLICY, "play", no_final_step)
+    result = SIM.simulate_built(path, "careful", 0)
+    score = evidence(task, result)
+    assert score["fields_correct"] == 24 and score["missed"] == 0
+    assert score["reward"] == 0 and not score["closed"]
+    assert score["p1_stalled"] == 1 and score["p2_stalled"] == 0
+    assert score["stale_after_delivery"] is None
+
+
+@pytest.mark.parametrize("dose", FAMILY.LEVELS)
+def test_commit_late_carrier_report_cannot_blame_booking(tmp_path, monkeypatch, dose):
+    (path,) = SIM.BUILD.build("commit", [0], 2, dose, SEED, ("team",), tmp_path)
+    task = json.loads((path / "environment" / "task.json").read_text())
+    play = SIM.POLICY.play
+    notices = [{"carrier": o["carrier"], "start": o["start"]} for o in task["params"]["outages"]]
+
+    def late_report(name, client, *args):
+        if client.seat == "p2":
+            for _ in range(FAMILY.IDLE_WAITS):
+                yield from client.sleep(61)
+            status, _ = yield from client.post("/relay", {"notices": notices})
+            assert status == 409
+        else:
+            yield from play(name, client, *args)
+
+    monkeypatch.setattr(SIM.POLICY, "play", late_report)
+    result = SIM.simulate_built(path, "careful", 0)
+    score = evidence(task, result)
+    assert score["reward"] == 0 and score["p2_stalled"] == 1 and score["p1_stalled"] == 0
+    assert score["missing_relay"] == len(notices)
+    assert not any(e["kind"] == "commit_report" for e in result["events"])

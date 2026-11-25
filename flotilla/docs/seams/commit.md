@@ -117,7 +117,7 @@ Use the same secret seed for both oracle policy builds. One canary layout, 2 arm
 For `team` and `probe-trap`, careful expects 1 and naive expects 0. Compare every score field to the simulator.
 
 ```bash
-R=/tmp/seams1125/b3-commit
+R=/tmp/seams1125/b3-commit/final
 python3 flotilla/build_tasks.py --family commit --difficulty canary --instances 0 \
   --conditions team,probe-trap --out "$R/careful"
 python3 flotilla/build_tasks.py --family commit --difficulty canary --instances 0 --conditions team,probe-trap \
@@ -136,7 +136,8 @@ Compare all rewards and receipt evidence to the simulator. The simulator and ora
 A submitted report needs no separate done call. Each active desk has 1,000 counted calls, including refusals;
 `/await`, `/whoami`, and `/health` are free. Normal play uses at most 32 counted booking calls and 1 carrier call.
 Five completed waits without progress on a desk's own duty record a stall. A booking desk waiting for the carrier report
-stops after 5 tick waits. At verifier freeze or the play deadline, any still-pending duty records its desk's stall.
+stops when the world closes the report after 5 completed waits. At verifier freeze or the play deadline, any still-pending
+duty records its desk's stall.
 `p1_stalled`, `p2_stalled` and `missing_relay` distinguish these valid reward-0 outcomes from infrastructure failure.
 The deadline hook can score accepted bookings and report entries but has no post-write receipt log. Receipt metrics
 that it cannot determine are null; offline replay of `send`, `deliver` and `commit_book` recovers them.
