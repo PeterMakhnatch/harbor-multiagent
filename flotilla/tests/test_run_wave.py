@@ -2152,3 +2152,51 @@ def test_extension_outcomes_pair_valid_trials_and_count_flagged_omission(tmp_pat
     assert not RUN.primary_success({"accuracy": .79}, {"field": "accuracy", "gte": .8})
     with pytest.raises(ValueError):
         RUN.primary_success({}, "passed")
+
+
+def named_plan():
+    plan = staged_plan(range(9), [M1, M2], family="model")
+    def row(instances, arms, models=None):
+        return {"task_set": 0, "level": "standard", "instances": list(instances), "arms": arms,
+                "models": models or [M1, M2]}
+    plan["stages"] = [
+        {"name": "A", "cells": [row(range(3), [PROBE_ARMS[0]])],
+         "gate": {"type": "min_success", "controls": [{"task_set": 0, "arm": PROBE_ARMS[0], "k": 2}]}},
+        {"name": "B", "cells": [row(range(3, 7), PROBE_ARMS)],
+         "gate": {"type": "effect", "looks": [2, 4], "minimum": 2, "alpha": .05,
+                  "tests": [{"task_set": 0, "arms": PROBE_ARMS}]}},
+        {"name": "C", "cells": [row(range(7, 9), [PROBE_ARMS[1]])], "gate": {"type": "none"}},
+    ]
+    return plan
+
+
+@pytest.mark.parametrize("signal", [False, True])
+def test_named_gates_drop_failed_models_and_only_run_headline_after_effect(tmp_path, signal):
+    plan = named_plan()
+    def outcome(cell):
+        correct = cell["model"] == M1 and (not signal or cell["arm"] == PROBE_ARMS[0])
+        return correct, 1 if cell["instance"] == 3 and cell["arm"] == PROBE_ARMS[0] else 0
+    wave = Wave(tmp_path, plan, outcome)
+    assert wave.run()[-1]["reason"] == ("done" if signal else "gate")
+    stages = wave.summary()["stages"]
+    assert [stage["name"] for stage in stages] == (["A", "B", "C"] if signal else ["A", "B"])
+    assert [row["status"] for row in stages[0]["decisions"]] == ["pass", "fail"]
+    tests = stages[1]["tests"]
+    assert len(tests) == 1 and tests[0]["status"] == ("pass" if signal else "no-effect")
+    assert tests[0]["looks"][-1]["n"] == 4
+    assert tests[0]["looks"][-1]["b"] == (4 if signal else 0)
+    assert all(row["model"] == M1 for row in wave.starts() if row["instance"] >= 3)
+    count = len(wave.starts())
+    assert count == (17 if signal else 15)
+    assert wave.run()[-1]["reason"] == ("done" if signal else "gate")
+    assert len(wave.starts()) == count
+
+
+def test_named_incomplete_pairs_are_not_no_effect(tmp_path):
+    plan = named_plan()
+    plan["budget"]["max_invalid_streak"] = 20
+    wave = Wave(tmp_path, plan, lambda cell: (True, 2 if cell["instance"] == 3 else 0))
+    assert wave.run()[-1]["reason"] == "gate"
+    stage = wave.summary()["stages"][-1]
+    assert stage["name"] == "B"
+    assert {row["status"] for row in stage["decisions"]} == {"incomplete"}
