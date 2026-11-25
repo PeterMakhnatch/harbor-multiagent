@@ -81,7 +81,7 @@ class Week:
         reply = {"round": self.round, "day": self.day, "board": self.board}
         ids = []
         if self.role(seat, "A"):
-            reply["handbook"] = self.p["rules"]
+            reply["handbook"] = family.handbook(self.p["rules"])
             reply["amendments"] = [{"order": o["id"], "carrier": o["amendment"], "desk":
                                      family.desk_for(o["hub"], self.round, self.p["shift"])}
                                     for o in self.orders.values() if o["amendment"] and o["amend_close"] == self.round]
