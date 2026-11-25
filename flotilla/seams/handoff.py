@@ -263,7 +263,7 @@ def extension_arm(inst, arm, max_text, max_messages):
         instructions[seat] = common + "\n" + suffix + "\n"
         briefings[seat] = {"shift": index, "shifts": count, "cap": params["cap"], "continuous": arm == "solo",
                            "record_after_close": arm == "team-record"}
-    scripted = seats[:-2] if arm.startswith("probe-") else []
+    scripted = seats[:-2] + seats[-1:] if arm.startswith("probe-") else []
     return {"params": params, "briefings": briefings, "instructions": instructions, "messaging": False,
             "initial_active": seats[:1], "scripted_seats": scripted,
             "scripted_policies": dict.fromkeys(scripted, "careful")}

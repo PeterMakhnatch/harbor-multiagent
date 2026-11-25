@@ -124,6 +124,7 @@ def test_handoff_generator(dose):
             assert left["instructions"] == right["instructions"]
             assert left["briefings"] == right["briefings"]
             assert left["scripted_seats"] == right["scripted_seats"]
+            assert len(left["briefings"]) - len(left["scripted_seats"]) == 1
             changes = [(a["batch"], key) for a, b in zip(left["params"]["batches"], right["params"]["batches"])
                        for key in a if a[key] != b[key]]
             target = "hunt_target" if "hunt" in first else "ref_target"
