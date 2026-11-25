@@ -6,7 +6,8 @@ from collections import Counter
 
 def supports(name, variant):
     return (name in ("careful", "naive", "naive_reader", "lone", "lane_only", "hold_all", "uniform_random",
-                     "blind", "random", "copy", "append", "newest_only", "guess-mode", "guess-position", "renumber", "reorder",
+                     "blind", "random", "copy", "append", "newest_only", "guess-mode", "guess-position",
+                     "renumber", "reorder", "no-usage",
                      "lapse-10", "lapse-20", "lapse-30", "lapse-50")
             or name.startswith("constant-"))
 
@@ -36,7 +37,14 @@ def decode(family, own, reply, name):
         if name == "renumber" and not own.get("fullrecord"):
             ids = {r["id"] for r in rules}
             amendments = [r for r in amendments if r["id"] in ids]
-        rules = amendments if name == "newest_only" else family.merge_amendments(rules, amendments)
+        if name == "newest_only":
+            rules = amendments
+        elif name in ("careful", "no-usage") and not (
+                own.get("revision") or own.get("fullrecord") or family.USAGE_LINE in text.splitlines()):
+            changed = {r["id"] for r in amendments}
+            rules = [r for r in rules if r["id"] not in changed] + amendments
+        else:
+            rules = family.merge_amendments(rules, amendments)
     return home, rules
 
 
@@ -124,7 +132,13 @@ def note_to_send(family, own, home, rules, text, cap, name):
     if own.lapse_percent is not None:
         home = {p: lane for p, lane in home.items() if not own.lapse(own.lapse_percent, ["home", p])}
         rules = [r for r in rules if not own.lapse(own.lapse_percent, ["keep-rule", r["id"]])]
-    return render(home, rules)
+    output = render(home, rules)
+    if name == "careful" and not card and cap is not None and (
+            own["role"] == "planner" or family.USAGE_LINE in text.splitlines()):
+        with_usage = output + "\n" + family.USAGE_LINE
+        if len(with_usage) <= cap:
+            return with_usage
+    return output
 
 
 def play(name, client, own, family):

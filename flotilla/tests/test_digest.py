@@ -59,6 +59,16 @@ def test_generator_sweep(dose):
                 assert D.parse_manual(block) == ({}, amendments)
             rules = D.merge_amendments(rules, amendments)
         assert rules == inst["rules"]
+        implicit = D.extension_arm(inst, "team-implicit", 4000, 200)
+        cap = implicit["params"]["cap"]
+        assert len(D.USAGE_LINE.encode("ascii")) <= 80
+        assert cap == (13 * len(inst["reference"] + "\n" + D.USAGE_LINE) + 99) // 100 * 10
+        rules = inst["initial_rules"]
+        for amendments in inst["amendments"]:
+            rules = D.merge_amendments(rules, amendments)
+            note = D.note_text(home, rules) + "\n" + D.USAGE_LINE
+            assert len(note.encode("ascii")) <= cap
+            assert D.parse_note(note) == (home, rules)
         final = inst["batches"][-1]
         cells = Counter(row["cell"] for row in final)
         assert len(cells) == D.DOSES[dose].rules + 7 and len(final) == 24
@@ -382,3 +392,66 @@ def test_tolerant_rule_headings():
         "order_kept": True, "numbers_kept": False, "note_measure_flag": None}
     assert EXT.note_measures(params, "R58 something unclear") == {
         "order_kept": None, "numbers_kept": None, "note_measure_flag": "unreadable_rule_heading"}
+
+
+@pytest.mark.parametrize("dose", DOSES)
+def test_implicit_usage_pair(dose, tmp_path):
+    paths = build(tmp_path, dose, ("team", "team-implicit"))
+    built = [QA.load_task(paths[arm]) for arm in ("team", "team-implicit")]
+    assert not list(QA.check_twins(built))
+    views = [{seat: {k: v for k, v in task.view(seat).items() if k != "env.SEAT_TOKEN"}
+              for seat in task.seats} for task in built]
+    a, b = [task.task_json for task in built]
+    assert a["params"] | {"cap": b["params"]["cap"]} == b["params"]
+    for seat in built[0].seats:
+        explicit, implicit = [view[seat]["instruction"] for view in views]
+        own = json.loads(views[1][seat]["env.SEAT_BRIEFING"])
+        role = own["role"]
+        if role == "planner":
+            assert "manual" in own and D.NESTING in implicit and D.LATER_FACT in implicit
+            assert (D.ORDER_FACTS in implicit) == dose.endswith("-order")
+        else:
+            assert "manual" not in own and "revision" not in own
+            assert D.LATER_FACT in explicit and D.LATER_FACT not in implicit
+            assert D.ORDER_FACTS not in implicit and D.REPLACEMENT_FACT not in implicit
+            assert (D.NESTING in implicit) == (role == "worker")
+        assert D.USAGE_LINE not in implicit
+    first_relay = built[0].seats[1]
+    for field, text in (("instruction", views[1][first_relay]["instruction"] + "\nExtra text."),
+                        ("env.SEAT_BRIEFING", views[0][first_relay]["env.SEAT_BRIEFING"])):
+        changed = views[1] | {first_relay: views[1][first_relay] | {field: text}}
+        assert list(D.pair_difference("team", "team-implicit", views[0], changed))
+    planner = built[0].seats[0]
+    changed = views[1] | {planner: views[1][planner] | {"instruction": views[1][planner]["instruction"].replace(
+        f"at most {b['params']['cap']} bytes", f"at most {b['params']['cap'] + 10} bytes")}}
+    assert list(D.pair_difference("team", "team-implicit", views[0], changed))
+
+
+@pytest.mark.parametrize("dose", DOSES)
+def test_implicit_no_usage_policy(dose, tmp_path):
+    inst = setup_instance(dose)
+    paths = build(tmp_path, dose, ("team", "team-implicit"))
+    expected_ids = [r["id"] for r in inst["initial_rules"]]
+    for arm, path in paths.items():
+        for policy in ("careful", "no-usage"):
+            result = SIM.simulate_built(path, policy, 0)
+            assert result["invalid"] is None
+            lost_usage = arm == "team-implicit" and policy == "no-usage"
+            assert (result["reward"] < 1) == (lost_usage and dose.endswith("-order"))
+            ids = expected_ids.copy()
+            current = inst["initial_rules"]
+            seals = [e["data"] for e in result["events"] if e["kind"] == "note_seal"]
+            assert len(seals) == len(inst["amendments"])
+            for changes, seal in zip(inst["amendments"], seals, strict=True):
+                current = D.merge_amendments(current, changes)
+                if lost_usage and changes:
+                    ids.remove(changes[0]["id"])
+                    ids.append(changes[0]["id"])
+                home, rules = D.parse_note(seal["text"])
+                assert home == inst["home"]
+                assert rules == [next(r for r in current if r["id"] == rid) for rid in ids]
+                assert seal["bytes"] <= seal["limit"]
+                if policy == "no-usage":
+                    assert D.USAGE_LINE not in seal["text"]
+                elif arm == "team-implicit":
+                    assert seal["text"].splitlines().count(D.USAGE_LINE) == 1
