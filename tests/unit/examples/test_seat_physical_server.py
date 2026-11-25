@@ -10,7 +10,8 @@ from contextlib import contextmanager
 from importlib import import_module
 from pathlib import Path
 
-from examples.seatlab.physical_dispatch import policies, stage, worlds
+from examples.seatlab.exhibit_wire import encode_request, render_turn, request_stamp
+from examples.seatlab.physical_dispatch import certificate, policies, stage, worlds
 
 _ROLES = ("loader", "registrar", "depot")
 _BOOT = """
@@ -109,6 +110,29 @@ def _views(root: Path) -> dict:
     return {role: _rpc(root, role, {"op": "view"}) for role in _ROLES}
 
 
+_SEAT_CLIENT = (
+    "import sys,relay;relay.SOCKET=sys.argv.pop(1);raise SystemExit(relay.main())"
+)
+
+
+def _seat_view(task: Path, root: Path, role: str) -> dict:
+    output = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "-c",
+            _SEAT_CLIENT,
+            str(root / "relay" / role / "rpc.sock"),
+            "view",
+        ],
+        cwd=task / "environment/seat",
+        stdout=subprocess.PIPE,
+        check=True,
+        timeout=10,
+    )
+    return json.loads(output.stdout)
+
+
 def _play(task: Path, seed: int, map_name: str, policy: str) -> dict:
     with _server(task, seed, map_name) as root:
         initial = _views(root)
@@ -119,7 +143,10 @@ def _play(task: Path, seed: int, map_name: str, policy: str) -> dict:
         filing = policies.depot(_rpc(root, "depot", {"op": "view"}), policy)
         _rpc(root, "depot", filing)
         dispatch = _views(root)
-        loader = dispatch["loader"]
+        loader = _seat_view(task, root, "loader")
+        assert loader == dispatch["loader"]
+        instruction = (task / "instructions/loader.md").read_text(encoding="utf-8")
+        driver_packet = encode_request(render_turn(instruction, loader, nomination))
         action = policies.follow(loader)
         if policy == "other":
             assert action is None
@@ -153,6 +180,7 @@ def _play(task: Path, seed: int, map_name: str, policy: str) -> dict:
             )
         ]
         return {
+            "driver_request_stamp": request_stamp(driver_packet),
             "initial": initial,
             "dispatch": dispatch,
             "final": final,
@@ -206,7 +234,12 @@ def test_physical_server_native_dispatch() -> None:
         assert original.keys() == swapped.keys()
         assert set(original.values()) == set(swapped.values())
         assert all(original[key] != swapped[key] for key in original)
+        certificate_arms = certificate.certify(seed)["arms"]
         for (policy, map_name), run in runs.items():
+            assert (
+                run["driver_request_stamp"]
+                == certificate_arms[policy]["counts"][map_name]["request_stamp"]
+            )
             cut = run["cut"]
             assert cut["case"] == worlds.select(case, map_name)
             assert cut["case"]["briefs"] == case["briefs"]

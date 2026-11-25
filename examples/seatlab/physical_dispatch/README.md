@@ -57,8 +57,48 @@ python -B -m examples.seatlab.physical_dispatch prepare-receivers "$work/task" "
 
 This command does not connect or start a trial. It refuses a nonfocal draw rather than selecting a replacement. It writes four private native configs, their locks, and a receipt. It records private case commitments, role instructions and a host source fingerprint. It checks every config and lock field. The fingerprint identifies the checkout’s harness files, not an external owner or provider. Only the trial label, hidden map, depot rule and opaque loader socket may differ. The seat receives no condition label, map, seed, or answer key. Its input contains the records its teammates filed, which can reveal the map. Keep the receipt and config files outside the participant context.
 
+## Enroll and audit a study without buying a run
+
+Use one private roster for the full study. `enroll` commits to 4–64 eligible warehouse cases, in blocks of 4. It uses the stock lottery. It does not edit a draw, consult model output, or select cases by reward. Within each block, every condition occupies every position once. Every ordered pair of different conditions occurs once as neighbors. Each block receives an independent schedule draw; draws can repeat. It does not prove the schedule was followed.
+
+These commands demonstrate the workflow with a **public development seed**, not a held-out result. Run them from the fork root, using the private `$work/task` created above:
+
+```sh
+mkdir -m 700 "$work/cases"
+python3.12 -BS -m examples.seatlab.physical_dispatch enroll "$work/study" --cases 4 --development-seed 7 > "$work/registration.json"
+pin=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cohort_digest"])' "$work/registration.json")
+python3.12 -BS -m examples.seatlab.physical_dispatch check-cohort "$work/study" --expect "$pin"
+python3.12 -BS -m examples.seatlab.physical_dispatch qualify-case "$work/study" case-0001 --expect "$pin"
+python3.12 -BS -m examples.seatlab.physical_dispatch score-cohort "$work/study" "$work/cases" --expect "$pin"
+```
+
+The empty study has 16 reserved decisions, no observations, no point estimate, and bounds of `[-1, 1]`. `qualify-case` enumerates the full native payoff matrix for the exact selected case. It refuses to substitute a different seed. A selection or qualification failure remains visible; do not silently enroll a replacement.
+
+For a future private study, omit `--development-seed`. Keep the printed commitment outside the editable study directory **before** revealing any decisions. Keep the private design, seeds, schedule and verifier artifacts away from every participant. A private draw is not proof that an operator never selected among several rosters. Fix the model version, budget, trial policy and analysis before collecting outcomes.
+
+Prepare each case in its reserved directory. Use four fresh one-use sockets; do not reuse a conversation across cells or cases. The following command writes inputs without contacting any owner:
+
+```sh
+python -B -m examples.seatlab.physical_dispatch bind-case "$work/study" case-0001 "$work/task" "$work/cases/case-0001" --expect "$pin" \
+  --original-other "$owners/r1" --original-relevant "$owners/r2" \
+  --swapped-other "$owners/r3" --swapped-relevant "$owners/r4"
+```
+
+The binding includes the exact trial config, role instructions, locks and the case certificate. Only the verifier receives `EXHIBIT_RETAIN_CUT=1`. The cut contains private world state. Preserve the staged task at its prepared absolute path and keep the matching fork revision. Earlier plans without this cut cannot support a retrospective claim about what the receiver saw.
+
+After an independently authorized run, use the fork's Python environment to read the original native records:
+
+```sh
+python -B -m examples.seatlab.physical_dispatch inspect-trial "$work/study" case-0001 "$work/cases/case-0001" original-other "$archived_trial" --expect "$pin"
+python -B -m examples.seatlab.physical_dispatch score-cohort "$work/study" "$work/cases" --expect "$pin"
+```
+
+`inspect-trial` matches the original actions and byte-level owner requests from all accepted turns. It uses the native result, verifier cut, observation and reward. A wrong completed dispatch scores 0. A frozen incomplete trial has no reward. Missing or inconsistent evidence also has no reward, with separate status codes. An accepted final request is not evidence of an unaccepted attempt or the identity of a model. A moved copy of one trial can be inspected; cohort scoring uses only its reserved native `trials/<trial_name>` slot.
+
+`score-cohort` reports the result for every reserved case, not just successful trials. It averages **relevant minus other** within each map, then averages the 2 maps within each case. It reports per-condition missingness, exact lower and upper bounds, and a separate mean for complete cases. These are descriptive bounds on the enrolled sample, not confidence intervals or estimates for all possible warehouses. All cells that reuse a native trial ID become unknown. The report compares recorded times with the planned order and flags overlap. An order conflict does not erase a valid physical grade. Do not use a conflicted case as evidence of order compliance. An operator can replace local files. Preserve independent provider and first-attempt records for any empirical claim.
+
 ## Future experiment, not run
 
-First choose the estimand. For a receiver-only study, fix the three upstream actions using the view-only policies. Use each combination of the 2 maps and 2 depot filing policies once per case. Randomize the order of these 4 conditions across fresh loader contexts. Do not change the order of the 4 actions inside a trial. Compare exact physical reward within each independent case. Do not disclose the seed, map, filing condition, other arm, or expected answer to a participant. A prior context shared across arms invalidates the comparison.
+First choose the estimand. For a receiver-only study, fix the three upstream actions using the view-only policies. Use each combination of the 2 maps and 2 depot filing policies once per case. Follow the precommitted order with a fresh loader context for each condition. Do not change the order of the 4 actions inside a trial. Compare exact physical reward within each independent case. Do not disclose the seed, map, filing condition, other arm, or expected answer to a participant. A prior context shared across arms invalidates the comparison.
 
 For a live team study, use separate held-out cases and let every role make its own decisions. Report the whole-team native reward. Do not label its difference as the effect of a fixed handoff. Record all selected cases, the eligibility rule, failures and missingness independently of reward. A case with no final dispatch has no measured native reward.

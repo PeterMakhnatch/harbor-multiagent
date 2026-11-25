@@ -39,7 +39,16 @@ def host_fingerprint(root: Path) -> str:
     )
     budget = MAX_TASK_BYTES
     for name in (
+        "__main__",
         "certificate",
+        "cohort",
+        "cohort_draw",
+        "cohort_scores",
+        "order_evidence",
+        "contrast",
+        "physical_evidence",
+        "physical_history",
+        "physical_inputs",
         "policies",
         "preflight",
         "receiver",

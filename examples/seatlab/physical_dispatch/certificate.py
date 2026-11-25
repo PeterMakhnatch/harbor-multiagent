@@ -1,3 +1,4 @@
+import json
 import sys
 from fractions import Fraction
 from importlib import import_module
@@ -8,7 +9,7 @@ from typing import Any
 from ...native_study import require
 from ..decision_boundary.core import World, analyze
 from ..decision_boundary.pair import compare
-from ..exhibit_wire import encode_request, render_turn
+from ..exhibit_wire import encode_request, render_turn, request_stamp
 from . import policies, worlds
 
 _TASK = "examples.tasks.exhibit-relay.environment.exhibit_relay"
@@ -31,10 +32,20 @@ _MAPS = ("original", "swapped")
 _POLICIES = ("other", "relevant")
 
 
+def case_maps(base: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {name: worlds.select(base, name) for name in _MAPS}
+
+
 def native_pair(seed: int) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     require(type(seed) is int and 0 <= seed < 2**63, "invalid fixed seed")
     base = make_case(seed, "fork", layout="draw")
-    return base, {name: worlds.select(base, name) for name in _MAPS}
+    return base, case_maps(base)
+
+
+def cli_view(view: dict[str, Any]) -> dict[str, Any]:
+    return json.loads(
+        json.dumps(view, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    )
 
 
 def _candidate(start: int) -> tuple[int, int, dict[str, Any], dict[str, Any]]:
@@ -59,7 +70,7 @@ def _prefix(
     depot_view = session.view("depot")
     filing = policies.depot(depot_view, policy)
     session.apply("depot", filing)
-    view = session.view("loader")
+    view = cli_view(session.view("loader"))
     require(view["phase"] == "dispatch", "native dispatch phase differs")
     require(len(initial["slips"]) == 1, "initial nomination is not focal")
     require(
@@ -167,6 +178,7 @@ def _enumerate(
     return (
         World(name, 1, packet, scores),
         {
+            "request_stamp": request_stamp(packet),
             "legal_actions": len(scores),
             "successful_actions": sum(scores.values()),
             "follow_reward": follow_reward,
@@ -179,7 +191,7 @@ def _enumerate(
 def certify(start: int) -> dict[str, Any]:
     seed, checked, base, focal = _candidate(start)
     instruction = _INSTRUCTION.read_text(encoding="utf-8")
-    selected = {name: worlds.select(base, name) for name in _MAPS}
+    selected = case_maps(base)
     first_inputs = []
     for case in selected.values():
         require(
@@ -187,7 +199,7 @@ def certify(start: int) -> dict[str, Any]:
             == {key: value for key, value in base.items() if key != "depot"},
             "private map changed a common native case field",
         )
-        initial_view = Session(case, "linked").view("loader")
+        initial_view = cli_view(Session(case, "linked").view("loader"))
         first_inputs.append(
             encode_request(render_turn(instruction, initial_view, None))
         )

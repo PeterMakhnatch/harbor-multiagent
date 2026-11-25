@@ -147,24 +147,15 @@ def _neutral(
     return _canonical(rest)
 
 
-def prepare_receivers(
-    task: Path, out: Path, seed: int, endpoints: dict[str, str]
-) -> dict[str, Any]:
-    require(type(seed) is int and 0 <= seed < 2**63, "invalid fixed seed")
-    root, stamps = bounded_tree(task.expanduser().absolute())
-    stage_digest = check_stage(root)
-    out = _output_path(out, root)
-    host_digest = host_fingerprint(CHECKOUT)
-    paths, pins = _endpoints(endpoints, root, out)
-    base, cases = native_pair(seed)
-    require(
-        base["realized"] == min(brief["id"] for brief in base["briefs"]),
-        "fixed seed is not a naturally focal draw",
-    )
-    require(set(cases) == set(MAPS), "unexpected native case maps")
-    harbor = native()
-    identity = task_identity(harbor, root, NAME)
-    tree_digest = task_files_digest(root, identity)
+def factor_inputs(
+    harbor: SimpleNamespace,
+    root: Path,
+    trials: Path,
+    seed: int,
+    identity: dict[str, str],
+    cases: dict[str, Any],
+    paths: dict[str, str],
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any], Any]:
     records: dict[str, dict[str, Any]] = {}
     inputs: dict[str, Any] = {}
     neutral_configs: set[bytes] = set()
@@ -182,7 +173,8 @@ def prepare_receivers(
                 SETTING: map_name,
             }
             team = _team(harbor, paths[cell], filing)
-            request = trial_request(harbor, root, out / "trials", ticket, team, env)
+            request = trial_request(harbor, root, trials, ticket, team, env)
+            request["verifier"] = {"env": {"EXHIBIT_RETAIN_CUT": "1"}}
             lock, arm = locked_arm(harbor, root, request, identity, ticket)
             for config, record, neutral in (
                 (True, request, neutral_configs),
@@ -230,11 +222,45 @@ def prepare_receivers(
         ),
         "role provenance differs",
     )
+    return records, inputs, source
+
+
+def prepare_receivers(
+    task: Path,
+    out: Path,
+    seed: int,
+    endpoints: dict[str, str],
+    *,
+    study_slot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    require(type(seed) is int and 0 <= seed < 2**63, "invalid fixed seed")
+    root, stamps = bounded_tree(task.expanduser().absolute())
+    stage_digest = check_stage(root)
+    out = _output_path(out, root)
+    host_digest = host_fingerprint(CHECKOUT)
+    paths, pins = _endpoints(endpoints, root, out)
+    base, cases = native_pair(seed)
+    require(
+        base["realized"] == min(brief["id"] for brief in base["briefs"]),
+        "fixed seed is not a naturally focal draw",
+    )
+    require(set(cases) == set(MAPS), "unexpected native case maps")
+    harbor = native()
+    identity = task_identity(harbor, root, NAME)
+    tree_digest = task_files_digest(root, identity)
+    records, inputs, source = factor_inputs(
+        harbor, root, out / "trials", seed, identity, cases, paths
+    )
     receipt = _receipt(
         seed, identity, tree_digest, stage_digest, base, cases, inputs, source
     )
     receipt["host_source_digest"] = host_digest
     records["receipt.json"] = receipt
+    if study_slot is not None:
+        records["cohort-binding.json"] = {
+            **study_slot,
+            "input_receipt_digest": _digest(receipt),
+        }
     require(
         _endpoints(endpoints, root, out) == (paths, pins),
         "receiver endpoints changed during preparation",

@@ -64,7 +64,10 @@ class SessionSeat(SeatEnvironment):
                 action = {"op": op, "routes": dict(pair.split("=", 1) for pair in args)}
             view = self.session.apply(self.service, action)
             self.actions.append(action)
-        return ExecResult(return_code=0, stdout=json.dumps(view))
+        return ExecResult(
+            return_code=0,
+            stdout=json.dumps(view, sort_keys=True, separators=(",", ":")),
+        )
 
 
 def listener(stack: ExitStack, path: Path) -> socket.socket:
