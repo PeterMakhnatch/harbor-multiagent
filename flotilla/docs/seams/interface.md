@@ -95,8 +95,8 @@ Prediction (INFERRED): frontier `team` near 1 at `canary`; lower at `heavy` and 
 ask before `/prepare` and the desk must answer before `/done`.
 
 Time limits: 1,200 s per agent and 1,260 s for world play, so agent timeouts end a stalled team before the world
-deadline. `careful` uses at most 17 world requests per seat at every level, free
-`/await` calls included.
+deadline. `careful` uses at most 18 world requests per seat at every level (the card's load table), free `/await`
+calls included.
 
 ## Policies
 
