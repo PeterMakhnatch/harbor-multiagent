@@ -2,8 +2,10 @@ import hashlib
 import json
 from typing import Any
 
+from .cases import AUTHORED_MODES
 from .frontier import analyze_frontier
 from .grading import grade
+from .notes import audit_notes, deliver_notes
 
 _STAGES = ("request", "registrar", "depot", "dispatch", "done")
 
@@ -31,6 +33,22 @@ def _card(cards: list[dict[str, Any]], key: str, epoch: int) -> dict[str, Any] |
 def case_commitment(case: dict[str, Any]) -> str:
     body = json.dumps(case, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return "sha256:" + hashlib.sha256(body.encode("ascii")).hexdigest()
+
+
+def _authored_handoff(
+    case: dict[str, Any], mode: str, actions: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    if len(actions) < 2:
+        return None
+    slips = actions[0]["slips"]
+    registrar_ids = actions[1]["ids"]
+    submitted = actions[1]["notes"]
+    delivered = deliver_notes(submitted, disclose=mode == "authored")
+    return {
+        "schema": "harbor.exhibit-relay.authorship/v1",
+        "submitted": audit_notes(case, slips, registrar_ids, submitted),
+        "delivered": audit_notes(case, slips, registrar_ids, delivered),
+    }
 
 
 def observation(cut: dict[str, Any]) -> dict[str, Any]:
@@ -94,4 +112,9 @@ def observation(cut: dict[str, Any]) -> dict[str, Any]:
             "visible_item_weight": supported_item_weight if depot is not None else None,
             "stage": _STAGES[len(actions)],
         },
+        **(
+            {"authored_handoff": _authored_handoff(case, mode, actions)}
+            if mode in AUTHORED_MODES
+            else {}
+        ),
     }

@@ -18,11 +18,13 @@ Consider 4 crate labels A, B, C and D at the same epoch. The loader nominates al
 
 In each layout, A, B, C and D each have individual demand weight 5. The depot sees the same private archive in both layouts. The 2 layouts differ only in the weights assigned to pairs, not in the set of pairs.
 
-The relay offers 3 useful versions of the handoff:
+The relay offers 3 world-generated versions of the handoff:
 
 - **Linked:** the depot receives exact individual demand totals, indexed by crate and epoch. It does not receive the pairs.
 - **Masked:** the depot receives the same totals and the true pairs, with every bundle weight set to `0`. Here `0` means *withheld*, not zero demand or a false measurement. The list length, pairs and epochs remain the same as in bundled.
 - **Bundled:** the depot receives the same totals and true pairs, with their actual brief weights. The extra information is the joint demand, not more filing capacity.
+
+For a handoff written by a teammate, see [the registrar-authored variant](AUTHORED.md). It preserves wrong and missing claims and separates source accuracy from transport.
 
 With only the flat totals, one response must serve both indistinguishable layouts. Filing AB supports weight 4 in layout a and weight 1 in layout b. Filing CD, AC or BD gives the same combined weight. Filing a different pair cannot improve it. The best common response therefore supports **5/20** of forecast weight across the 2 layouts.
 
@@ -35,7 +37,7 @@ These fractions measure explicit written evidence, not realized reward. The cert
 | Role | Private information | World action |
 |---|---|---|
 | Loader | Forecast briefs, epochs and weights | Nominate briefs; later commit 2 routes for the realized brief |
-| Registrar | Exhibit-to-crate history cards | File a limited set of card IDs |
+| Registrar | Exhibit-to-crate history cards | File a limited set of card IDs; author pair claims when enabled |
 | Depot | Crate-to-bay history cards | File a limited set of card IDs |
 
 Both maps are bijections at each epoch. History cards use inclusive validity intervals. The loader needs the correct card from each archive to build a complete written route. The weighted lottery selects one brief from *all* forecast briefs, not just the nominations. The world reveals that brief only after both filings. The grader gives reward 1 if both routes are correct, and 0 if either is wrong. Correct routes without supporting cards still count as correct.
@@ -62,7 +64,7 @@ python -m examples.seatlab.workbench exhibit design --profile fork --seed 7 --ca
 
 `twins` checks that the 2 linked depot views are identical and that the grouped views preserve the true weighted pairs. It reports the attainable common-file weight and the weight from the informed policy. `design` enumerates the explicit evidence frontier for public development cases, not model performance. Run it for a profile before spending money on a team that may lack sufficient information. Do not use public development seeds to enroll a confirmatory study.
 
-`exhibit_packet` uses the same encoder as the external depot owner. On development seed 7, each owner request is 4,452 bytes. Across matched arms, only 4 weight digits differ. The masked packets are identical across layouts. This check covers the request sent to the owner, not its provider template, token count or internal state.
+`exhibit_packet` uses the same encoder as the external depot owner. With the current role instructions, each world-generated request on development seed 7 is 4,526 bytes. Across matched arms, only 4 weight digits differ. The masked packets are identical across layouts. This check covers the request sent to the owner, not its provider template, token count or internal state.
 
 ### 2. Prepare native inputs
 
@@ -72,7 +74,7 @@ python -m examples.seatlab.exhibit_prepare /tmp/exhibit-author-seed7 --profile c
 
 Use a new output directory outside the checkout. The preparation command constructs native reference configurations, task locks and a matched-input comparison. It binds the task tree and role instructions and checks that the intended world setting differs. Read the returned paths and role-binding status. Preparation is not enrollment or execution. For `coupling`, it compares `masked` and `bundled`. For `fork` and `mesh`, it compares `independent` and `linked`. See [PAIRING.md](PAIRING.md) for the coupling study and [PROTOCOL.md](PROTOCOL.md) for the other profiles.
 
-### 3. Prepare one future depot decision
+### 3. Prepare one future depot decision (world-generated handoffs only)
 
 These commands prepare a development roster and validate one native input. They start no owner or trial. Use the fork environment for `exhibit_bind`. The other commands use Python 3.12 and the standard library.
 

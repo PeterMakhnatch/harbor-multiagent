@@ -13,6 +13,13 @@ def render_turn(
         "depot": '{"op":"file","ids":["card ID", ...]}',
         "dispatch": '{"op":"commit","routes":{"exhibit ID":"bay ID", ...}}',
     }[phase]
+    if phase == "registrar" and view["role"] == "registrar" and "note_capacity" in view:
+        rule = (
+            '{"op":"file","ids":["card ID", ...],'
+            '"notes":[{"epoch":0,"keys":["crate ID","crate ID"],"weight":1}, ...]}'
+            ". Include zero to four notes with two distinct crate IDs each, "
+            "epoch 0 to 2, and integer weight 0 to 9"
+        )
     payload = {"instruction": instruction, "view": view, "previous_action": previous}
     return (
         "Select the action for your current role using only the supplied information. "

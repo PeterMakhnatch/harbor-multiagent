@@ -13,14 +13,15 @@ By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 This branch combines the [team operator](examples/seatlab/workbench/team-account.md), native packaging of per-seat instructions, and a [two-seat shipping benchmark](examples/seatlab/decision_receipt/README.md). Start by checking the saved evidence:
 
 ```sh
-git clone --depth 1 --branch seatlab/exhibit-relay https://github.com/PeterMakhnatch/harbor-multiagent.git
+git clone --depth 1 --branch seatlab/registrar-authored-handoff https://github.com/PeterMakhnatch/harbor-multiagent.git
 cd harbor-multiagent
 python3.12 -BS -m examples.seatlab.workbench verify exhibit-handoff-twins
+python3.12 -BS -m examples.seatlab.workbench verify exhibit-authored-channel
 python3.12 -BS -m examples.seatlab.workbench verify team-return-partial team-return-complete ship-decision-evidence ship-worker-plans
 python3.12 -BS -m examples.seatlab.workbench verify dispatch-native-choices dispatch-order-ready dispatch-order-coverage
 ```
 
-The first two reports show what changes when one worker is missing or all workers return. They keep archived model teams separate from scripted controls. The shipping report asks a different question: did the receiver have a usable parcel reference before deciding? The original runs did not record whether the receiver cited it. The [new benchmark](examples/seatlab/decision_receipt/README.md) records the citation separately from the delivery outcome. Preparing its four control configurations does not run them.
+The 2 exhibit certificates qualify the benchmark without model calls. The `team-return-partial` and `team-return-complete` reports show what changes when a worker is missing. They keep archived model teams separate from scripted controls. The shipping report asks a different question: did the receiver have a usable parcel reference before deciding? The original runs did not record whether the receiver cited it. The [new benchmark](examples/seatlab/decision_receipt/README.md) records the citation separately from the delivery outcome. Preparing its four control configurations does not run them.
 
 To see why the **same two-seat decisions** can earn different rewards, [inspect two saved shipping controls](examples/seatlab/decision_receipt/README.md#compare-two-saved-decisions). The decision card shows the sender's handoff, the receiver's accepted action, and what the supplier did afterward. No seat runs.
 
@@ -80,7 +81,9 @@ To let **two operators collect separate four-seat teams**, use the [campaign com
 
 To **repeat a whole business panel**, give each worker [one of two company shards](examples/seatlab/market-handoff.md#run-or-verify-a-separate-repetition). Both workers use the recorded decisions without starting models. To inspect an existing result first, run `python3.12 -BS -m examples.seatlab.workbench verify native-business-repeat reporter-tokens`. The second check shows why the calendar teams used fewer calls but reported more tokens.
 
-The fork's default branch does not include this workbench. Use `seatlab/offline-team-receipts` for the combined checkout above. You do not need to switch branches for the linked studies.
+The fork's default branch does not include this workbench. Use `seatlab/registrar-authored-handoff` for the combined checkout above. You do not need to switch branches for the linked studies.
+
+**Test a handoff written by another seat:** [The registrar-authored variant](examples/tasks/exhibit-relay/AUTHORED.md) separates what a teammate reported from what the relay delivered. Its development certificate compares the complete requests without starting any model.
 
 **Build a multi-agent handoff benchmark:** [Exhibit Relay](examples/tasks/exhibit-relay/README.md) gives three seats separate records for the same shipment. Its paired worlds have identical per-crate priorities but different best pairs. Run `python3.12 -BS -m examples.seatlab.workbench exhibit twins --seed 7` to check the information loss without any model or container.
 

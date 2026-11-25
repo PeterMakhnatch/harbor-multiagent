@@ -91,13 +91,49 @@ def _registrar(view: dict[str, Any], policy: str) -> list[str]:
     return list(best)
 
 
+def _notes(view: dict[str, Any], ids: list[str]) -> list[dict[str, Any]]:
+    selected = set(ids)
+    cards = [card for card in view["cards"] if card["id"] in selected]
+    notes: list[dict[str, Any]] = []
+    seen: set[tuple[int, str, str]] = set()
+    for brief in sorted(view["briefs"], key=lambda b: (-b["weight"], b["id"])):
+        epoch, weight = brief["epoch"], brief["weight"]
+        if not 1 <= weight <= 9:
+            continue
+        keys = sorted(
+            card["value"]
+            for card in cards
+            if card["key"] in brief["items"] and card["start"] <= epoch <= card["end"]
+        )
+        if len(keys) != 2 or keys[0] == keys[1]:
+            continue
+        pair = (epoch, keys[0], keys[1])
+        if pair in seen:
+            continue
+        seen.add(pair)
+        notes.append({"epoch": epoch, "keys": keys, "weight": weight})
+        if len(notes) == view["note_capacity"]:
+            break
+    return sorted(notes, key=lambda note: (note["epoch"], note["keys"]))
+
+
 def _depot(view: dict[str, Any], policy: str) -> list[str]:
     cards, agenda, quota = view["cards"], view["agenda"], view["quota"]
-    if not agenda or policy in ("latest", "index", "unfiltered"):
+    if policy in ("latest", "index", "unfiltered"):
         return _fallback(cards, quota, policy)
     if view.get("bundles") and policy == "portfolio":
-        pair = min(view["bundles"], key=lambda b: (-b["weight"], b["epoch"], b["keys"]))
-        return sorted(_required_card(cards, key, pair["epoch"]) for key in pair["keys"])
+        for pair in sorted(
+            view["bundles"], key=lambda b: (-b["weight"], b["epoch"], b["keys"])
+        ):
+            ids = sorted(
+                card["id"]
+                for card in cards
+                if any(_matches(card, key, pair["epoch"]) for key in pair["keys"])
+            )
+            if len(ids) == len(pair["keys"]) and len(ids) <= quota:
+                return ids
+    if not agenda:
+        return _fallback(cards, quota, policy)
     weights: dict[str, int] = {}
     for intent in agenda:
         ident = _required_card(cards, intent["key"], intent["epoch"])
@@ -159,7 +195,10 @@ def act(view: dict[str, Any], policy: str = "portfolio") -> dict[str, Any]:
     if role == "loader":
         return _loader(view, policy)
     if role == "registrar" and view["phase"] == "registrar":
-        return {"op": "file", "ids": _registrar(view, policy)}
+        ids = _registrar(view, policy)
+        if view.get("note_capacity") == 4:
+            return {"op": "file", "ids": ids, "notes": _notes(view, ids)}
+        return {"op": "file", "ids": ids}
     if role == "depot" and view["phase"] == "depot":
         return {"op": "file", "ids": _depot(view, policy)}
     raise ValueError("unexpected role or phase")

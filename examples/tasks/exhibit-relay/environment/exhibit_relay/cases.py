@@ -4,6 +4,7 @@ from itertools import combinations, pairwise
 from typing import Any, TypeGuard, cast
 
 PROFILES = {"fork": (8, 3, 2, 3), "mesh": (10, 4, 3, 6), "coupling": (8, 2, 4, 4)}
+AUTHORED_MODES = ("authored", "author-masked")
 
 
 def capacity(case: dict[str, Any], role: str, mode: str) -> int:
@@ -16,7 +17,7 @@ def capacity(case: dict[str, Any], role: str, mode: str) -> int:
 
 def valid_mode(case: dict[str, Any], mode: str) -> bool:
     return mode in ("linked", "independent", "open", "silent") or (
-        mode in ("masked", "bundled") and case["profile"] == "coupling"
+        mode in ("masked", "bundled", *AUTHORED_MODES) and case["profile"] == "coupling"
     )
 
 

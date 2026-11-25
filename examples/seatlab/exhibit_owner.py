@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import shlex
@@ -6,7 +7,7 @@ import socket
 import stat
 import time
 from pathlib import Path
-from typing import Any, override
+from typing import Any, cast, override
 
 from examples.seatlab.exhibit_wire import encode_request, render_turn, request_stamp
 from examples.seatlab.visibility import local_seat
@@ -108,8 +109,25 @@ async def _seat_command(
 
 
 def _check_view(view: dict[str, Any], role: str, phase: str) -> None:
+    keys = _VIEW_KEYS
+    if "bundle_source" in view:
+        if (
+            role != "depot"
+            or view["bundle_source"] != "registrar"
+            or "bundles" not in view
+        ):
+            raise ValueError("Invalid bundle source")
+        keys = keys | {"bundle_source"}
+    if "note_capacity" in view:
+        if (
+            role != "registrar"
+            or type(view["note_capacity"]) is not int
+            or view["note_capacity"] != 4
+        ):
+            raise ValueError("Invalid note capacity")
+        keys = keys | {"note_capacity"}
     if (
-        view.keys() not in (_VIEW_KEYS, _VIEW_KEYS | {"bundles"})
+        view.keys() not in (keys, keys | {"bundles"})
         or view["role"] != role
         or view["phase"] != phase
     ):
@@ -143,6 +161,31 @@ def _listing(
     return [op, *values]
 
 
+def _note_argument(rows: object, capacity: int) -> str:
+    if (
+        type(capacity) is not int
+        or capacity != 4
+        or not isinstance(rows, list)
+        or len(rows) > capacity
+    ):
+        raise ValueError("Invalid owner notes")
+    for row in cast("list[dict[str, Any]]", rows):
+        if not isinstance(row, dict) or row.keys() != {"epoch", "keys", "weight"}:
+            raise ValueError("Invalid owner note row")
+        keys = row["keys"]
+        if (
+            type(row["epoch"]) is not int
+            or not 0 <= row["epoch"] <= 2
+            or type(row["weight"]) is not int
+            or not 0 <= row["weight"] <= 9
+            or not isinstance(keys, list)
+            or len(keys) != 2
+            or any(not _safe_id(key) for key in keys)
+        ):
+            raise ValueError("Invalid owner note fields")
+    return json.dumps(rows, ensure_ascii=True, separators=(",", ":"))
+
+
 def _arguments(action: dict[str, Any], view: dict[str, Any], phase: str) -> list[str]:
     if phase == "request":
         return _listing(
@@ -153,9 +196,27 @@ def _arguments(action: dict[str, Any], view: dict[str, Any], phase: str) -> list
             view["nominate"],
         )
     if phase in ("registrar", "depot"):
-        return _listing(
-            action, "file", "ids", [card["id"] for card in view["cards"]], view["quota"]
-        )
+        allowed = [card["id"] for card in view["cards"]]
+        if (
+            phase == "registrar"
+            and view["role"] == "registrar"
+            and "note_capacity" in view
+        ):
+            if action.keys() != {"op", "ids", "notes"}:
+                raise ValueError("Invalid authored filing")
+            listing = _listing(
+                {"op": action["op"], "ids": action["ids"]},
+                "file",
+                "ids",
+                allowed,
+                view["quota"],
+            )
+            return [
+                "file-notes",
+                _note_argument(action["notes"], view["note_capacity"]),
+                *listing[1:],
+            ]
+        return _listing(action, "file", "ids", allowed, view["quota"])
     routes = action.get("routes")
     if (
         action.keys() != {"op", "routes"}

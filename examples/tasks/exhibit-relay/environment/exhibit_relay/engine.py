@@ -2,7 +2,8 @@ from copy import deepcopy
 from threading import RLock
 from typing import Any
 
-from .cases import capacity, valid_mode, validate_case
+from .cases import AUTHORED_MODES, capacity, valid_mode, validate_case
+from .notes import deliver_notes, normalize_notes
 
 LOADER = "loader"
 REGISTRAR = "registrar"
@@ -78,7 +79,7 @@ class Session:
 
     def _agenda(self) -> list[dict[str, Any]]:
         if (
-            self._mode not in ("linked", "open", "masked", "bundled")
+            self._mode not in ("linked", "open", "masked", "bundled", *AUTHORED_MODES)
             or len(self._events) < 2
         ):
             return []
@@ -97,7 +98,13 @@ class Session:
         ]
 
     def _bundles(self) -> list[dict[str, Any]]:
-        if self._mode not in ("masked", "bundled") or len(self._events) < 2:
+        if len(self._events) < 2:
+            return []
+        if self._mode in AUTHORED_MODES:
+            return deliver_notes(
+                self._events[1]["action"]["notes"], disclose=self._mode == "authored"
+            )
+        if self._mode not in ("masked", "bundled"):
             return []
         cards = self._file(REGISTRAR)
         bundles = []
@@ -135,6 +142,11 @@ class Session:
                 "phase": PHASES[step],
                 "turn": TURNS[step],
                 "quota": capacity(self._case, role, self._mode),
+                **(
+                    {"note_capacity": 4}
+                    if role == REGISTRAR and self._mode in AUTHORED_MODES
+                    else {}
+                ),
                 "nominate": self._nominate,
                 "exhibits": self._case["exhibits"],
                 "crates": self._case["crates"],
@@ -145,6 +157,11 @@ class Session:
                 **(
                     {"bundles": self._bundles() if role == DEPOT else []}
                     if self._case["profile"] == "coupling"
+                    else {}
+                ),
+                **(
+                    {"bundle_source": "registrar"}
+                    if role == DEPOT and self._mode in AUTHORED_MODES
                     else {}
                 ),
                 "registrar_file": self._file(REGISTRAR) if delivered else [],
@@ -161,11 +178,21 @@ class Session:
     def _normalize(
         self, role: str, action: dict[str, Any], step: int
     ) -> dict[str, Any]:
-        if (
-            type(action) is not dict
-            or len(action) != 2
-            or type(action.get("op")) is not str
-        ):
+        authored = step == 1 and self._mode in AUTHORED_MODES
+        if type(action) is not dict or type(action.get("op")) is not str:
+            raise ValueError("invalid action")
+        if authored:
+            if action.keys() != {"op", "ids", "notes"} or action["op"] != "file":
+                raise ValueError("invalid action")
+            allowed = {card["id"] for card in self._case[role]}
+            return {
+                "op": "file",
+                "ids": _select_ids(
+                    action["ids"], allowed, capacity(self._case, role, self._mode)
+                ),
+                "notes": normalize_notes(action["notes"], self._case["crates"]),
+            }
+        if len(action) != 2:
             raise ValueError("invalid action")
         if step == 0 and action["op"] == "request" and "slips" in action:
             allowed = {brief["id"] for brief in self._case["briefs"]}
