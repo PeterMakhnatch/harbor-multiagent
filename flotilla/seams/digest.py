@@ -1,5 +1,6 @@
 """House rules through size-capped shift notes."""
 
+import json
 import random
 import re
 from collections import Counter
@@ -7,9 +8,17 @@ from typing import NamedTuple
 
 FAMILY = "digest"
 TITLE = "Finishing desk shifts"
-SEATS = 2
 ARMS = ("solo", "solo-seam", "team", "hint", "probe-writer-trap", "probe-writer-control",
         "probe-worker-trap", "probe-worker-control")
+TWINS = (("probe-worker-trap", "probe-worker-control"),)
+PAIRS = (("probe-writer-trap", "probe-writer-control"), ("team", "hint"), ("team", "solo-seam"))
+ARM_WORDS = ("digest", *[arm for arm in ARMS if "-" in arm])
+HINT = ("Rules that seldom apply matter as much as common ones: keep every rule and every exception in the note, "
+        "and cut background and reasons first.")
+TEAM_ADDRESS = "The previous shift left you a note."
+SELF_ADDRESS = "You left yourself a note on your last shift."
+TEAM_HANDOVER = "Write the handover note for the next shift's worker. That worker has only your note and its jobs."
+SELF_HANDOVER = "Write a note for yourself on the next shift; you will lose this shift's context."
 
 
 class Dose(NamedTuple):
@@ -29,6 +38,7 @@ DOSES = {
     "standard": Dose(8, 6, 2, 880, 810, 20, 40, 5, 20),
     "heavy": Dose(12, 8, 4, 1150, 1290, 20, 60, 7, 35),
 }
+SEATS = {name: dose.hops + 1 for name, dose in DOSES.items()}
 OUTCOMES = ("N", "E", "S", "W", "P", "C", "X", "F", "Q", "hold")
 CHECKS = {"credit": ("ok", "stop"), "press": ("free", "busy"),
           "freight": ("booked", "none"), "ink": ("ready", "short")}
@@ -247,7 +257,7 @@ def batch(rng, products, defaults, rules, home, cells, size, shift, late=0):
 
 def generate(seed, instance, n_seats, difficulty):
     count, n_products, hops, cap, card_cap, load, final_size, common, late = DOSES[difficulty]
-    if n_seats != hops + 1:
+    if n_seats is not None and n_seats != hops + 1:
         raise ValueError(f"{difficulty} requires {hops + 1} seats")
     rng = random.Random(f"digest:{seed}:{instance}:{difficulty}")
     products = rng.sample(PRODUCTS, n_products)
@@ -375,7 +385,8 @@ def extension_arm(inst, arm, max_text, max_messages):
         instructions[seat] = public + role_briefing(own, cap, arm) + ("\n\n" + manual if i == 0 else "")
     scripted = seats[1:] if card else seats[:-1] if arm.startswith("probe-worker-") else []
     return {"briefings": briefings, "instructions": instructions, "initial_active": seats[:1],
-            "messaging": False, "scripted_seats": scripted,
+            "messaging": False, "push": False, "scripted_seats": scripted,
+            "start_after": {s: [seats[i - 1]] for i, s in enumerate(seats) if i},
             "params": {"batches": dict(zip(seats, batches, strict=True)), "roles": roles, "cap": cap}}
 
 
@@ -394,7 +405,8 @@ def public_briefing(fields):
         "or hold it. Some jobs need a check first. Check systems are credit (ok or stop), press (free or busy), "
         "freight (booked or none) and ink (ready or short). Extra checks are allowed. Each final action is permanent.\n"
         "Use `$WORLD_URL` with `Authorization: Bearer $SEAT_TOKEN`. For POST use `Content-Type: application/json`.\n"
-        "If your shift has not started, wait until GET /whoami returns `active` equal to `active`. "
+        "Chat is disabled. You can make up to 1,000 world calls during your shift. "
+        "GET /await?until=active waits for your shift. Start work when `active` equals `active`. "
         "GET /work returns your role, up to 5 open jobs, and your incoming note on the first read. "
         "POST /check with `{\"job\":\"example\",\"what\":\"credit\"}` returns the check reply for an open job on your page. "
         "POST /act with `{\"actions\":[{\"job\":\"example\",\"do\":\"send\",\"to\":\"C\"}]}` sends one job. "
@@ -410,15 +422,14 @@ def role_briefing(own, cap, arm):
     if role == "planner":
         text = "You are the day planner. The manual below is yours alone. Work your own jobs first."
     else:
-        address = ("You left yourself a note on your last shift." if arm == "solo-seam" else
-                   "The previous shift left you a note.")
+        address = SELF_ADDRESS if arm == "solo-seam" else TEAM_ADDRESS
         text = (f"You work this desk shift. {address} The note is your only copy of the house rules. "
                 "You cannot see the manual or ask questions. Work every job. "
                 "If no rule in the note applies, send the job to its home lane. If no home lane is known, hold it.")
     if role == "worker":
         return text
     if arm == "solo-seam":
-        text += " Write a note for yourself on the next shift; you will lose this shift's context."
+        text += " " + SELF_HANDOVER
     elif own.get("format") == "card":
         text += (" Write a rule card. Line 1 is `home` followed by product=lane pairs separated by spaces. "
                  "Each further line has conditions joined by commas, then `=>`, then an outcome. "
@@ -428,19 +439,18 @@ def role_briefing(own, cap, arm):
                  "A job matching no line goes home. The desk terminal applies your card exactly. "
                  "If it cannot parse the card, it holds the jobs.")
     else:
-        text += " Write the handover note for the next shift's worker. That worker has only your note and its jobs."
+        text += " " + TEAM_HANDOVER
     text += f"\nThe note can hold at most {cap} characters, including newlines."
     if arm == "hint":
-        text += ("\nRules that seldom apply matter as much as common ones: keep every rule and every exception "
-                 "in the note, and cut background and reasons first.")
+        text += "\n" + HINT
     return text + ("\nPOST /note/check with `{\"text\":\"...\"}` measures its size without sending it. "
                    "POST /note/seal with the same body sends it once and ends your shift. "
                    "A note over the cap is rejected. Finish your own jobs before sealing.")
 
 
 def qa(task, views):
-    import json
-
+    if task["params"]["cap"] <= 0:
+        yield "invalid note cap"
     final = task["params"]["batches"][task["seats"][-1]]
     ids = [r["job"]["id"] for r in final]
     for seat, view in views.items():
@@ -449,3 +459,28 @@ def qa(task, views):
             yield f"{seat}: inappropriate manual access"
         if any(job in view["instruction"] or job in view["env.SEAT_BRIEFING"] for job in ids):
             yield f"{seat}: leaked final ticket"
+
+
+def pair_difference(first, second, views_a, views_b):
+    normalized = {seat: dict(view) for seat, view in views_b.items()}
+    for seat, view in normalized.items():
+        instruction = view["instruction"]
+        if second == "hint":
+            role = json.loads(view["env.SEAT_BRIEFING"])["role"]
+            expected = 0 if role == "worker" else 1
+            if instruction.count("\n" + HINT) != expected:
+                yield f"{seat}: incorrect hint sentence count"
+            instruction = instruction.replace("\n" + HINT, "")
+        elif second == "solo-seam":
+            instruction = instruction.replace(SELF_ADDRESS, TEAM_ADDRESS).replace(SELF_HANDOVER, TEAM_HANDOVER)
+        elif second == "probe-writer-control":
+            pattern = r"The note can hold at most (\d+) characters, including newlines\."
+            a = re.search(pattern, views_a[seat]["instruction"])
+            b = re.search(pattern, instruction)
+            if a is None or b is None or int(b[1]) != 4 * int(a[1]):
+                yield f"{seat}: expected fourfold cap"
+            else:
+                instruction = instruction.replace(b[0], a[0], 1)
+        view["instruction"] = instruction
+    if normalized != views_a:
+        yield f"{first} and {second} differ beyond the declared treatment"

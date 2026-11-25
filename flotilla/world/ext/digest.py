@@ -20,20 +20,18 @@ class Digest:
         self.pages = {s: [] for s in self.seats}
         self.actions = {s: set() for s in self.seats}
         self.notes = {}
-        self.read = set()
+        self.work_seen = set()
 
     def done(self, seat):
         return len(self.actions[seat]) == len(self.rows[seat])
 
     def note(self, seat):
         if seat not in self.notes:
-            return {}
+            return {}, []
         text = self.notes[seat]
-        self.host.record("note_read", seat, {"chars": len(text)})
-        if seat not in self.read:
-            self.read.add(seat)
-            self.host.record("note_delivered", seat, {"chars": len(text), "id": f"note-{seat}"})
-        return {"note": text}
+        note_id = f"note-{seat}"
+        self.host.record("note_read", seat, {"chars": len(text), "id": note_id})
+        return {"note": text}, [note_id]
 
     def work(self, seat):
         page = [j for j in self.order[seat] if j not in self.actions[seat]][:5]
@@ -41,11 +39,15 @@ class Digest:
         self.host.record("work", seat, {"jobs": page})
         reply = {"role": self.params["roles"][seat], "jobs": [self.rows[seat][j]["job"] for j in page],
                  "done": not page}
-        if seat not in self.read:
-            reply.update(self.note(seat))
+        ids = [f"job-{job}" for job in page]
+        if seat not in self.work_seen:
+            self.work_seen.add(seat)
+            note, note_ids = self.note(seat)
+            reply.update(note)
+            ids.extend(note_ids)
         if not page and seat == self.seats[-1]:
             self.host.freeze()
-        return 200, reply
+        return 200, reply, ids
 
     def check(self, seat, body):
         job, what = body.get("job"), body.get("what")
@@ -56,7 +58,7 @@ class Digest:
         reply = self.rows[seat][job]["replies"][what]
         data = {"job": job, "what": what, "reply": reply}
         self.host.record("check", seat, data)
-        return 200, data
+        return 200, data, [f"check-{job}-{what}"]
 
     def act(self, seat, body):
         actions = body.get("actions")
@@ -109,7 +111,8 @@ class Digest:
         if path == "/work":
             return self.work(seat)
         if path == "/note":
-            return 200, self.note(seat)
+            note, ids = self.note(seat)
+            return 200, note, ids
         if path == "/check":
             return self.check(seat, body)
         if path == "/act":
@@ -133,7 +136,7 @@ def score(task, events):
         elif kind == "act":
             key = (seat, data["job"])
             moves.setdefault(key, (data["outcome"], frozenset(checks.get(key, ())), seat in read_before))
-        elif kind == "note_read":
+        elif kind == "delivered" and f"note-{seat}" in data["ids"]:
             read_before.add(seat)
         elif kind == "note_seal":
             note_sizes.append(data["chars"] / data["limit"])

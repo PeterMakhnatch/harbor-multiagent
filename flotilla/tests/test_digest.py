@@ -93,6 +93,7 @@ def test_generator_sweep(dose):
 
 
 def check_result(task, result, reward):
+    assert result["invalid"] is None
     assert result["reward"] == pytest.approx(reward, abs=1e-12)
     assert EXT.score(task, result["events"])["reward"] == result["reward"]
     events = result["events"]
@@ -100,7 +101,13 @@ def check_result(task, result, reward):
     assert all(e["data"]["status"] < 500 for e in events if e["kind"] == "extension_call")
     if reward == 1:
         assert sum(e["kind"] == "note_seal" for e in events) == len(task["seats"]) - 1
-        assert sum(e["kind"] == "note_delivered" for e in events) == len(task["seats"]) - 1
+        notes = [e for e in events if e["kind"] == "delivered" and f"note-{e['seat']}" in e["data"]["ids"]]
+        assert len(notes) == len(task["seats"]) - 1
+        for receipt in notes:
+            prior = [e for e in events if e["kind"] == "note_seal" and
+                     e["data"]["id"] in receipt["data"]["ids"]]
+            assert len(prior) == 1 and prior[0]["seq"] < receipt["seq"]
+            assert all(e["seq"] > receipt["seq"] for e in events if e["kind"] == "act" and e["seat"] == receipt["seat"])
         assert len([e for e in events if e["kind"] == "act" and e["seat"] == task["seats"][-1]]) == len(
             task["params"]["batches"][task["seats"][-1]])
 
@@ -109,6 +116,7 @@ def check_result(task, result, reward):
 def test_simulation_sweep(dose, tmp_path):
     scores = defaultdict(list)
     turns = defaultdict(list)
+    seat_turns = defaultdict(int)
     random_rewards = []
     for i in range(SWEEP):
         # Each build has all 8 arms, then reuses the exact bundle for the 5 interleavings.
@@ -125,6 +133,9 @@ def test_simulation_sweep(dose, tmp_path):
                     scores[(arm, policy)].append(result["reward"])
                     if policy == "careful":
                         turns[arm].append(max(result["requests"].values()))
+                        if arm == "team":
+                            for seat, requests in result["requests"].items():
+                                seat_turns[seat] = max(seat_turns[seat], requests)
                         if i == 0 and schedule == 0:
                             assert result["events"] == SIM.simulate_built(path, policy, schedule)["events"]
             if arm == "team":
@@ -144,6 +155,8 @@ def test_simulation_sweep(dose, tmp_path):
                     for outcome in D.OUTCOMES:
                         assert SIM.simulate_built(path, {final: f"constant-{outcome}"}, 0)["reward"] <= 0.2 + 1e-9
         shutil.rmtree(tmp_path / f"i{i}")
+        if SWEEP >= 200 and (i + 1) % 20 == 0:
+            print(f"{dose}: completed {i + 1}/{SWEEP} instances", flush=True)
     if SWEEP >= 200:
         assert abs(mean(random_rewards) - 0.1) < 0.05
     for (arm, policy), values in sorted(scores.items()):
@@ -151,6 +164,7 @@ def test_simulation_sweep(dose, tmp_path):
     for arm, values in sorted(turns.items()):
         print(f"{dose:8} {arm:22} max requests/seat={max(values)}")
     print(f"{dose:8} uniform_random n={len(random_rewards)} mean={mean(random_rewards):.6f}")
+    print(f"{dose:8} team per-seat max requests={dict(sorted(seat_turns.items()))}")
 
 
 def test_qa_canary(tmp_path):
@@ -180,6 +194,8 @@ def test_alternative_note_and_route_legality(tmp_path, start_world):
     assert world.seat("p1", "GET", "/work")[0] == 409
     status, page = world.seat("p2", "GET", "/work")
     assert status == 200 and page["note"] == text
+    assert world.events()[-1]["kind"] == "delivered"
+    assert "note-p2" in world.events()[-1]["data"]["ids"]
     assert world.seat("p2", "GET", "/note")[1]["note"] == text
     rows = {r["job"]["id"]: r for r in task["params"]["batches"]["p2"]}
     while not page["done"]:

@@ -10,14 +10,8 @@ def supports(name, variant):
 
 
 def wait_for_shift(client):
-    for _ in range(600):
-        status, me = yield from client.get("/whoami")
-        if status != 200 or me["frozen"] or me["active"] == "retired":
-            return False
-        if me["active"] == "active":
-            return True
-        yield from client.sleep(0.2)
-    return False
+    status, me = yield from client.get("/await?until=active")
+    return status == 200 and not me["frozen"] and me["active"] == "active"
 
 
 def decode(family, own, text):
