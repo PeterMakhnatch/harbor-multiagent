@@ -130,6 +130,16 @@ def test_handoff_generator(dose):
     assert len(fingerprints) == 200
 
 
+def test_handoff_briefing_is_content_free():
+    inst = FAMILY.generate(SEED, 0, 3, "canary")
+    for arm in FAMILY.ARMS:
+        instructions = FAMILY.extension_arm(inst, arm, 600, 32)["instructions"]
+        for text in instructions.values():
+            assert "Write the note as free text." in text
+            assert "For ID pairs" not in text and "For lot-ID lists" not in text
+            assert (FAMILY.EXTRA_SENTENCES["hint"] in text) == (arm == "hint")
+
+
 @pytest.mark.parametrize("dose", FAMILY.LEVELS)
 def test_handoff_sweep(dose, tmp_path):
     tally = defaultdict(list)

@@ -272,11 +272,7 @@ Calls:
 - `GET /log`: see the calls and replies of this shift.
 - `POST /close {{}}`: end the work part of this shift. You cannot print, dispatch, settle or file a ticket after this.
 - `POST /handover {{"note":"..."}}`: end this shift. This also closes work if not already closed.
-  The note can contain up to {cap} characters. A longer note is refused.
-  A note can include prose. For ID pairs, use `Bxx=Rxx`, `Rxx=Bxx`, `Bxx -> Rxx`, or
-  separate the two IDs with a colon, slash, space, or `(ref …)`. For lot-ID lists, label the
-  list `Suspects` (possible lots) or `Cleared` (ruled-out lots). Separate lists with a semicolon
-  or newline. JSON with a `pending` ID map and `suspects` or `cleared` arrays is also accepted.
+  The note can contain up to {cap} characters. A longer note is refused. Write the note as free text.
 
 Carrier results arrive 0, 1, 2 or 3 shifts after dispatch.
 The carrier uses only the carrier reference and the status `returned` or `delivered`.
