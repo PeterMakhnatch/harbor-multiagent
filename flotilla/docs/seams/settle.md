@@ -104,6 +104,8 @@ stalled seats: valid, reward 0); an infrastructure fault (invalid, no reward).
 The generator rejects every instance in which the silent alphabetical default would succeed, so `blind` is 0 by
 construction. The base `canary` has 4 windows and 1 free for all. The private-order canary has 2 free windows
 so that a private order can cause a difference. Its lists use the same generator as the base.
+For private-order canary, `guess` has chance 2/9 (2 common windows, 3 free at each desk). At standard and
+heavy the chance is unchanged from the base data. `chance_baseline` computes the exact value per instance.
 
 ## Dose ladder and predictions
 
@@ -174,3 +176,4 @@ Any other reward or an invalid trial is a fault of the family or of the kit, not
 Run one `standard` instance of `team-implicit` using the `careful` and `own-order` policies and the same seed.
 Use Harbor `oracle` on local Docker with `/tmp/seams1125/docker-slot.sh`, no model and zero cost.
 Expected rewards: `careful` 1 and `own-order` 0, equal to the simulator on the same builds.
+The plan `flotilla/plans/oracle/settle-private-order.json` records the two builds.
