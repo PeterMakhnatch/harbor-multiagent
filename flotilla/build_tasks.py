@@ -28,6 +28,7 @@ import os
 import re
 import secrets
 import shutil
+import sys
 import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
@@ -208,9 +209,12 @@ SCRIPTED_INSTRUCTION = "Scripted seat: Harbor's oracle agent runs solution/oracl
 
 
 def family_path(name: str) -> Path:
-    """families/<name>.py (an answer family) or games/<name>.py (a game family, docs/COMMONS.md)."""
-    path = ROOT / "families" / f"{name}.py"
-    return path if path.exists() else ROOT / "games" / f"{name}.py"
+    """Find a family module by name, including file-discovered Seams families."""
+    for directory in ("families", "seams", "games"):
+        path = ROOT / directory / f"{name}.py"
+        if path.is_file():
+            return path
+    return ROOT / "families" / f"{name}.py"
 
 
 def load_family(name: str) -> Any:
@@ -219,6 +223,7 @@ def load_family(name: str) -> Any:
     if spec is None or spec.loader is None:
         raise SystemExit(f"no family module at {path}")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -523,6 +528,12 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             raise SystemExit(str(exc)) from exc
     family_file = family_path(family_name)
     game = getattr(family, "MODE", "") == "rounds"  # a game family (games/<name>.py, docs/COMMONS.md)
+    extension = family_file.parent == ROOT / "seams"
+    extension_file = ROOT / "world" / "ext" / f"{family_name}.py"
+    if extension and not extension_file.is_file():
+        raise SystemExit(f"missing extension {extension_file}")
+    if extension and (game or scripted or submitter or announce):
+        raise SystemExit("extensions define their own seat roles and arm rules")
     probe = hasattr(family, "confederate_plans")  # a behavior probe: scripted confederates (families/probe.py)
     submit_gate = bool(getattr(family, "SUBMIT_GATE", False)) and not game
     if push and not probe:
@@ -579,11 +590,20 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             inst = family.with_audit_budget(inst, audit_budget)
         if policy_file:
             inst = family.with_policy(inst, i, seed, difficulty)
-        team_seats = list(inst["seats"]) if game else sorted(inst["private"])
+        team_seats = list(inst["seats"]) if game or extension else sorted(inst["private"])
+        if extension and len(team_seats) != n_seats:
+            raise ValueError("extension generator must return the requested number of seats")
         scripted_seats = tuple(inst.get("scripted_seats", ())) if scripted or probe else ()
         for condition in conditions:
             seats = ["p1"] if condition == "solo" else team_seats
-            if game:
+            ext_arm = family.extension_arm(inst, condition, max_text, max_messages) if extension else None
+            if ext_arm is not None:
+                briefings = ext_arm["briefings"]
+                seats = sorted(briefings)
+                scripted_seats = tuple(ext_arm.get("scripted_seats", ()))
+                if not seats or set(scripted_seats) - set(seats) or not set(seats) <= set(team_seats):
+                    raise ValueError("invalid extension arm roster")
+            elif game:
                 arm = inst | ({"players": ["p1"]} if condition == "solo" else {})
                 if hasattr(family, "briefing"):
                     briefings = {s: family.briefing(arm, s, condition) for s in seats}
@@ -598,7 +618,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             if post_trigger:
                 plans = family.at_first_submit(inst["probe"], plans)
             posts, own_steps = scheduled_posts(plans)  # the world posts; a confederate plays only its other steps
-            for seat in scripted_seats:  # a confederate plays its plan; a scripted peer posts its part, honestly or not
+            for seat in scripted_seats if not extension else ():  # legacy scripted seats
                 lying = "liar" in condition
                 briefings[seat] = {"script": "confederate", "plan": own_steps[seat]} if probe else {
                     "script": "liar" if lying else "honest",
@@ -630,6 +650,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             if game:
                 meta |= {"mode": "rounds", "round_seconds": round_seconds,
                          "max_messages_per_round": max_messages_per_round}
+            if extension:
+                meta["mode"] = "extension"
             meta["names"] = "readable" if readable_names else "opaque"  # qa.py checks an opaque name (opaque-names)
             if submitter:
                 meta["submitter"] = submitter
@@ -653,8 +675,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             )
             for seat in seats:
                 text = (
-                    SCRIPTED_INSTRUCTION
-                    if seat in scripted_seats
+                    SCRIPTED_INSTRUCTION if seat in scripted_seats
+                    else ext_arm["instructions"][seat] if ext_arm is not None
                     else game_instruction(family, arm, seat, condition, max_text, max_messages_per_round) if game
                     else family.seat_instruction(inst, seat, seats, condition, max_text, max_messages)
                     if hasattr(family, "seat_instruction")
@@ -672,8 +694,12 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 compose(condition, seats, tokens, admin, briefings, max_text, max_messages,
                         world_env=world_env | {"FLOTILLA_PLAY_SECONDS": str(play_timeout)})
             )
-            (env / "Dockerfile").write_text(MAIN_DOCKERFILE)
-            files = family.seat_files(inst) if hasattr(family, "seat_files") else {}
+            (env / "Dockerfile").write_text(
+                MAIN_DOCKERFILE + (f"COPY ext/{family_name}.py /world/ext/\n" if extension else ""))
+            if extension:
+                (env / "ext").mkdir()
+                shutil.copy(extension_file, env / "ext" / extension_file.name)
+            files = ext_arm.get("files", {}) if extension else family.seat_files(inst) if hasattr(family, "seat_files") else {}
             for file_name, text in sorted(files.items()):
                 (env / "player" / file_name).write_text(text)
             (env / "player" / "Dockerfile").write_text(player_dockerfile(sorted(files)))
@@ -684,7 +710,12 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                          "seats": seats,
                          "difficulty": difficulty, "seed": seed,
                          "world_version": WORLD_VERSION, "max_text": max_text, "max_messages": max_messages}
-            if game:
+            if extension:
+                task_json |= {"mode": "extension", "extension": family_name, "params": ext_arm["params"],
+                              "initial_active": ext_arm.get("initial_active", seats),
+                              "messaging": ext_arm.get("messaging", condition.startswith("talk")),
+                              "scripted_seats": list(scripted_seats)}
+            elif game:
                 task_json |= {"mode": "rounds", "game": arm, "round_seconds": round_seconds,
                               "max_messages_per_round": max_messages_per_round, "read_gate": condition == "gated"}
             else:
@@ -850,7 +881,7 @@ def main() -> None:
     arms = tuple(getattr(module, "ARMS", ()))
     n_seats = args.seats if args.seats is not None else int(getattr(module, "SEATS", 2))
     conditions = tuple(c for c in args.conditions.split(",") if c)
-    if arms and path.parent == ROOT / "families" and args.conditions == ",".join(CONDITIONS):
+    if arms and path.parent != ROOT / "games" and args.conditions == ",".join(CONDITIONS):
         conditions = arms  # an answer family with arms of its own (probe)
     known = (set(CONDITION_TEXT) | set(arms) | set(getattr(module, "EXTRA_ARMS", ()))
              | set(getattr(module, "POLICY_ARMS", ())))

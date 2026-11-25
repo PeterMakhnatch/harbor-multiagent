@@ -15,6 +15,7 @@ import json
 import math
 import os
 import secrets
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -353,9 +354,114 @@ if AUDIT is not None:
     STATE["audits"] = []  # every audit attempt: {"seat", "month", "t", "ok", "status", "left", "attempts_before"}
     STATE["audit_attempts"] = dict.fromkeys(SEATS, 0)
 _SEQ = [0]
+EXTENSION: Any = None
+EXTENSION_ROUTES: dict[str, tuple[str, ...]] = {}
+
+
+class ExtensionHost:
+    """The referee services available to an extension. All calls run under LOCK."""
+
+    def __init__(self, seats: list[str], active: list[str]) -> None:
+        if len(set(active)) != len(active) or set(active) - set(seats):
+            raise ValueError("invalid initial active seats")
+        self.tick = 0
+        self.status = {seat: "active" if seat in active else "waiting" for seat in seats}
+        self.arrivals: dict[tuple[str, str], int | None] = {}
+        self.attempts = dict.fromkeys(seats, 0)
+
+    def record(self, kind: str, seat: str | None, data: dict[str, Any] | None = None) -> None:
+        record(kind, seat, data)
+
+    def advance(self) -> int:
+        if STATE["frozen"]:
+            raise ValueError("play has ended")
+        self.tick += 1
+        record("tick", None, {"tick": self.tick})
+        return self.tick
+
+    def activate(self, seat: str) -> None:
+        self._transition(seat, "waiting", "active")
+
+    def retire(self, seat: str) -> None:
+        self._transition(seat, "active", "retired")
+
+    def _transition(self, seat: str, before: str, after: str) -> None:
+        if STATE["frozen"] or self.status.get(seat) != before:
+            raise ValueError(f"invalid seat transition: {seat} {before} -> {after}")
+        self.status[seat] = after
+        record("seat_transition", seat, {"status": after, "tick": self.tick})
+
+    def freeze(self) -> None:
+        if not STATE["frozen"]:
+            STATE["frozen"] = True
+            record("freeze", None, {"reason": "extension ended play"})
+
+    def sent(self, message: dict[str, Any]) -> None:
+        delay = getattr(EXTENSION, "message_delay", None)
+        for seat in SEATS:
+            if seat == message["from"] or message["to"] not in ("all", seat):
+                continue
+            ticks = delay(message, seat) if delay else 0
+            if ticks is not None and (type(ticks) is not int or ticks < 0):
+                raise ValueError("message delay must be a nonnegative integer or None")
+            arrival = None if ticks is None else self.tick + ticks
+            self.arrivals[message["id"], seat] = arrival
+            record("message_route", message["from"], {"id": message["id"], "to": seat, "arrival": arrival})
+
+    def visible(self, message: dict[str, Any], seat: str) -> bool:
+        if message["from"] == seat:
+            return True
+        arrival = self.arrivals.get((message["id"], seat))
+        return arrival is not None and arrival <= self.tick
+
+
+HOST: ExtensionHost | None = None
+
+
+def load_extension() -> None:
+    global EXTENSION, HOST, MESSAGING
+    if not TASK_JSON_PATH.is_file():
+        return
+    task = json.loads(TASK_JSON_PATH.read_text())
+    name = task.get("extension")
+    if name is None:
+        return
+    if not isinstance(name, str) or not name.isidentifier():
+        raise ValueError("invalid extension name")
+    if GAME is not None or AUDIT is not None or SCHEDULED or REPLIES or PUSH or INBOX or SUBMIT_GATE:
+        raise ValueError("extensions cannot combine with legacy game or probe hooks")
+    path = Path(__file__).with_name("ext") / f"{name}.py"
+    spec = importlib.util.spec_from_file_location("world_extension", path)
+    if spec is None or spec.loader is None:
+        raise ValueError(f"cannot load extension {name}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    HOST = ExtensionHost(SEATS, task.get("initial_active", SEATS))
+    messaging = task.get("messaging")
+    if type(messaging) is not bool:
+        raise ValueError("extension messaging must be boolean")
+    MESSAGING = messaging
+    EXTENSION = module.create(task, HOST)
+    for route, methods in EXTENSION.routes.items():
+        if (not route.startswith("/") or route.startswith("/admin/") or route in ROUTES
+                or "?" in route or not methods or not set(methods) <= {"GET", "POST"}):
+            raise ValueError(f"invalid extension route {route}")
+        EXTENSION_ROUTES[route] = tuple(methods)
+    del ROUTES["/submit"]
+    ROUTES.update(EXTENSION_ROUTES)
+    STATE["extension"] = {"name": name}
+
+
+def visible_to(message: dict[str, Any], seat: str) -> bool:
+    if HOST is not None:
+        return HOST.visible(message, seat)
+    return message["to"] in ("all", seat) or message["from"] == seat
 
 
 def now() -> float:
+    if HOST is not None:
+        return float(HOST.tick)
     return round(time.monotonic() - START, 3)
 
 
@@ -413,6 +519,8 @@ def config_problems() -> list[str]:
 def expire() -> None:
     """Freeze the world PLAY_SECONDS after the first seat call, so that a seat process that outlives play
     cannot change the result before the verifier freezes it (review of fork PR #18, S1). Callers hold LOCK."""
+    if HOST is not None:
+        return
     first = STATE["first_call"]
     if PLAY_SECONDS and not STATE["frozen"] and first is not None and now() >= first + PLAY_SECONDS:
         STATE["frozen"] = True
@@ -516,7 +624,7 @@ def _unread(seat: str) -> list[dict[str, Any]]:
     """Messages from another seat, to this seat or to all, that no reply has shown this seat. Callers hold LOCK."""
     delivered = STATE["delivered"][seat]
     return [m for m in STATE["messages"]
-            if m["from"] != seat and m["to"] in ("all", seat) and m["id"] not in delivered]
+            if m["from"] != seat and visible_to(m, seat) and m["id"] not in delivered]
 
 
 def _deliver(seat: str, ids: list[str], via: str = "") -> None:
@@ -864,11 +972,23 @@ class World(BaseHTTPRequestHandler):
         if method not in methods:
             self._probe(seat, method, path, 405)
             return
+        if HOST is not None and seat != "admin" and path != "/whoami":
+            with LOCK:
+                if STATE["frozen"] or HOST.status[seat] != "active":
+                    record("late" if STATE["frozen"] else "inactive", seat, {"path": path})
+                    self._reply(409, {"error": "play has ended" if STATE["frozen"] else "seat is not active"})
+                    return
+        if path in EXTENSION_ROUTES:
+            self._extension_call(seat, method, path)
+            return
         if method == "GET":
             if path == "/whoami":
                 with LOCK:
                     record("whoami", seat)
-                self._reply(200, whoami(seat))
+                    view = whoami(seat)
+                    if HOST is not None:
+                        view |= {"active": HOST.status[seat], "tick": HOST.tick, "frozen": STATE["frozen"]}
+                self._reply(200, view)
             elif path == "/messages":
                 self._get_messages(seat)
             elif path == "/state":
@@ -906,6 +1026,25 @@ class World(BaseHTTPRequestHandler):
                 STATE["frozen"] = True
                 record("freeze", "admin")
             self._reply(200, {"frozen": True})
+
+    def _extension_call(self, seat: str, method: str, path: str) -> None:
+        body, reason = self._body() if method == "POST" else ({}, "")
+        if body is None:
+            self._invalid(seat, method, path, 400, reason, "send a JSON object")
+            return
+        with LOCK:
+            if STATE["frozen"] or HOST.status[seat] != "active":
+                record("late" if STATE["frozen"] else "inactive", seat, {"path": path})
+                self._reply(409, {"error": "play has ended" if STATE["frozen"] else "seat is not active"})
+                return
+            HOST.attempts[seat] += 1
+            if HOST.attempts[seat] > 1000:
+                status, reply = 429, {"error": "request limit reached"}
+            else:
+                status, reply = EXTENSION.handle(seat, method, path, body, parse_qs(urlsplit(self.path).query))
+            record("extension_call", seat, {"method": method, "path": path, "status": status})
+        self._reply(status, reply)
+
 
     def _audit(self, seat: str, body: dict[str, Any]) -> None:
         """Version 15: one month's file for a seat under test, within its budget; version 17: as plain CSV with
@@ -978,9 +1117,9 @@ class World(BaseHTTPRequestHandler):
                           f"messages are limited to {MAX_TEXT} characters")
             return
         with LOCK:
-            if STATE["frozen"]:  # review of fork PR #18, M2: a frozen world takes no more evidence
-                record("late", seat, {"path": "/messages", "chars": len(text)})
-                self._reply(409, {"error": "play has ended; the world is frozen"})
+            if STATE["frozen"] or (HOST is not None and HOST.status[seat] != "active"):
+                record("late" if STATE["frozen"] else "inactive", seat, {"path": "/messages", "chars": len(text)})
+                self._reply(409, {"error": "play has ended; the world is frozen" if STATE["frozen"] else "seat is not active"})
                 return
             if GAME is not None and MAX_MESSAGES_PER_ROUND:
                 tick()
@@ -1002,6 +1141,8 @@ class World(BaseHTTPRequestHandler):
             with (LOGS / "messages.jsonl").open("a") as log:
                 log.write(json.dumps(message, sort_keys=True) + "\n")
             record("send", seat, {"id": message["id"], "to": to, "chars": len(text)})
+            if HOST is not None:
+                HOST.sent(message)
             if REPLIES:
                 _arm_replies(message)
         self._reply(201, message)
@@ -1010,8 +1151,12 @@ class World(BaseHTTPRequestHandler):
         if self._deny_messaging(seat):
             return
         with LOCK:
+            if HOST is not None and (STATE["frozen"] or HOST.status[seat] != "active"):
+                record("late" if STATE["frozen"] else "inactive", seat, {"path": "/messages"})
+                self._reply(409, {"error": "play has ended" if STATE["frozen"] else "seat is not active"})
+                return
             visible = [
-                m for m in STATE["messages"] if m["to"] in ("all", seat) or m["from"] == seat
+                m for m in STATE["messages"] if visible_to(m, seat)
             ]
         self._deliver_reply(200, {"messages": visible}, seat)
 
@@ -1136,11 +1281,11 @@ class World(BaseHTTPRequestHandler):
         self._reply(200, view)
 
 
-def serve(host: str = "0.0.0.0", port: int = 8080) -> ThreadingHTTPServer:
-    """Bind the server, open the logs and record the start event; the caller runs serve_forever()."""
+def start_world() -> None:
+    """Initialize the referee and evidence, without binding a socket."""
     if problems := config_problems():
         raise SystemExit(f"world config refused: {'; '.join(problems)}")
-    server = ThreadingHTTPServer((host, port), World)
+    load_extension()
     LOGS.mkdir(parents=True, exist_ok=True)
     for name in ("events.jsonl", "messages.jsonl"):
         (LOGS / name).touch()
@@ -1157,9 +1302,16 @@ def serve(host: str = "0.0.0.0", port: int = 8080) -> ThreadingHTTPServer:
                                | ({"push": True} if PUSH else {})
                                | ({"inbox": True} if INBOX else {})
                                | ({"reply_posts": len(REPLIES)} if REPLIES else {}))
+        if HOST is not None:
+            record("extension_start", None, {"active": HOST.status.copy()})
         if INBOX:
             _post_inbox()
-    return server
+
+
+def serve(host: str = "0.0.0.0", port: int = 8080) -> ThreadingHTTPServer:
+    """Bind the server, open the logs and record the start event; the caller runs serve_forever()."""
+    start_world()
+    return ThreadingHTTPServer((host, port), World)
 
 
 def _post_inbox() -> None:

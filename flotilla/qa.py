@@ -263,7 +263,7 @@ def load_task(path: Path) -> Task:
     if not isinstance(task.task_json, dict):
         task.error("environment/task.json is not a JSON object")
         task.task_json = {}
-    elif task.answer_key is None and task.task_json.get("mode") != "rounds":  # a game has no answer key
+    elif task.answer_key is None and task.task_json.get("mode") not in ("rounds", "extension"):
         task.error("environment/task.json has no answer_key object")
     task.family_name = str(meta.get("family") or task.task_json.get("family") or "")
     variant = str(meta.get("variant") or "")
@@ -302,6 +302,8 @@ def load_task(path: Path) -> Task:
         task.error(f"solution/family.py cannot be loaded ({type(exc).__name__})")
     else:
         needs = ("settle", "score_game") if task.task_json.get("mode") == "rounds" else ("score", "oracle_answer")
+        if task.task_json.get("mode") == "extension":
+            needs = ("generate", "extension_arm", "qa")
         if all(callable(getattr(module, name, None)) for name in needs):
             task.family = module
         else:
@@ -594,10 +596,10 @@ def check_example_leak(task: Task) -> Iterator[Finding]:
                                   f"the JSON example on line {line} of its instruction scores 1 against {what}")
 
 
-def reveal_hits(text: str, condition: str) -> list[tuple[int, str]]:
+def reveal_hits(text: str, condition: str, extra: tuple[str, ...] = ()) -> list[tuple[int, str]]:
     """(offset, word) for each word that names or reveals a condition, leaving out a word inside a longer one
     ("liar" inside "talk-liar")."""
-    names = sorted({*REVEALING_NAMES, *([condition] if condition else [])})
+    names = sorted({*REVEALING_NAMES, *extra, *([condition] if condition else [])})
     patterns = [re.compile(rf"(?<![A-Za-z0-9_-]){re.escape(n)}(?![A-Za-z0-9_-])", re.IGNORECASE) for n in names]
     spans = sorted((m.start(), -m.end(), m.group(0)) for p in [*patterns, LIAR, WARNED] for m in p.finditer(text))
     hits, reach = [], -1
@@ -625,7 +627,8 @@ def check_condition_leak(task: Task) -> Iterator[Finding]:
             if WARNING in text and not warned:
                 yield Finding("condition-leak", task.name, seat,
                               f"{name} has the warning sentence, but {task.condition} is not a warned condition")
-            hits = reveal_hits(text.replace(WARNING, " " * len(WARNING)), task.condition)
+            extra = tuple(arm for arm in getattr(task.family, "ARMS", ()) if "-" in arm)
+            hits = reveal_hits(text.replace(WARNING, " " * len(WARNING)), task.condition, extra)
             if hits:
                 where = f" (line {text.count(chr(10), 0, hits[0][0]) + 1})" if name == "instruction" else ""
                 words = ", ".join(sorted({repr(word) for _start, word in hits}))
@@ -729,6 +732,7 @@ def protected_files(task: Task, seat: str) -> dict[Path, str]:
     """Files that a seat must never get: main's files, the family module, the other seats' instructions (their
     private information), task.toml and the build manifest (both say the condition of an opaque task)."""
     paths = {task.env_dir / name: f"environment/{name}" for name in WORLD_FILES}
+    paths.update((path, f"environment/ext/{path.name}") for path in (task.env_dir / "ext").glob("*.py"))
     paths[task.path / "solution" / "family.py"] = "solution/family.py"
     paths[task.path / "task.toml"] = "task.toml"
     for root in (task.path.parent, task.path.parent.parent):  # <out>/<label>/<task>: the manifest is at <out>
@@ -867,13 +871,24 @@ def check_stale_code(task: Task) -> Iterator[Finding]:
         return
     missing, differ = [], []
     game = task.task_json.get("mode") == "rounds"  # a game ships games/oracle.py and games/<family>.py
+    extension = task.task_json.get("mode") == "extension"
     for built, source in SHIPPED.items():
         if game:
             source = source.replace("world/oracle.py", "games/oracle.py").replace("families/", "games/")
+        elif extension:
+            source = source.replace("families/", "seams/")
         expected = checkout_bytes(source.format(family=task.family_name))
         if expected is None:
             yield Finding("stale-code", task.name, "*", f"this checkout has no family {task.family_name!r}")
         elif not (task.path / built).is_file():
+            missing.append(built)
+        elif (task.path / built).read_bytes() != expected:
+            differ.append(built)
+    if extension:
+        source = f"world/ext/{task.family_name}.py"
+        built = f"environment/ext/{task.family_name}.py"
+        expected = checkout_bytes(source)
+        if expected is None or not (task.path / built).is_file():
             missing.append(built)
         elif (task.path / built).read_bytes() != expected:
             differ.append(built)
@@ -940,6 +955,35 @@ def check_solo_sufficient(task: Task) -> Iterator[Finding]:
         if score_of(task, answer, task.answer_key, f"the oracle answer from {seat}'s briefing") >= 1.0:
             yield Finding("solo-sufficient", task.name, seat,
                           "its own briefing alone gives a correct answer (oracle_answer scores 1)")
+
+
+def check_extension(task: Task) -> Iterator[Finding]:
+    if task.task_json.get("mode") != "extension" or task.family is None:
+        return
+    data = task.task_json
+    try:
+        if data.get("extension") != task.family_name:
+            raise ValueError("extension name differs from family")
+        metadata = tomllib.loads((task.path / "task.toml").read_text())["metadata"]
+        inst = task.family.generate(data["seed"], data["instance"], metadata["team_seats"], data["difficulty"])
+        arm = task.family.extension_arm(inst, data["condition"], data["max_text"], data["max_messages"])
+        seats = sorted(arm["briefings"])
+        scripted = sorted(arm.get("scripted_seats", ()))
+        if (seats != task.seats or seats != sorted(data["seats"]) or scripted != sorted(data["scripted_seats"])
+                or sorted(set(seats) - set(scripted)) != task.under_test
+                or data["params"] != arm["params"]
+                or data["initial_active"] != arm.get("initial_active", seats)
+                or data["messaging"] != arm.get("messaging", data["condition"].startswith("talk"))):
+            yield Finding("qa-error", task.name, "*", "extension arm differs from family generator")
+        for seat in seats:
+            text = BUILD.SCRIPTED_INSTRUCTION if seat in scripted else arm["instructions"][seat]
+            if (task.view(seat)["instruction"] != text
+                    or json.loads(task.env(seat)["SEAT_BRIEFING"]) != arm["briefings"][seat]):
+                yield Finding("qa-error", task.name, seat, "extension briefing or instruction differs from generator")
+        for detail in task.family.qa(data, {seat: task.view(seat) for seat in seats}):
+            yield Finding("qa-error", task.name, "*", detail)
+    except Exception as exc:  # noqa: BLE001 - malformed extension task is a QA failure
+        yield Finding("qa-error", task.name, "*", f"extension QA failed: {type(exc).__name__}")
 
 
 def check_confederate_plan(task: Task) -> Iterator[Finding]:
@@ -1200,7 +1244,8 @@ def check_container_name(task: Task) -> Iterator[Finding]:
 
 TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
               check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient,
-              check_game_secret, check_confederate_plan, check_audit_data, check_push, check_inbox, check_policy)
+              check_game_secret, check_confederate_plan, check_audit_data, check_push, check_inbox, check_policy,
+              check_extension)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------
@@ -1255,7 +1300,9 @@ def check_twins(tasks: list[Task]) -> Iterator[Finding]:
         if task.instance is not None and task.condition:
             groups[(str(task.path.parent), task.label, task.instance)].setdefault(task.condition, task)
     for _key, by_condition in sorted(groups.items()):
-        for first, second in TWINS:
+        exemplar = next(iter(by_condition.values()))
+        twins = (*TWINS, *getattr(exemplar.family, "TWINS", ()))
+        for first, second in twins:
             if first not in by_condition or second not in by_condition:
                 continue
             a, b = by_condition[first], by_condition[second]
