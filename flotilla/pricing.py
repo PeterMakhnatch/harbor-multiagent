@@ -24,6 +24,7 @@ OpenRouter model without a ZDR endpoint, which such an account gets a 404 for.
 from __future__ import annotations
 
 import json
+import math
 import os
 import statistics
 import tempfile
@@ -247,6 +248,49 @@ class Estimate(NamedTuple):
     """USD per model seat in one trial (None when unknown) and where it came from."""
     usd: float | None
     source: str
+    uncertainty: float = 1.0
+
+
+def validate_profiles(profiles: object) -> None:
+    """A flat list of selectors; level, arm and role (seat name) may be omitted as wildcards."""
+    if not isinstance(profiles, list) or not profiles:
+        raise ValueError("token_profiles must be a nonempty list")
+    required = {"kind", "miss", "hit", "out", "source", "uncertainty"}
+    optional = {"level", "arm", "role", "n"}
+    seen = set()
+    for index, row in enumerate(profiles):
+        where = f"token_profiles[{index}]"
+        if not isinstance(row, dict) or required - row.keys() or row.keys() - required - optional:
+            raise ValueError(f"{where}: missing or unknown fields")
+        for key in ("kind", "source", "level", "arm", "role"):
+            if key in row and (not isinstance(row[key], str) or not row[key].strip()):
+                raise ValueError(f"{where}.{key}: expected nonempty text")
+        for key in ("miss", "hit", "out", "uncertainty"):
+            value = row[key]
+            try:
+                valid = _number(value) is not None and math.isfinite(value) and value >= (key == "uncertainty")
+            except OverflowError:
+                valid = False
+            if not valid:
+                bound = "factor >= 1" if key == "uncertainty" else "tokens >= 0"
+                raise ValueError(f"{where}.{key}: expected finite {bound}")
+        if not any(row[key] for key in ("miss", "hit", "out")):
+            raise ValueError(f"{where}: all token counts are zero")
+        if "n" in row and (type(row["n"]) is not int or row["n"] < 1):
+            raise ValueError(f"{where}.n: expected positive integer")
+        selector = tuple(row.get(key) for key in ("kind", "level", "arm", "role"))
+        if selector in seen:
+            raise ValueError(f"{where}: duplicate selector")
+        seen.add(selector)
+
+
+def declared_profile(profiles: list[dict], kind: str | None, level: str | None,
+                     arm: str | None, role: str | None) -> dict | None:
+    matches = [row for row in profiles if row["kind"] == kind and all(
+        key not in row or row[key] == value for key, value in (("level", level), ("arm", arm), ("role", role)))]
+    # More specific wins; ties prefer level, then arm, then role.
+    return max(matches, key=lambda row: (sum(key in row for key in ("level", "arm", "role")),
+                                        "level" in row, "arm" in row, "role" in row), default=None)
 
 
 def kind_of(label: str) -> str:
@@ -430,27 +474,31 @@ def _mean(values: list[float]) -> float:
     return sum(values) / len(values)
 
 
+def _price_tokens(model: str, tokens: dict, catalog: Catalog, source: str, uncertainty: float = 1.0) -> Estimate:
+    if is_deepseek_direct(model):
+        usd = PEAK_FACTOR_MAX * sum(tokens[key] * OFF_PEAK[key] for key in tokens) / 1e6
+        return Estimate(usd, f"{source}, DeepSeek peak rate", uncertainty)
+    prices = catalog.prices()
+    if prices is None:
+        return Estimate(None, "unknown (no catalog)")
+    try:
+        return Estimate(openrouter_cost(model, tokens, prices), source, uncertainty)
+    except (KeyError, ValueError):
+        return Estimate(None, "unknown (not in catalog)")
+
+
 def _profile_estimate(model: str, kind: str | None, history: History, catalog: Catalog) -> Estimate:
     if kind is None:
         return Estimate(None, "unknown (no task kind, no history)")
     profile = token_profile(history, kind)
     if profile is None:
         return Estimate(None, f"unknown (no history, no {kind} token profile)")
-    tokens = profile[0]
-    if is_deepseek_direct(model):
-        usd = PEAK_FACTOR_MAX * sum(tokens[key] * OFF_PEAK[key] for key in tokens) / 1e6
-        return Estimate(usd, f"price-estimate {kind}, DeepSeek peak rate")
-    prices = catalog.prices()
-    if prices is None:
-        return Estimate(None, "unknown (no catalog)")
-    try:
-        return Estimate(openrouter_cost(model, tokens, prices), f"price-estimate {kind}")
-    except (KeyError, ValueError):
-        return Estimate(None, "unknown (not in catalog)")
+    return _price_tokens(model, profile[0], catalog, f"price-estimate {kind}")
 
 
-def seat_estimate(model: str | None, kind: str | None, history: History, catalog: Catalog, smoke: bool) -> Estimate:
-    """USD for one model seat. Prefer reliable same-kind history, then kind-specific prices, then pooled history."""
+def seat_estimate(model: str | None, kind: str | None, history: History, catalog: Catalog, smoke: bool,
+                  declared: dict | None = None) -> Estimate:
+    """Prefer same-kind history, then a declared profile, then pooled history."""
     if model is None:
         return Estimate(0.0, "free")
     if smoke:
@@ -461,6 +509,10 @@ def seat_estimate(model: str | None, kind: str | None, history: History, catalog
     priced = _profile_estimate(model, kind, history, catalog)
     if priced.usd is not None:
         return priced
+    if declared is not None and not token_profile(history, kind):
+        tokens = {key: declared[key] for key in ("hit", "miss", "out")}
+        return _price_tokens(model, tokens, catalog, f"declared profile ({declared['source']})",
+                             declared["uncertainty"])
     pooled = {seen: amounts for (seen, name), amounts in history.costs.items() if name == model}
     if pooled:
         amounts = [amount for values in pooled.values() for amount in values]
@@ -482,8 +534,8 @@ def _manifest_of(task_set: dict, repo: Path, jobs_dir: Path) -> dict | None:
     return None
 
 
-def cell_layouts(plan: dict, repo: Path, jobs_dir: Path) -> dict[tuple, tuple[str | None, list | None, list | None]]:
-    """(kind, seats, scripted seats) per (task set, instance, arm) from the manifests; None where unknown."""
+def cell_layouts(plan: dict, repo: Path, jobs_dir: Path) -> dict[tuple, tuple]:
+    """(kind, seats, scripted seats, level) per (task set, instance, arm) from the manifests."""
     found = {}
     for index, task_set in enumerate(plan["task_sets"]):
         for entry in ((_manifest_of(task_set, repo, jobs_dir) or {}).get("tasks") or {}).values():
@@ -491,36 +543,47 @@ def cell_layouts(plan: dict, repo: Path, jobs_dir: Path) -> dict[tuple, tuple[st
             seats = entry.get("seats") if isinstance(entry.get("seats"), list) else None
             scripted = (entry.get("build") or {}).get("scripted_seats")
             found[(index, entry.get("instance"), entry.get("condition"))] = (
-                kind_of(label) if label else None, seats, scripted if isinstance(scripted, list) else None)
+                kind_of(label) if label else None, seats, scripted if isinstance(scripted, list) else None,
+                (entry.get("build") or {}).get("difficulty"))
     return found
 
 
-def cell_models(cell: dict, seats: list | None, scripted: list | None) -> list[str]:
-    """The model of every model seat of a planned trial. Without a roster a model cell has one model seat."""
-    if cell.get("assignment"):
-        return list(cell["assignment"])
+def cell_seat_models(cell: dict, seats: list | None, scripted: list | None) -> list[tuple[str | None, str]]:
+    """Seat name and model for each tested seat. Unknown rosters keep the legacy one-seat estimate."""
+    skipped = scripted if scripted is not None else cell.get("scripted") or []
+    tested = [seat for seat in sorted(seats or []) if seat not in skipped]
+    models = cell.get("assignment")
+    if models:
+        return list(zip(tested or [None] * len(models), models, strict=True))
     if cell.get("model") is None:
         return []
-    skipped = scripted if scripted is not None else cell.get("scripted") or []
-    tested = len([seat for seat in seats if seat not in skipped]) if seats else 0
-    return [cell["model"]] * max(1, tested)
+    return [(seat, cell["model"]) for seat in tested or [None]]
 
 
 def _tally(order: list[dict], layouts: dict, estimate) -> dict[str, dict]:
     rows: dict[str, dict] = {}
     for cell in order:
-        kind, seats, scripted = layouts.get((cell["task_set"], cell["instance"], cell["arm"]), (None, None, None))
-        models = cell_models(cell, seats, scripted)
-        for model in dict.fromkeys(models) if models else [None]:
-            count = models.count(model) if model else 0
-            found = estimate(model, kind)
-            row = rows.setdefault(model or ORACLE, {"trials": 0, "seats": 0, "priced": 0, "usd": 0.0, "sources": {}})
+        kind, seats, scripted, level = layouts.get((cell["task_set"], cell["instance"], cell["arm"]),
+                                                    (None, None, None, None))
+        models = cell_seat_models(cell, seats, scripted)
+        grouped: dict[str | None, list[Estimate]] = {}
+        for seat, model in models or [(None, None)]:
+            grouped.setdefault(model, []).append(estimate(model, kind, level, cell["arm"], seat))
+        for model, estimates in grouped.items():
+            row = rows.setdefault(model or ORACLE, {"trials": 0, "seats": 0, "priced": 0, "usd": 0.0,
+                                                   "low": 0.0, "high": 0.0, "complete_usd": 0.0, "sources": {}})
             row["trials"] += 1
-            row["seats"] += count
-            row["sources"][found.source] = row["sources"].get(found.source, 0) + 1
-            if found.usd is not None:
+            row["seats"] += len(estimates) if model else 0
+            for source in dict.fromkeys(found.source for found in estimates):
+                row["sources"][source] = row["sources"].get(source, 0) + 1
+            if all(found.usd is not None for found in estimates):
                 row["priced"] += 1
-                row["usd"] += found.usd * count
+                row["complete_usd"] += sum(found.usd or 0.0 for found in estimates)
+            for found in estimates:
+                if found.usd is not None:
+                    row["usd"] += found.usd
+                    row["low"] += found.usd / found.uncertainty
+                    row["high"] += found.usd * found.uncertainty
     return dict(sorted(rows.items()))
 
 
@@ -532,7 +595,7 @@ def _row_line(model: str, row: dict) -> str:
         return f"{head}, cost UNKNOWN [{shown}]"
     missing = row["trials"] - row["priced"]
     tail = f", {missing} trials UNKNOWN" if missing else ""
-    return f"{head}, ${row['usd'] / row['priced']:.6f}/trial, total ${row['usd']:.4f}{tail} [{shown}]"
+    return f"{head}, ${row['complete_usd'] / row['priced']:.6f}/trial, total ${row['usd']:.4f}{tail} [{shown}]"
 
 
 def _profile_lines(history: History, kinds: list[str]) -> list[str]:
@@ -569,6 +632,13 @@ def _total_lines(plan: dict, trials: int, rows: dict[str, dict]) -> list[str]:
                      f"{sum(unknown.values())} model trials: {names}")
     else:
         lines.append(f"  expected: ${expected:.4f} = {spend} + Modal ${modal:.4f}")
+    if plan.get("token_profiles") and not plan.get("smoke"):
+        if unknown:
+            lines.append("  low / expected / high total: UNKNOWN (some seats lack a price)")
+        else:
+            low = sum(row["low"] for row in rows.values()) + modal
+            high = sum(row["high"] for row in rows.values()) + modal
+            lines.append(f"  low / expected / high total: ${low:.4f} / ${expected:.4f} / ${high:.4f}")
     cap = float(plan["budget"]["cap_usd"])
     note = "; expected model spend is above the cap" if openrouter + deepseek > cap else ""
     lines.append(f"  maximum: ${cap + modal:.4f} = model cap ${cap:.4f} + Modal ${modal:.4f}{note}")
@@ -588,10 +658,12 @@ def forecast_lines(plan: dict, order: list[dict], repo: Path, history_jobs: Path
     layouts = {} if smoke else cell_layouts(plan, repo, jobs_dir)
     cache: dict[tuple, Estimate] = {}
 
-    def estimate(model: str | None, kind: str | None) -> Estimate:
-        if (model, kind) not in cache:
-            cache[(model, kind)] = seat_estimate(model, kind, history, catalog, smoke)
-        return cache[(model, kind)]
+    def estimate(model: str | None, kind: str | None, level: str | None, arm: str, seat: str | None) -> Estimate:
+        key = (model, kind, level, arm, seat)
+        if key not in cache:
+            declared = declared_profile(plan.get("token_profiles", []), kind, level, arm, seat)
+            cache[key] = seat_estimate(model, kind, history, catalog, smoke, declared)
+        return cache[key]
 
     rows = _tally(order, layouts, estimate)
     if smoke:
@@ -599,7 +671,7 @@ def forecast_lines(plan: dict, order: list[dict], repo: Path, history_jobs: Path
     else:
         lines = [f"cost forecast {plan['name']}: history {jobs_dir} ({history.records} usable finished trial records)"]
     lines += [_row_line(model, row) for model, row in rows.items()]
-    kinds = sorted({kind for (_model, kind), found in cache.items() if kind and found.source.startswith("price-")})
+    kinds = sorted({key[1] for key, found in cache.items() if key[1] and found.source.startswith("price-")})
     lines += _profile_lines(history, kinds)
     if not smoke:
         lines.append(f"  catalog: {catalog.status or 'not read (no model needed list prices)'}")

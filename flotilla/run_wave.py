@@ -106,7 +106,7 @@ assert _JOBS and _JOBS.loader
 _JOBS.loader.exec_module(JOBS)
 PLAN_KEYS = frozenset({
     "name", "prereg", "task_sets", "models", "agent", "make_jobs", "budget", "order_seed", "seat_assignments",
-    "scripted_seats", "stages",
+    "scripted_seats", "stages", "token_profiles",
 })
 PREREG_KEYS = frozenset({"commit", "doc", "section"})
 JOB_KEYS = frozenset({"max_turns", "env", "concurrency", "start_spacing_s"})
@@ -207,6 +207,11 @@ def load_plan(path: Path, *, smoke: bool = False) -> dict:
     refuse_unknown(plan["prereg"], PREREG_KEYS, "prereg")
     refuse_unknown(plan["make_jobs"], JOB_KEYS, "make_jobs")
     refuse_unknown(plan["budget"], BUDGET_KEYS, "budget")
+    if "token_profiles" in plan:
+        try:
+            PRICING.validate_profiles(plan["token_profiles"])
+        except ValueError as exc:
+            raise SystemExit(f"refused: {exc}") from None
     for field in ("commit", "doc", "section"):
         if field not in plan["prereg"]:
             raise SystemExit(f"refused: prereg missing {field}")
