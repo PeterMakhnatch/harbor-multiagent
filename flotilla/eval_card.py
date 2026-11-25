@@ -198,6 +198,7 @@ def simulate_job(job: tuple[Path, str, int, bool]) -> dict[str, Any]:
     invalid = bool(result.get("invalid") or result.get("stalled") or score.get("invalid") or score.get("error"))
     events = json.dumps(result.get("events", []), sort_keys=True, separators=(",", ":"), allow_nan=False)
     row = {"reward": result.get("reward"), "invalid": invalid, "stalled": bool(result.get("stalled")),
+           "stalled_seats": result.get("stalled_seats") or score.get("stalled_seats") or [],
            "requests": result.get("requests", {}), "event_sha256": hashlib.sha256(events.encode()).hexdigest(),
            "event_count": len(result.get("events", []))}
     versions = result.get("versions", score.get("versions"))
@@ -504,10 +505,14 @@ def make_checks(card: dict, pairs: dict[str, str], twins: list[tuple[str, str]])
     if not stall or stall.get("unsupported_stall"):
         result.append(check("invalid is not zero", "F1", "NA", "Kit does not return a result for scheduler exhaustion"))
     else:
-        valid = stall.get("stalled") and stall.get("invalid") and stall.get("reward") is None and not stall.get("error")
+        void = stall.get("stalled") and stall.get("invalid") and stall.get("reward") is None
+        flagged = not stall.get("invalid") and bool(stall.get("stalled_seats"))  # a family's on_deadline result
+        valid = (void or flagged) and not stall.get("error")
         result.append(check("invalid is not zero", "F1", "PASS" if valid else "FAIL",
                             f"Budget-limited simulation: stalled={stall.get('stalled')}, "
-                            f"invalid={stall.get('invalid')}, reward={stall.get('reward')}"))
+                            f"invalid={stall.get('invalid')}, reward={stall.get('reward')}, "
+                            f"stalled_seats={stall.get('stalled_seats')} (a cut-off play is void or a valid result "
+                            "that names the stalled seats, never an unflagged score)"))
     canary = static["canary"]
     result.append(check("canary", "A6", "NA" if canary is None or not static["tasks"] else
                         "FAIL" if canary else "PASS", "Builder has no canary marker" if canary is None else
