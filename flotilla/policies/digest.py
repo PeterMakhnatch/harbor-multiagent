@@ -1,11 +1,13 @@
 """Scripted workers use only the manual, amendments and delivered notes."""
 
 import hashlib
+from collections import Counter
 
 
 def supports(name, variant):
     return (name in ("careful", "naive", "naive_reader", "lone", "lane_only", "hold_all", "uniform_random",
-                     "blind", "random", "copy", "append", "lapse-10", "lapse-20", "lapse-30", "lapse-50")
+                     "blind", "random", "copy", "append", "newest_only", "guess-mode", "guess-position",
+                     "lapse-10", "lapse-20", "lapse-30", "lapse-50")
             or name.startswith("constant-"))
 
 
@@ -31,11 +33,11 @@ def decode(family, own, reply, name):
             home, rules = {}, []
     if "amendment" in own and (name not in ("copy", "append", "naive") or own.get("fullrecord")):
         _, amendments = family.parse_manual(own["amendment"])
-        rules = family.merge_amendments(rules, amendments)
+        rules = amendments if name == "newest_only" else family.merge_amendments(rules, amendments)
     return home, rules
 
 
-def solve_job(family, client, job, home, rules, name):
+def solve_job(family, client, job, home, rules, name, position):
     try:
         _, _, action = family.decision(rules, job)
     except (ValueError, AttributeError, TypeError):
@@ -43,14 +45,23 @@ def solve_job(family, client, job, home, rules, name):
     if name == "lane_only":
         action = home.get(job["product"], "hold")
     replies = {}
-    guessing = name in ("lone", "uniform_random", "blind", "random")
+    guessing = name in ("lone", "uniform_random", "blind", "random", "guess-mode", "guess-position")
     if guessing or name.startswith("constant-"):
         for check in family.CHECKS:
             status, result = yield from client.post("/check", {"job": job["id"], "what": check})
             if status != 200:
                 raise RuntimeError("check not accepted")
             replies[check] = result["reply"]
-    if guessing:
+    if name == "guess-mode":
+        counts = Counter(home.values())
+        for rule in rules:
+            for _, value in rule["clauses"]:
+                outcomes = [item.split("=")[1] for item in value.split()[1:]] if value.startswith("check:") else [value]
+                counts.update(outcome for outcome in outcomes if outcome in family.OUTCOMES)
+        outcome = counts.most_common(1)[0][0] if counts else "hold"
+    elif name == "guess-position":
+        outcome = family.OUTCOMES[position % len(family.OUTCOMES)]
+    elif guessing:
         number = int.from_bytes(hashlib.sha256(job["id"].encode()).digest()[:8], "big")
         outcome = family.OUTCOMES[number % len(family.OUTCOMES)]
     elif name.startswith("constant-"):
@@ -81,7 +92,7 @@ def main_only(rules):
 
 def note_to_send(family, own, home, rules, text, cap, name):
     if name in ("lone", "blind", "random", "uniform_random"):
-        return ""
+        return "No rules recorded."
     card = own.get("format") == "card"
     render = family.card_text if card else family.note_text
     if own["role"] == "relay" and not own.get("fullrecord"):
@@ -91,7 +102,7 @@ def note_to_send(family, own, home, rules, text, cap, name):
             return render(home, rules[1:])
         if name == "append":
             _, amendments = family.parse_manual(own["amendment"])
-            addition = "\n".join(family.note_text({}, amendments).splitlines()[2:])
+            addition = "\n".join(family.note_text(home, amendments).splitlines()[1:])
             combined = text + "\n" + addition
             return combined if len(combined) <= cap else text
     if card and (name == "naive" or own.lapse_percent is not None):
@@ -129,7 +140,7 @@ def play(name, client, own, family):
                     and not own.get("format") and count >= 12 and (name in ("naive", "naive_reader") or (
                         own.lapse_percent is not None and own.lapse(own.lapse_percent, ["read", job["id"]])))):
                 active_rules = main_only(rules)
-            actions.append((yield from solve_job(family, client, job, home, active_rules, name)))
+            actions.append((yield from solve_job(family, client, job, home, active_rules, name, count)))
             count += 1
         status, _ = yield from client.post("/act", {"actions": actions})
         if status != 200:
@@ -138,7 +149,7 @@ def play(name, client, own, family):
         raise RuntimeError("too many pages")
     if own["role"] == "worker":
         return
-    status, measure = yield from client.post("/note/check", {"text": ""})
+    status, measure = yield from client.post("/note/check", {"text": "Measure note cap."})
     if status != 200:
         return
     output = note_to_send(family, own, home, rules, text, measure["limit"], name)
