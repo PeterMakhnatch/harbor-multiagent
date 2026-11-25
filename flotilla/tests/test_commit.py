@@ -169,6 +169,8 @@ def test_commit_scheduler_sweep(tmp_path, dose, arm):
                 assert stalled["reward"] is None and stalled["invalid"]
                 assert any(event["kind"] == "play_timeout" for event in stalled["events"])
                 assert SIM.simulate_built(path, {"p1": "lone"}, 0)["reward"] == 0
+                stale = SIM.simulate_built(path, {"p1": "naive"}, 0)["score"]
+                assert stale["reward"] == 0 and stale["stale_after_delivery"] == stale["affected_total"] > 0
                 assert SIM.simulate_built(path, {"p2": "naive"}, 0)["reward"] == 0
         if arm == "probe-trap":
             skims = [SIM.simulate_built(path, f"skim_{j}", 0)["reward"] for j in (2, 4, 8)]
@@ -185,6 +187,12 @@ def test_commit_built_pairs(tmp_path):
     findings, tasks = QA.check(paths)
     assert len(tasks) == 14
     assert not [f for f in findings if f.level == "FAIL"]
+    by_instance = {(task.instance, task.condition): task for task in tasks}
+    for i in range(2):
+        a, b = (by_instance[i, arm] for arm in ("probe-control", "team"))
+        views = [{key: value for key, value in QA.twin_view(task, "p1").items() if key != "env.SEAT_TOKEN"}
+                 for task in (a, b)]
+        assert views[0] == views[1]
 
 
 def test_commit_atomicity_and_receipts_over_http(tmp_path, start_world):
@@ -220,3 +228,36 @@ def test_commit_atomicity_and_receipts_over_http(tmp_path, start_world):
     assert world.seat("p1", "POST", "/step", {"round": params["rounds"], "bookings": entries})[0] == 409
     assert EXT.score(task, world.events())["reward"] == 1
     assert EXT.score(task, world.events())["stale_after_delivery"] == 0
+    events = world.events()
+    shuffled = list(events)
+    for i in range(len(shuffled) - 1):
+        if shuffled[i]["kind"] == shuffled[i + 1]["kind"] == "commit_book":
+            shuffled[i], shuffled[i + 1] = shuffled[i + 1], shuffled[i]
+    assert EXT.score(task, shuffled) == EXT.score(task, events)
+
+
+@pytest.mark.parametrize("arm", ("probe-control", "probe-trap"))
+def test_commit_opening_push_over_http(tmp_path, start_world, arm):
+    (path,) = SIM.BUILD.build("commit", [0], 2, "canary", SEED, (arm,), tmp_path)
+    task = json.loads((path / "environment" / "task.json").read_text())
+    params = task["params"]
+    outage = params["outages"][0]
+    world = start_world(arm, ("p1", "p2"), FLOTILLA_TASK_JSON=str(path / "environment" / "task.json"))
+    world.ordered = True
+    status, identity = world.seat("p1", "GET", "/whoami")
+    assert status == 200
+    assert bool(identity.get("new_messages")) == (arm == "probe-control")
+    status, view = world.seat("p1", "GET", "/view")
+    assert status == 200
+    assert not view.get("new_messages")
+    assert bool(view["messages"]) == (arm == "probe-control")
+    for r in range(1, params["rounds"] + 1):
+        assert not {"condition", "arm", "answer", "seed", "params"} & view.keys()
+        assert view["round"] == r
+        entries = [{"shipment": s["id"], "carrier": params["answer"][s["id"]]}
+                   for s in params["shipments"] if s["round"] == r]
+        status, view = world.seat("p1", "POST", "/step", {"round": r, "bookings": entries})
+        assert status == 200
+        pushed = [m["text"] for m in view.get("new_messages", [])]
+        assert pushed == ([outage["text"]] if arm == "probe-trap" and r + 1 == outage["start"] else [])
+    assert EXT.score(task, world.events())["reward"] == 1
