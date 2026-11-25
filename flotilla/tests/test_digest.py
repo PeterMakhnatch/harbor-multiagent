@@ -380,6 +380,10 @@ def test_tolerant_rule_headings():
         ("Rule 58.\nMain: proof=pending\n  58.1 exception account=key\n"
          "Rule 12.\nMain: stock=custom\nRule 31.\nMain: account=new"),
         "58 proof=pending->N\n12:stock=custom=>C\n31 account=new->hold",
+        "1) R58 pending: N; key & rush no: Q\n2.R12 custom: C\n3 31 new: hold\n4) Otherwise: home",
+        "1. 58 pending: N\n2) **12** custom: C\n3 R31 new: hold",
+        "Rules in order: R58 pending=N. R12 custom=C. R31 new=hold. Otherwise home.",
+        "Rules in order: 58 pending=N. 12 custom=C. 31 new=hold. Otherwise home.",
     ]
     for note in notes:
         assert EXT.note_measures(params, note) == {
@@ -390,8 +394,18 @@ def test_tolerant_rule_headings():
         "order_kept": False, "numbers_kept": True, "note_measure_flag": None}
     assert EXT.note_measures(params, "R58 proof pending\nR12 stock custom") == {
         "order_kept": True, "numbers_kept": False, "note_measure_flag": None}
-    assert EXT.note_measures(params, "R58 something unclear") == {
+    assert EXT.note_measures(params, "R58 pending: N") == {
+        "order_kept": True, "numbers_kept": False, "note_measure_flag": None}
+    assert EXT.note_measures(params, "R99 something unclear") == {
         "order_kept": None, "numbers_kept": None, "note_measure_flag": "unreadable_rule_heading"}
+    assert EXT.note_measures(params, "Order 58,12,31. No rule headings.") == {
+        "order_kept": None, "numbers_kept": None, "note_measure_flag": "unreadable_note"}
+    assert EXT.note_measures(params, "R12 custom=C. R31 new=hold. R58 pending=N.") == {
+        "order_kept": False, "numbers_kept": True, "note_measure_flag": None}
+    assert EXT.note_measures(params, "Today 4 jobs, all done. Rule 58 never fired. Rule 12 unverified.") == {
+        "order_kept": None, "numbers_kept": None, "note_measure_flag": "unreadable_note"}
+    assert EXT.note_measures(params, "Rule 58 amendment: pending=N. Unknown home: hold.") == {
+        "order_kept": True, "numbers_kept": False, "note_measure_flag": None}
 
 
 @pytest.mark.parametrize("dose", DOSES)

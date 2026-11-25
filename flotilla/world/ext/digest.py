@@ -169,8 +169,11 @@ def create(task, host):
 
 
 RULE_LABEL = re.compile(
-    r"^\s*(?:[-*+]\s+)?(?:\*\*|__|`)?(?:(?:rule|r)\s*)?(\d+)(?!\d|\.\d)"
-    r"(?:\*\*|__|`)?(?:\s*[:.)-]\s*|\s+|$)(.*)$", re.IGNORECASE)
+    r"^\s*(?:[-*+]\s+)?(?:\d+[.)]?(?:\s+|(?=(?:rule|r)\s*\d)))?"
+    r"(?:\*\*|__|`)?(?:(?:rule|r)\s*)?(\d+)(?!\d|\.\d)"
+    r"(?:\*\*|__|`)?(\s*[:.)-]\s*|\s+|$)(.*)$", re.IGNORECASE)
+NON_RULE_HEADING = re.compile(r"^(?:otherwise|else|default|no match|jobs?)\b", re.IGNORECASE)
+RULE_BREAK = r"(?<!\d)[.!?]\s+|[:;]\s+(?=(?:rule\s*|r)?(?:{})\b)"
 
 
 def note_measures(params, note):
@@ -184,22 +187,31 @@ def note_measures(params, note):
     if not heads:
         return unknown | {"note_measure_flag": "no_reference"}
     expected = {field: number for number, field in heads}
+    by_number = {number: field for number, field in heads}
     field_pattern = re.compile(r"\b(" + "|".join(expected) + r")\b", re.IGNORECASE)
     observed = {}
     numbers_match = True
-    lines = [line for line in note.splitlines() if line.strip()]
-    for index, line in enumerate(lines):
+    inline_break = re.compile(RULE_BREAK.format("|".join(map(str, by_number))), re.IGNORECASE)
+    lines = [(part, i > 0) for line in note.splitlines()
+             for i, part in enumerate(inline_break.split(line)) if part.strip()]
+    for index, (line, inline) in enumerate(lines):
         label = RULE_LABEL.match(line)
         if label is None:
             continue
-        body = label[2].strip("*`_ ")
-        if not body and index + 1 < len(lines) and not RULE_LABEL.match(lines[index + 1]):
-            body = lines[index + 1]
-        field = field_pattern.search(body)
-        if field is None:
-            return unknown | {"note_measure_flag": "unreadable_rule_heading"}
-        name = field[1].lower()
+        body = label[3].strip("*`_ ")
+        if inline and ":" not in label[2] and not re.search(r"[:=]|->", body):
+            continue
+        if not body and index + 1 < len(lines) and not RULE_LABEL.match(lines[index + 1][0]):
+            body = lines[index + 1][0]
+        if NON_RULE_HEADING.match(body):
+            continue
         number = int(label[1])
+        # A field in an exception is not the identity of the main rule.
+        main = re.split(r":|;|=>|->", re.sub(r"^main:\s*", "", body, flags=re.IGNORECASE), maxsplit=1)[0]
+        field = field_pattern.search(main)
+        name = field[1].lower() if field else by_number.get(number)
+        if name is None:
+            return unknown | {"note_measure_flag": "unreadable_rule_heading"}
         if name in observed and observed[name] != number:
             numbers_match = False
         observed[name] = number
