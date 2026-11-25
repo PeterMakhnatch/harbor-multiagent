@@ -136,8 +136,8 @@ def booking_instruction(inst, arm, max_text, max_messages):
     else:
         lines.append("Each shipment is an ID. `GET /shipment?id=<id>` gives its origin, destination and load.")
     lines.extend([
-        '`POST /step` with `{"round": <number>, "bookings": [{"shipment": "<id>", "carrier": "<name>"}]}` '
-        "books that round's shipments and ends your part of the round.",
+        ('`POST /step` with `{"round": <number>, "bookings": [{"shipment": "<id>", "carrier": "<name>"}]}` '
+         "books that round's shipments and ends your part of the round."),
         "The next round opens when both desks have finished their part, or if the carrier desk has finished for the day.",
         "The reply gives the current view. If `stepped` is true, your part is complete but the round remains open.",
         "In that case use `GET /await?until=tick&after=<round minus 1>` to wait, then `GET /view` for the next round.",
