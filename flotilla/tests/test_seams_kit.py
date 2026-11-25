@@ -13,6 +13,25 @@ BUILD = SIM.BUILD
 QA = load(FLOTILLA / "qa.py")
 SEED = 7236499753218553
 
+def test_extension_canary(tmp_path):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("talk",), tmp_path)
+    for file in BUILD.canary_files(path, "kit_fixture"):
+        assert BUILD.CANARY_LINE in file.read_bytes().splitlines()
+    assert not QA.check([path])[0]
+    task = QA.load_task(path)
+    for seat in task.seats:
+        assert all(BUILD.CANARY not in text for text in task.view(seat).values())
+    toml = path / "task.toml"
+    toml.write_bytes(toml.read_bytes().replace(BUILD.CANARY_LINE, b""))
+    assert any(f.rule == "canary" and f.seat == "*" for f in QA.check([path])[0])
+    instruction = path / "instructions" / "p2.md"
+    instruction.write_text(instruction.read_text() + BUILD.CANARY)
+    assert any(f.rule == "canary" and f.seat == "p2" for f in QA.check([path])[0])
+    (legacy,) = BUILD.build("schedule", [0], 2, "easy", SEED, ("solo",), tmp_path)
+    assert all(BUILD.CANARY.encode() not in file.read_bytes() for file in legacy.rglob("*") if file.is_file())
+    assert not any(f.rule == "canary" for f in QA.check([legacy])[0])
+
+
 
 def test_fixture_sweep(tmp_path):
     paths = BUILD.build("kit_fixture", [0, 1], 2, "easy", SEED, ("solo", "talk", "talk-control", "talk-trap"),

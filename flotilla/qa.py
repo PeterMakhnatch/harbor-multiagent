@@ -107,6 +107,7 @@ RULES: dict[str, tuple[str, str]] = {
                        "the subject's 'Team messages so far' block is not task.json's scheduled posts exactly, or a "
                        "seat has a block without inbox")),
     "solo-sufficient": ("WARN", "in a team condition, a seat's own briefing alone gives a correct answer"),
+    "canary": ("FAIL", "an extension task lacks the hidden contamination marker or exposes it to a seat"),
 }
 ALLOW_READABLE_NAMES = "--allow-readable-names"  # the flag that makes runtime-names a WARN
 ALLOW_PUBLIC_SEED = "--allow-public-seed"  # the flag that makes public-seed a WARN
@@ -888,6 +889,8 @@ def check_stale_code(task: Task) -> Iterator[Finding]:
         elif extension:
             source = source.replace("families/", "seams/")
         expected = checkout_bytes(source.format(family=task.family_name))
+        if extension and expected is not None:
+            expected = BUILD.marked(expected)
         if expected is None:
             yield Finding("stale-code", task.name, "*", f"this checkout has no family {task.family_name!r}")
         elif not (task.path / built).is_file():
@@ -900,7 +903,7 @@ def check_stale_code(task: Task) -> Iterator[Finding]:
         expected = checkout_bytes(source)
         if expected is None or not (task.path / built).is_file():
             missing.append(built)
-        elif (task.path / built).read_bytes() != expected:
+        elif (task.path / built).read_bytes() != BUILD.marked(expected):
             differ.append(built)
     if "policy" in task.task_json:
         sources = {"solution/policy.py": "world/policy.py"}
@@ -908,9 +911,10 @@ def check_stale_code(task: Task) -> Iterator[Finding]:
         if checkout_bytes(custom) is not None:
             sources["solution/family_policy.py"] = custom
         for built, source in sources.items():
+            expected = checkout_bytes(source)
             if not (task.path / built).is_file():
                 missing.append(built)
-            elif (task.path / built).read_bytes() != checkout_bytes(source):
+            elif (task.path / built).read_bytes() != (BUILD.marked(expected) if extension else expected):
                 differ.append(built)
     if differ:
         yield Finding("stale-code", task.name, "*",
@@ -977,6 +981,20 @@ def check_solo_sufficient(task: Task) -> Iterator[Finding]:
                           "its own briefing alone gives a correct answer (oracle_answer scores 1)")
 
 
+def check_canary(task: Task) -> Iterator[Finding]:
+    if task.task_json.get("mode") != "extension":
+        return
+    for path in BUILD.canary_files(task.path, task.family_name):
+        if path.name == "family_policy.py" and not path.exists():
+            continue
+        if not path.is_file() or BUILD.CANARY_LINE not in path.read_bytes().splitlines():
+            yield Finding("canary", task.name, "*", f"{relative(task, path)} lacks the marker")
+    for seat in task.seats:
+        for name, text in task.view(seat).items():
+            if BUILD.CANARY in text or BUILD.CANARY in decoded(text):
+                yield Finding("canary", task.name, seat, f"{name} contains the marker")
+
+
 def check_extension(task: Task) -> Iterator[Finding]:
     if task.task_json.get("mode") != "extension" or task.family is None:
         return
@@ -1035,8 +1053,11 @@ def check_policy_runner(task: Task) -> Iterator[Finding]:
         custom = BUILD.load_policy(task.family_name)
         expected = BUILD.policy_settings(task.family, custom, data["variant"], mode, selected, task.seats,
                                          tuple(set(task.seats) - set(task.under_test)), arm.get("scripted_policies", {}))
+        script = BUILD.POLICY_SH.encode()
+        if mode == "extension":
+            script = BUILD.marked(script)
         if (json.loads((solution / "policy.json").read_text()) != expected
-                or (solution / "solve.sh").read_text() != BUILD.POLICY_SH):
+                or (solution / "solve.sh").read_bytes() != script):
             raise ValueError("policy solution differs")
     except Exception as exc:  # noqa: BLE001
         yield Finding("qa-error", task.name, "*", f"policy QA failed: {type(exc).__name__}")
@@ -1303,7 +1324,7 @@ def check_container_name(task: Task) -> Iterator[Finding]:
 TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
               check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient,
               check_game_secret, check_confederate_plan, check_audit_data, check_push, check_inbox, check_policy,
-              check_extension, check_policy_runner)
+              check_extension, check_policy_runner, check_canary)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------

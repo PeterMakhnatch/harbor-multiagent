@@ -230,7 +230,10 @@ def simulate_built(task_dir: Path, policies: str | dict[str, str] | None, schedu
     if task.get("mode") == "rounds":
         raise ValueError("legacy wall-clock games are not supported by the logical simulator")
     settings_path = solution / "policy.json"
-    if settings_path.is_file() and (solution / "policy.py").read_bytes() != (ROOT / "world" / "policy.py").read_bytes():
+    expected_runner = (ROOT / "world" / "policy.py").read_bytes()
+    if task.get("mode") == "extension":
+        expected_runner = BUILD.marked(expected_runner)
+    if settings_path.is_file() and (solution / "policy.py").read_bytes() != expected_runner:
         raise ValueError("built policy runner differs from this checkout; rebuild the task")
     settings = json.loads(settings_path.read_text()) if settings_path.is_file() else {
         "mode": task.get("mode", "answer"), "variant": task.get("variant", ""),
