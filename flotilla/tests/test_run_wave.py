@@ -2093,3 +2093,26 @@ def test_a_staged_dry_run_prints_the_looks_and_the_most_and_fewest_trials(tmp_pa
     cells = [line for line in lines if line[:1].isdigit()]
     stages = [int(line.split()[2]) for line in cells]
     assert len(cells) == 24 and stages == sorted(stages) and cells[0].startswith("1. stage 1 set ")
+
+
+def test_staged_declared_profile_forecasts_each_cell_and_stage_with_zdr_warning(tmp_path, capsys):
+    plan = staged_plan(range(8), [M1], family="model", extra_set=range(4))
+    plan["token_profiles"] = [{"kind": "probe.verify", "miss": 1000, "hit": 0, "out": 100,
+                               "uncertainty": 2, "source": "new family estimate"}]
+    repo = init_repo(tmp_path)
+    probe_tree(repo, [("tasks", range(8)), ("more", range(4))])
+    path = commit_plan(repo, plan)
+    payload = {"data": [{"id": "a/one", "pricing": {"prompt": "0.000001", "completion": "0.000010"}}]}
+    sources = Sources({}, lambda *_args: 10.0, payload=payload,
+                      zdr={"data": [{"model_id": "other/model", "provider_name": "Zdr"}]})
+    assert RUN.run(path, dry_run=True, sources=sources, base_env={}, history_jobs=tmp_path / "history") == []
+    most, fewest = capsys.readouterr().out.split("forecast, fewest (12 trials):")
+    assert "declared profile (new family estimate)" in most
+    assert "low / expected / high total: $0.0744 / $0.0984 / $0.1464" in most
+    assert "8 trials; mean/trial $0.003100 / $0.004100 / $0.006100; cell total $0.0248 / $0.0328 / $0.0488" in most
+    assert "stage 1: 6 trials, added $0.0186 / $0.0246 / $0.0366" in most
+    assert "stage 3: 12 trials, added $0.0372 / $0.0492 / $0.0732; cumulative 24 trials" in most
+    assert "stage 3: 4 trials, added $0.0124 / $0.0164 / $0.0244; cumulative 12 trials" in fewest
+    assert "low / expected / high total: $0.0372 / $0.0492 / $0.0732" in fewest
+    assert f"ZDR warning: {M1}" in most
+    assert not sources.balance_calls and sources.price_calls == 0 and sources.catalog_calls == 1

@@ -110,6 +110,22 @@ homogeneous DeepSeek direct cells it prices the recorded tokens. These are accou
 - Smoke jobs use `smoke-<plan>-<6 hex>`, so `<plan>-*` does not match them. The run dir ends in `-smoke`.
   Exit code 4 means a trial recorded spend.
 
+### Forecast a family with no paid history
+
+- Use history first. A declared profile prices a seat only when the plan has no same-kind history.
+- Write `token_profiles` in the plan. Each row has `kind`, `miss`, `hit`, `out`, `source` and
+  `uncertainty`. Optional `level`, `arm` and `role` (seat name) select a narrower row. Optional `n` is the sample count.
+- Get rows from playtests: `python3 flotilla/token_profile.py --family KIND --level LEVEL --from-playtest RUN...`.
+  The tool reads Codex `turn.completed` usage and the Claude final `result` usage. It stops on another format.
+- Without a playtest, run `uvx --quiet --python 3.12 --with pyyaml python flotilla/token_profile.py --family KIND
+  --level LEVEL --model-turns TASK...`. The source text lists every assumption.
+- The turn model uses 4 characters per token for the instruction and briefing. It uses the careful policy's world calls,
+  `--calls-per-turn` (default 1), and constants fitted from 2,679 finished Terminus 2 probe seats.
+  The in-sample weighted absolute error is 36% to 40% by token type.
+- Read `low / expected / high` as `expected / uncertainty`, `expected` and `expected × uncertainty`. These values are
+  not a confidence interval. The dry run also prints each cell and each stage of a staged plan.
+- Treat a declared profile as an estimate. Replace it with history after the first paid stage. Then forecast again.
+
 ### Cross-play and the per-model suite
 
 - **Cross-play.** `seat_assignments` lists models in seat order, excluding scripted seats. It replaces

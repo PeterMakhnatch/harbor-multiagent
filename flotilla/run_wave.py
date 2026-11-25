@@ -106,7 +106,7 @@ assert _JOBS and _JOBS.loader
 _JOBS.loader.exec_module(JOBS)
 PLAN_KEYS = frozenset({
     "name", "prereg", "task_sets", "models", "agent", "make_jobs", "budget", "order_seed", "seat_assignments",
-    "scripted_seats", "stages",
+    "scripted_seats", "stages", "token_profiles",
 })
 PREREG_KEYS = frozenset({"commit", "doc", "section"})
 JOB_KEYS = frozenset({"max_turns", "env", "concurrency", "start_spacing_s"})
@@ -207,6 +207,11 @@ def load_plan(path: Path, *, smoke: bool = False) -> dict:
     refuse_unknown(plan["prereg"], PREREG_KEYS, "prereg")
     refuse_unknown(plan["make_jobs"], JOB_KEYS, "make_jobs")
     refuse_unknown(plan["budget"], BUDGET_KEYS, "budget")
+    if "token_profiles" in plan:
+        try:
+            PRICING.validate_profiles(plan["token_profiles"])
+        except ValueError as exc:
+            raise SystemExit(f"refused: {exc}") from None
     for field in ("commit", "doc", "section"):
         if field not in plan["prereg"]:
             raise SystemExit(f"refused: prereg missing {field}")
@@ -1500,8 +1505,13 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
         if "stages" in wave:
             staged = Staged(wave, order)
             most, fewest = staged.planned(True), staged.planned(False)
-            forecasts = [PRICING.forecast_lines(wave, cells, repo, history_jobs, fetch_catalog=fetch)
-                         for cells in (most, fewest)]
+            forecasts = []
+            for cells in (most, fewest):
+                options = {}
+                if wave.get("token_profiles"):
+                    options["stages"] = [[cell for cell in cells if staged.block_stage(cell) == stage]
+                                         for stage in range(staged.count)]
+                forecasts.append(PRICING.forecast_lines(wave, cells, repo, history_jobs, fetch_catalog=fetch, **options))
             print_staged_dry_run(wave, staged, scripted, key_line(base, models), most, fewest,
                                  (forecasts[0] + zdr, forecasts[1]))
             return []
