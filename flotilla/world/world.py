@@ -364,13 +364,44 @@ EXTENSION_ROUTES: dict[str, tuple[str, ...]] = {}
 class ExtensionHost:
     """The referee services available to an extension. All calls run under LOCK."""
 
-    def __init__(self, seats: list[str], active: list[str]) -> None:
+    def __init__(self, seats: list[str], active: list[str], task: dict[str, Any]) -> None:
         if len(set(active)) != len(active) or set(active) - set(seats):
             raise ValueError("invalid initial active seats")
         self.tick = 0
         self.status = {seat: "active" if seat in active else "waiting" for seat in seats}
         self.arrivals: dict[tuple[str, str], int | None] = {}
         self.attempts = dict.fromkeys(seats, 0)
+        self.senders = set(task.get("senders", ()))
+        self.scripted = set(task.get("scripted_seats", ()))
+        self.seed = task.get("seed", 0)
+        self.pending: list[tuple[dict[str, Any], int | None]] = []
+
+    def message(self, sender: str, to: str, text: str) -> dict[str, Any]:
+        index = STATE["sent"].get(sender, 0)
+        digest = hashlib.sha256(json.dumps([self.seed, sender, index]).encode()).hexdigest()[:24]
+        return {"id": f"m-{digest}", "from": sender, "to": to, "text": text, "t": now()}
+
+    def post(self, sender: str, to: str, text: str, delay: int | None = None) -> dict[str, Any]:
+        if (not MESSAGING or STATE["frozen"] or sender not in self.scripted | self.senders
+                or to not in ("all", *SEATS) or not isinstance(text, str) or not text.strip()
+                or len(text) > MAX_TEXT or STATE["sent"].get(sender, 0) >= MAX_MESSAGES_PER_SEAT
+                or (delay is not None and (type(delay) is not int or delay < 0))):
+            raise ValueError("invalid world post")
+        message = self.message(sender, to, text)
+        STATE["sent"][sender] = STATE["sent"].get(sender, 0) + 1
+        if EXTENSION is None:
+            self.pending.append((message, delay))
+        else:
+            self.publish(message, delay)
+        return message.copy()
+
+    def publish(self, message: dict[str, Any], delay: int | None = None) -> None:
+        STATE["messages"].append(message)
+        with (LOGS / "messages.jsonl").open("a") as log:
+            log.write(json.dumps(message, sort_keys=True) + "\n")
+        record("send", message["from"], {"id": message["id"], "to": message["to"],
+                                         "chars": len(message["text"]), "text": message["text"]})
+        self.sent(message, delay)
 
     def record(self, kind: str, seat: str | None, data: dict[str, Any] | None = None) -> None:
         record(kind, seat, data)
@@ -399,15 +430,15 @@ class ExtensionHost:
             STATE["frozen"] = True
             record("freeze", None, {"reason": "extension ended play"})
 
-    def sent(self, message: dict[str, Any]) -> None:
+    def sent(self, message: dict[str, Any], explicit_delay: int | None = None) -> None:
         delay = getattr(EXTENSION, "message_delay", None)
         for seat in SEATS:
             if seat == message["from"] or message["to"] not in ("all", seat):
                 continue
-            ticks = delay(message, seat) if delay else 0
+            ticks = explicit_delay if explicit_delay is not None else delay(message.copy(), seat) if delay else 0
             if ticks is not None and (type(ticks) is not int or ticks < 0):
                 raise ValueError("message delay must be a nonnegative integer or None")
-            arrival = None if ticks is None else self.tick + ticks
+            arrival = None if ticks is None else int(message["t"]) + ticks
             self.arrivals[message["id"], seat] = arrival
             record("message_route", message["from"], {"id": message["id"], "to": seat, "arrival": arrival})
 
@@ -440,7 +471,7 @@ def load_extension() -> None:
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    HOST = ExtensionHost(SEATS, task.get("initial_active", SEATS))
+    HOST = ExtensionHost(SEATS, task.get("initial_active", SEATS), task)
     messaging = task.get("messaging")
     if type(messaging) is not bool:
         raise ValueError("extension messaging must be boolean")
@@ -1152,6 +1183,15 @@ class World(BaseHTTPRequestHandler):
                 record("denied", seat, {"path": "/messages", "reason": "message limit"})
                 self._reply(429, {"error": f"limit of {MAX_MESSAGES_PER_SEAT} messages per seat reached"})
                 return
+            if HOST is not None:
+                message = HOST.message(seat, to, text)
+                STATE["sent"][seat] += 1
+                HOST.publish(message)
+                hook = getattr(EXTENSION, "on_message", None)
+                if hook:
+                    hook(message.copy())
+                self._reply(201, message)
+                return
             STATE["sent"][seat] = STATE["sent"].get(seat, 0) + 1
             # A random id: a global counter told a third seat how many direct messages it did not see
             # (review of fork PR #18, M1). The order is in "t" and in the logs.
@@ -1160,8 +1200,6 @@ class World(BaseHTTPRequestHandler):
             with (LOGS / "messages.jsonl").open("a") as log:
                 log.write(json.dumps(message, sort_keys=True) + "\n")
             record("send", seat, {"id": message["id"], "to": to, "chars": len(text)})
-            if HOST is not None:
-                HOST.sent(message)
             if REPLIES:
                 _arm_replies(message)
         self._reply(201, message)
@@ -1323,6 +1361,9 @@ def start_world() -> None:
                                | ({"reply_posts": len(REPLIES)} if REPLIES else {}))
         if HOST is not None:
             record("extension_start", None, {"active": HOST.status.copy()})
+            for message, delay in HOST.pending:
+                HOST.publish(message, delay)
+            HOST.pending.clear()
         if INBOX:
             _post_inbox()
 

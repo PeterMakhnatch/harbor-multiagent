@@ -106,7 +106,8 @@ class Simulation:
     def record(self, event: dict[str, Any]) -> None:
         if event["seq"] != len(self.events) + 1 or (self.events and event["t"] < self.events[-1]["t"]):
             raise AssertionError("event order is invalid")
-        if event["seat"] is not None and event["seat"] not in self.tokens:
+        if (event["seat"] is not None and event["seat"] not in self.tokens
+                and (self.world.HOST is None or event["seat"] not in self.world.HOST.senders)):
             raise AssertionError("event has an unknown seat")
         if not isinstance(event["kind"], str) or not event["kind"] or not isinstance(event["data"], dict):
             raise AssertionError("invalid event shape")

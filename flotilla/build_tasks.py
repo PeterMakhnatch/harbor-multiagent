@@ -761,6 +761,9 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                               "initial_active": ext_arm.get("initial_active", seats),
                               "messaging": ext_arm.get("messaging", condition.startswith("talk")),
                               "scripted_seats": list(scripted_seats)}
+                for field in ("push", "senders"):
+                    if field in ext_arm:
+                        task_json[field] = ext_arm[field]
             elif game:
                 task_json |= {"mode": "rounds", "game": arm, "round_seconds": round_seconds,
                               "max_messages_per_round": max_messages_per_round, "read_gate": condition == "gated"}
