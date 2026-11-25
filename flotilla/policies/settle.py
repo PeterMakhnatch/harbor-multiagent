@@ -24,6 +24,7 @@ NAMES = ("careful", "naive", "eager", "polite", "rule-own", "follower", "propose
          "fixed", "lone", "guess", "script-loop")
 ALPHA_RULE = ("Rule: all desks file the window that comes first in alphabetical order among the windows that "
               "no desk has blocked.")
+LAST_RULE = ALPHA_RULE.replace("first", "last")
 OWN_RULE = "Rule: all desks file the last-time window of the lowest desk."
 
 
@@ -81,15 +82,18 @@ class Desk:
         return f"{self.me} blocked: {', '.join(self.own['blocked'])}."
 
     def alphabetical(self):
+        if self.name == "last-rule":  # another valid answer: the grader accepts every window that is free for all
+            common = [code for code in self.windows if all(code not in blocked for blocked in self.lists.values())]
+            return common[-1] if common else self.free[-1]
         return self.family.first_free(self.windows, self.lists.values()) or self.free[0]
 
     def target(self):
+        code = None
         if self.name == "rule-own":
-            return self.lasts.get(self.desks[0], self.last)
-        if self.name == "follower" and self.rules and min(self.rules)[2] == "lowest":
+            code = self.lasts.get(self.desks[0], self.last)
+        elif self.name == "follower" and self.rules and min(self.rules)[2] == "lowest":
             code = self.lasts.get(self.desks[0])
-            return code if code in self.free else self.alphabetical()
-        return self.alphabetical()
+        return code if code in self.free else self.last if self.name == "rule-own" else self.alphabetical()
 
     def missing(self):
         return [desk for desk in self.desks if desk not in self.lists]
@@ -120,15 +124,17 @@ class Desk:
                 return f"OK, I take {max(heard)[2]}.", max(heard)[2]
             return None, self.last
         if r == 1:
-            rule = {"rule-own": f"{OWN_RULE} {self.me} last-time window: {self.last}.", "follower": ""}.get(
+            rule = {"rule-own": f"{OWN_RULE} {self.me} last-time window: {self.last}.", "follower": "",
+                    "last-rule": f"{LAST_RULE} We file in round {last_round}."}.get(
                 name, f"{ALPHA_RULE} We file in round {last_round}.")
             if self.lapse("tell"):
                 return rule or None, None
             return f"{self.list_text()} {rule}".strip(), None
+        final = self.last if "last_time" in self.own and self.lapse("default") else self.target()
         if r == last_round - 1 and self.lapse("wait"):
-            return None, self.target()
+            return None, final
         if r == last_round:
-            return (None, None) if name == "talker" else (None, self.target())
+            return (None, None) if name == "talker" else (None, final)
         if self.asked and not self.told:
             return self.list_text(), None
         missing = self.missing()
@@ -173,8 +179,42 @@ class Desk:
                 return
 
 
+def expect(status, code):
+    if status != code:
+        raise RuntimeError(f"status {status}, expected {code}")
+
+
+def fuzz(name, client, own):
+    """Test play beside a desk that never closes: each malformed or repeated action gets a 4xx reply."""
+    free = [code for code in own["windows"] if code not in own["blocked"]]
+    other = next(desk for desk in own["desks"] if desk != client.seat)
+    for body in ({}, {"window": 5}, {"window": "W-AA"}, {"window": ""}, {"window": own["blocked"][0]},
+                 {"window": free[0], "desk": client.seat}, {"window": " ".join(free)}):
+        expect((yield from client.post("/file", body))[0], 400)
+    for body, code in (({"to": other, "text": "hello"}, 400), ({"to": "all", "text": "caf\u00e9"}, 413),
+                       ({"to": "all", "text": "x" * 241}, 413), ({"to": "all", "text": "two\nlines"}, 413),
+                       ({"to": "all", "text": "x" * 240}, 201), ({"to": "all", "text": "again"}, 429)):
+        expect((yield from client.post("/messages", body))[0], code)
+    expect((yield from client.post("/close", {"round": 1}))[0], 400)
+    if name == "fuzz-file":  # a filing in another spelling stands; nothing is accepted after it
+        expect((yield from client.post("/file", {"window": free[0].lower().replace("-", "")}))[0], 200)
+        expect((yield from client.post("/file", {"window": free[-1]}))[0], 409)
+    else:  # after closing, the desk waits for the next round
+        expect((yield from client.post("/close", {}))[0], 200)
+        expect((yield from client.post("/file", {"window": free[0]}))[0], 409)
+    expect((yield from client.post("/messages", {"to": "all", "text": "after"}))[0], 409)
+    expect((yield from client.post("/close", {}))[0], 409)
+
+
 def play(name, client, own, family):
-    if own["role"] == "all":
+    if name == "burn":
+        for _ in range(60):
+            status, _ = yield from client.get("/desk")
+            if status != 200:
+                return
+    elif own["role"] == "all":
         yield from solo(client, own, family)
+    elif name in ("fuzz", "fuzz-file"):
+        yield from fuzz(name, client, own)
     else:
         yield from Desk(name, client, own, family).play()
