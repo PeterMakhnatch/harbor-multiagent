@@ -1,14 +1,14 @@
 {
   "name": "seams-handoff-pilot",
   "prereg": {
-    "commit": "0ee3e8f2f5ee80765fa7b76d2990b89a5fc6f9c9",
+    "commit": "8cee3593922d14d602c11a6aa53ed0e3a17f4030",
     "doc": "flotilla/pilot_plan.py",
-    "section": "Seams staged pilot: executable maximum envelope, not spending approval.\nStage A: 10 distinct instances per model, level and control arm; require at least 9 full successes in each arm.\nDrop a model-level group if either control fails or remains incomplete after one retry.\nStage B: run each matched probe pair on 12 fresh instances for each model-level group that passed A.\nUse exact sequential McNemar at 3, 6 and 12 pairs, alpha 0.05, Holm over pairs within model and level.\nAt least 2 control-only successes in any pair are required for that model-level group to continue.\nEarly positive efficacy can stop with this threshold met; statistical futility cannot establish no effect.\nIf the threshold is not met, report no-effect only with 12 valid pairs; otherwise report incomplete.\nStage C: on fresh matched instances for each passing group, compare team to team-fullrecord when present, otherwise solo.\nInclude hint, solo-seam and team-implicit when present. Freeze n at the largest eligible positive card alternative, at most 100.\nUse fixed-sample exact McNemar on full success. A capped sample can have less than 80% power.\nConditional selection of the smallest compatible card effect, first signal level, or inclusion of other A-passing\nmodels at that level requires a separately pre-registered headline plan. The runner does not resize the headline.\nA family without probe pairs has no attribution gate: week is only a descriptive demonstration (no headline claim).\nRequire a private seed, QA, oracle parity and approval before paid work. Use --stop-after-stage A, then B, then C\nwith the same run directory; the runner applies the gates and cumulative model caps. For week skip B.\nRepeat on Terminus 2 and one native command-line harness before claiming an effect; record the delivery mode.\nMatched-token and cross-model team controls, and 5 human baselines, are required before publication.\nThe target result is a boundary cost on the same work, with a similar cost for self and teammate transfer;\nhint recovers less than one third and a harness mechanism recovers at least two thirds. This pilot alone cannot establish that.\nKill if standard team reaches 0.9 of control and hint closes the gap, the effect reverses by harness, or heavy solo is below 0.9.\nFor digest heavy, require at least 0.95 solo success: 10/10 at this pilot size.\n"
+    "section": "Seams staged pilot: executable maximum envelope, not spending approval.\nStage A: 10 distinct instances per model, level and control arm; require at least 9 full successes in each arm.\nDrop a model-level group if either control fails or remains incomplete after one retry.\nStage B: run each matched probe pair on 12 fresh instances for each model-level group that passed A.\nUse exact sequential McNemar at 3, 6 and 12 pairs, alpha 0.05, Holm over pairs within model and level.\nAt least 2 control-only successes in any pair are required for that model-level group to continue.\nEarly positive efficacy can stop with this threshold met; statistical futility cannot establish no effect.\nIf the threshold is not met, report no-effect only with 12 valid pairs; otherwise report incomplete.\nStage C: on fresh matched instances for each passing group, compare team to team-fullrecord when present, otherwise solo.\nInclude hint, solo-seam, team-implicit and team-implicit-all when present. Freeze n at the largest eligible positive\ncard alternative, at most 100.\nUse fixed-sample exact McNemar on full success. A capped sample can have less than 80% power.\nConditional selection of the smallest compatible card effect, first signal level, or inclusion of other A-passing\nmodels at that level requires a separately pre-registered headline plan. The runner does not resize the headline.\nA family without probe pairs has no attribution gate: week is only a descriptive demonstration (no headline claim).\nRequire a private seed, QA, oracle parity and approval before paid work. Use --stop-after-stage A, then B, then C\nwith the same run directory; the runner applies the gates and cumulative model caps. For week skip B.\nRepeat on Terminus 2 and one native command-line harness before claiming an effect; record the delivery mode.\nMatched-token and cross-model team controls, and 5 human baselines, are required before publication.\nThe target result is a boundary cost on the same work, with a similar cost for self and teammate transfer;\nhint recovers less than one third and a harness mechanism recovers at least two thirds. This pilot alone cannot establish that.\nKill if standard team reaches 0.9 of control and hint closes the gap, the effect reverses by harness, or heavy solo is below 0.9.\nFor digest heavy, require at least 0.95 solo success: 10/10 at this pilot size.\n"
   },
   "task_sets": [
     {
-      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-a",
-      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-a/manifest.json",
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wy3q6l7t/standard/stage-a",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wy3q6l7t/standard/stage-a/manifest.json",
       "arms": [
         "solo",
         "team-fullrecord"
@@ -27,8 +27,8 @@
       ]
     },
     {
-      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-b",
-      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-b/manifest.json",
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wy3q6l7t/standard/stage-b",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wy3q6l7t/standard/stage-b/manifest.json",
       "arms": [
         "probe-hunt-control",
         "probe-hunt-trap"
@@ -49,8 +49,8 @@
       ]
     },
     {
-      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-b",
-      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-b/manifest.json",
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wy3q6l7t/standard/stage-b",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wy3q6l7t/standard/stage-b/manifest.json",
       "arms": [
         "probe-ref-control",
         "probe-ref-trap"
@@ -71,14 +71,15 @@
       ]
     },
     {
-      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-c",
-      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-c/manifest.json",
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wy3q6l7t/standard/stage-c",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wy3q6l7t/standard/stage-c/manifest.json",
       "arms": [
         "team-fullrecord",
         "team",
         "hint",
         "solo-seam",
-        "team-implicit"
+        "team-implicit",
+        "team-implicit-all"
       ],
       "instances": [
         22,
@@ -190,7 +191,7 @@
     "start_spacing_s": 5.0
   },
   "budget": {
-    "cap_usd": 705,
+    "cap_usd": 800,
     "reserve_per_trial_usd": 2.15,
     "provider_floors": {
       "openrouter": 2.0
@@ -497,6 +498,54 @@
       "source": "Claude final result usage (cache creation at miss rate); Codex turn.completed usage",
       "uncertainty": 2.0,
       "n": 22
+    },
+    {
+      "kind": "handoff",
+      "level": "standard",
+      "arm": "team-implicit-all",
+      "role": "s1",
+      "miss": 6717.5,
+      "hit": 140952,
+      "out": 1130.85,
+      "source": "Claude final result usage (cache creation at miss rate); Codex turn.completed usage",
+      "uncertainty": 2.0,
+      "n": 26
+    },
+    {
+      "kind": "handoff",
+      "level": "standard",
+      "arm": "team-implicit-all",
+      "role": "s2",
+      "miss": 7559.19,
+      "hit": 143711.92,
+      "out": 1290.69,
+      "source": "Claude final result usage (cache creation at miss rate); Codex turn.completed usage",
+      "uncertainty": 2.0,
+      "n": 26
+    },
+    {
+      "kind": "handoff",
+      "level": "standard",
+      "arm": "team-implicit-all",
+      "role": "s3",
+      "miss": 7949.08,
+      "hit": 150289.85,
+      "out": 1394.08,
+      "source": "Claude final result usage (cache creation at miss rate); Codex turn.completed usage",
+      "uncertainty": 2.0,
+      "n": 26
+    },
+    {
+      "kind": "handoff",
+      "level": "standard",
+      "arm": "team-implicit-all",
+      "role": "s4",
+      "miss": 8045.96,
+      "hit": 133094.69,
+      "out": 1278.31,
+      "source": "Claude final result usage (cache creation at miss rate); Codex turn.completed usage",
+      "uncertainty": 2.0,
+      "n": 26
     }
   ],
   "notes": "Fixed upper-envelope headline sample. Obtain separate approval before each stage; do not treat the scripted power alternatives as model effect estimates.",
@@ -641,7 +690,8 @@
             "team",
             "hint",
             "solo-seam",
-            "team-implicit"
+            "team-implicit",
+            "team-implicit-all"
           ],
           "instances": [
             22,
@@ -748,7 +798,7 @@
       "gate": {
         "type": "none"
       },
-      "cap_usd": 705
+      "cap_usd": 800
     }
   ]
 }

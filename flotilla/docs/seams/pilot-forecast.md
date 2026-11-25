@@ -11,7 +11,8 @@ At least 2 control-only successes in any pair are required for that model-level 
 Early positive efficacy can stop with this threshold met; statistical futility cannot establish no effect.
 If the threshold is not met, report no-effect only with 12 valid pairs; otherwise report incomplete.
 Stage C: on fresh matched instances for each passing group, compare team to team-fullrecord when present, otherwise solo.
-Include hint, solo-seam and team-implicit when present. Freeze n at the largest eligible positive card alternative, at most 100.
+Include hint, solo-seam, team-implicit and team-implicit-all when present. Freeze n at the largest eligible positive
+card alternative, at most 100.
 Use fixed-sample exact McNemar on full success. A capped sample can have less than 80% power.
 Conditional selection of the smallest compatible card effect, first signal level, or inclusion of other A-passing
 models at that level requires a separately pre-registered headline plan. The runner does not resize the headline.
@@ -40,7 +41,7 @@ For digest heavy, require at least 0.95 solo success: 10/10 at this pilot size.
 ## handoff
 
 Plan: `handoff.json`. Price source: OpenRouter public catalog (https://openrouter.ai/api/v1/models), snapshot `frontier-prices.json`, 2026-11-25 ET.
-Model cap: $705.00. Profiles (uncertainty ×2):
+Model cap: $800.00. Profiles (uncertainty ×2):
 
 - Claude final result usage (cache creation at miss rate)
 - Claude final result usage (cache creation at miss rate); Codex turn.completed usage
@@ -81,6 +82,9 @@ Model cap: $705.00. Profiles (uncertainty ×2):
 | C | standard | team-implicit | anthropic/claude-opus-5.5 | 94 | 376 / 376 | $17.6923 / $35.1871 / $70.1768 |
 | C | standard | team-implicit | openai/gpt-6.2-sol | 94 | 376 / 376 | $8.9448 / $17.6923 / $35.1871 |
 | C | standard | team-implicit | **Total** | 188 | 752 / 752 | $26.6371 / $52.8794 / $105.3639 |
+| C | standard | team-implicit-all | anthropic/claude-opus-5.5 | 94 | 376 / 376 | $16.0164 / $31.8355 / $63.4735 |
+| C | standard | team-implicit-all | openai/gpt-6.2-sol | 94 | 376 / 376 | $8.1069 / $16.0164 / $31.8355 |
+| C | standard | team-implicit-all | **Total** | 188 | 752 / 752 | $24.1234 / $47.8519 / $95.3090 |
 
 | Stage | Model | Added trials | Added model / all seats | Added low / expected / high | Cumulative trials | Cumulative model / all seats | Cumulative low / expected / high | Cumulative model high estimate (stage cap on all row) |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
@@ -90,19 +94,19 @@ Model cap: $705.00. Profiles (uncertainty ×2):
 | B | openai/gpt-6.2-sol | 48 | 48 / 192 | $1.8970 / $3.6931 / $7.2854 | 68 | 98 / 242 | $5.8499 / $11.5570 / $22.9712 | $22.83 |
 | B | anthropic/claude-opus-5.5 | 48 | 48 / 192 | $3.6931 / $7.2854 / $14.4701 | 68 | 98 / 242 | $11.5570 / $22.9712 / $45.7996 | $45.66 |
 | B | all | 96 | 96 / 384 | $5.5901 / $10.9785 / $21.7555 | 136 | 196 / 484 | $17.4069 / $34.5282 / $68.7708 | $69.00 |
-| C | openai/gpt-6.2-sol | 470 | 1880 / 1880 | $54.0169 / $107.0469 / $213.1067 | 538 | 1978 / 2122 | $59.8668 / $118.6039 / $236.0779 | $234.95 |
-| C | anthropic/claude-opus-5.5 | 470 | 1880 / 1880 | $107.0469 / $213.1067 / $425.2264 | 538 | 1978 / 2122 | $118.6039 / $236.0779 / $471.0260 | $469.90 |
-| C | all | 940 | 3760 / 3760 | $161.0638 / $320.1536 / $638.3331 | 1076 | 3956 / 4244 | $178.4707 / $354.6818 / $707.1039 | $705.00 |
+| C | openai/gpt-6.2-sol | 564 | 2256 / 2256 | $62.1238 / $123.0633 / $244.9422 | 632 | 2354 / 2498 | $67.9737 / $134.6203 / $267.9134 | $266.59 |
+| C | anthropic/claude-opus-5.5 | 564 | 2256 / 2256 | $123.0633 / $244.9422 / $488.7000 | 632 | 2354 / 2498 | $134.6203 / $267.9134 / $534.4996 | $533.17 |
+| C | all | 1128 | 4512 / 4512 | $185.1871 / $368.0055 / $733.6421 | 1264 | 4708 / 4996 | $202.5940 / $402.5337 / $802.4130 | $800.00 |
 
 Power source: `handoff.card.json`. Stage B exact looks: [3, 6, 12]; no optional non-binding futility. Stage C envelope (largest eligible card n, capped):
 
 - standard: 94 pairs/model maximum. Lapse alternatives (control-only minus trap-only full-success rate, card n): probe-ref-trap lapse-10 0.083, 94; probe-hunt-trap lapse-10 0.167, 46; probe-ref-trap lapse-20 0.292, 26; probe-ref-trap lapse-30 0.292, 26; probe-hunt-trap lapse-20 0.333, 23; probe-hunt-trap lapse-30 0.583, 12; probe-ref-trap lapse-50 0.583, 12; probe-hunt-trap lapse-50 0.875, 8
 
-Task sets (zero-based runner index): 0=A/standard/solo,team-fullrecord; 1=B/standard/probe-hunt-control,probe-hunt-trap; 2=B/standard/probe-ref-control,probe-ref-trap; 3=C/standard/team-fullrecord,team,hint,solo-seam,team-implicit.
+Task sets (zero-based runner index): 0=A/standard/solo,team-fullrecord; 1=B/standard/probe-hunt-control,probe-hunt-trap; 2=B/standard/probe-ref-control,probe-ref-trap; 3=C/standard/team-fullrecord,team,hint,solo-seam,team-implicit,team-implicit-all.
 
 ## Suite: maximum envelope, one harness
 
 | Family | Trials | Model / all seats | Cost low / expected / high | Model cap |
 |---|---:|---:|---:|---:|
-| handoff | 1076 | 3956 / 4244 | $178.4707 / $354.6818 / $707.1039 | $705.00 |
-| **Total** | 1076 | 3956 / 4244 | $178.4707 / $354.6818 / $707.1039 | $705.00 |
+| handoff | 1264 | 4708 / 4996 | $202.5940 / $402.5337 / $802.4130 | $800.00 |
+| **Total** | 1264 | 4708 / 4996 | $202.5940 / $402.5337 / $802.4130 | $800.00 |
