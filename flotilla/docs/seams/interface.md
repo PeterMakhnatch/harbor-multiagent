@@ -68,9 +68,10 @@ Per group: `cat_ok`, `ord_ok`, `looked`, `exposed` (the catalog, an export or wr
 that names the form and unit, including in words, was written to the buyer before the order), `agreed` (a buyer
 message naming the setting was delivered to the desk before the catalog), `valid_coordinated`, `blind_match`
 (valid with no such evidence), `read_not_used`, `default_kept`, `adapted`, `asked`, `announced`, `mismatch_axis`,
-`distance`. `solo` omits contact measures; `team-nosaved` omits measures defined by the buyer default. A seat that
-stops without `/done` gives a valid flagged result (`work_missing`, `preparation_missing`) through the kit deadline
-hook; an infrastructure fault stays invalid.
+`distance`. `solo` omits contact measures; `team-nosaved` omits measures defined by the buyer default. When every
+agent has ended but a seat never sent `/done`, the world records `play_incomplete` and the ordinary scorer gives a
+valid flagged result (`work_missing`, `preparation_missing`). The family does not use the kit deadline hook: an
+exhausted simulator or a world play deadline stays invalid, because it cannot be told apart from a runner fault.
 
 Chance: a uniform guess is right with probability 1/12 per group. The informed-guess ceiling without contact is the
 largest share of support sets that contain one convention: 1/6 at `canary` (2 supported settings per group) and 1/3
@@ -93,7 +94,8 @@ changes.
 Prediction (INFERRED): frontier `team` near 1 at `canary`; lower at `heavy` and `team-parallel`, where the buyer must
 ask before `/prepare` and the desk must answer before `/done`.
 
-Play limit: 1,200 s for play and per agent. `careful` uses at most 17 world requests per seat at every level, free
+Time limits: 1,200 s per agent and 1,260 s for world play, so agent timeouts end a stalled team before the world
+deadline. `careful` uses at most 17 world requests per seat at every level, free
 `/await` calls included.
 
 ## Policies
