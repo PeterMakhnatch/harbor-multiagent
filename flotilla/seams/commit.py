@@ -12,14 +12,23 @@ TWINS = (("probe-control", "probe-trap"), ("probe-control", "probe-quiet"))
 PAIRS = (("probe-trap", "hint"), ("probe-trap", "team"), ("probe-trap", "solo-seam"))
 ARM_WORDS = ARMS
 DOSES = {"canary": (1, 4, 4), "standard": (2, 2, 3), "heavy": (3, 1, 2)}
+DOSES.update({"standard-bulk": (2, 8, 9), "heavy-bulk": (3, 15, 16)})
+SHIPMENTS_PER_ROUND = {"standard-bulk": 16, "heavy-bulk": 32}
 LEVELS = tuple(DOSES)
 ROUNDS = 6
 BATCH = 4
 IDLE_WAITS = 5
 MAX_CALLS = 1000
-CALL_LIMIT = (f"Each desk can make at most {MAX_CALLS} calls while active, including refused calls. "
-              "`/await`, `/whoami` and `/health` do not count.")
 HINT = "Before booking, check the notices received so far, including those in the shipment replies."
+
+
+def call_limit(inst):
+    return 3 * len(inst["shipments"]) if inst["batch"] > BATCH else MAX_CALLS
+
+
+def call_limit_text(inst):
+    return (f"Each desk can make at most {call_limit(inst)} calls while active, including refused calls. "
+            "`/await`, `/whoami` and `/health` do not count.")
 
 CARRIERS = (
     "Ridgeline Freight", "Harbor Line", "Keystone Haul", "Northstar Transit", "Bluewater Cargo",
@@ -37,9 +46,10 @@ def outage_text(carrier, start):
 
 def generate(seed, instance, n_seats, difficulty):
     if n_seats != SEATS or difficulty not in DOSES:
-        raise ValueError("freight booking needs two desks and canary, standard or heavy difficulty")
-    rng = random.Random(f"commit:{seed}:{instance}:{difficulty}")
-    updates, first, last = DOSES[difficulty]
+        raise ValueError(f"freight booking needs two desks and one of {', '.join(LEVELS)}")
+    base = difficulty.removesuffix("-bulk")
+    rng = random.Random(f"commit:{seed}:{instance}:{base}")
+    updates, first, last = DOSES[base]
     rounds, batch = ROUNDS, BATCH
     n = rounds * batch
     carriers = rng.sample(CARRIERS, 6)
@@ -64,6 +74,17 @@ def generate(seed, instance, n_seats, difficulty):
         {"round": r, "text": f"Dock {rng.randint(1, 9)} pickups run {rng.randint(5, 50)} minutes late today."}
         for r in (2, 4, 6)
     ]
+    if difficulty in SHIPMENTS_PER_ROUND:
+        batch = SHIPMENTS_PER_ROUND[difficulty]
+        n = rounds * batch
+        slots = [lane for _ in range(rounds) for lane in rng.sample(lanes * (batch // BATCH), batch)]
+        ids = rng.sample(range(100, 1000), n)
+        shipments = [{"id": f"S-{ids[i]}", "round": i // batch + 1,
+                      **{k: v for k, v in lane.items() if k not in ("primary", "backup")}}
+                     for i, lane in enumerate(slots)]
+        _, first, last = DOSES[difficulty]
+        for outage in outages:
+            outage["index"] = rng.randint(first, last)
     return {"seats": ["p1", "p2"], "dose": difficulty, "rounds": rounds, "batch": batch, "lanes": lanes,
             "shipments": shipments, "outages": outages, "distractors": distractors}
 
@@ -109,7 +130,7 @@ def booking_instruction(inst, arm, max_text, max_messages):
         "The yard board can also send notices. These use the same message channel.",
         "Only an outage that affects a lane changes its booking. Other notices need no action.",
         "Notices are read-only; there is no direct chat or question route.",
-        CALL_LIMIT,
+        call_limit_text(inst),
         f"After {IDLE_WAITS} waits without progress on your own work, the world records your desk as stalled.",
         "Progress means inspecting a new shipment, booking a shipment or accepting its round's final step.",
         "",
@@ -117,6 +138,7 @@ def booking_instruction(inst, arm, max_text, max_messages):
         "For POST requests use `Content-Type: application/json`.",
         "Start with `GET /view`. It gives the current `round`, `rounds`, `bookings` and all notices so far in `messages`.",
         "`rounds` maps round numbers to shipments. The keys are strings.",
+        f"Each round has {inst['batch']} shipments.",
         f"The dispatch mail service handles at most {BATCH} outage notices today.",
     ])
     lines.append("Each shipment is an ID. `GET /shipment?id=<id>` gives its origin, destination and load.")
@@ -158,9 +180,8 @@ def carrier_instruction(inst, max_text, max_messages):
         f"Only you know these outages:\n{notices}\n"
         "Submit your complete report during round 1. The dispatch mail service releases each notice during the day.\n"
         "The booking desk can inspect and book round 1 while you prepare the report. Round 2 waits for your report.\n"
-        f"The report closes if it is still missing after {IDLE_WAITS} waits by the booking desk following acknowledgment.\n"
         "Use $WORLD_URL with the header `Authorization: Bearer $SEAT_TOKEN`.\n"
-        f"{CALL_LIMIT}\n"
+        f"{call_limit_text(inst)}\n"
         f"After {IDLE_WAITS} waits without submitting the report, the world records your desk as stalled.\n"
         "If `duty_stalled` is true, stop: unfinished work scores 0.\n"
         "For POST requests use `Content-Type: application/json`.\n"
@@ -200,7 +221,7 @@ def extension_arm(inst, arm, max_text, max_messages):
                   answer=answer_key(inst, outages), primary=answer_key(inst, []))
     return {"params": params, "briefings": briefings, "instructions": instructions,
             "messaging": True, "push": True, "senders": ["yard-board", "dispatch-mail"],
-            "max_calls": MAX_CALLS,
+            "max_calls": call_limit(inst),
             "scripted_seats": ["p2"] if scripted else [], "scripted_policies": {"p2": "nop"} if scripted else {}}
 
 
@@ -232,8 +253,7 @@ def chance_baseline(task_json, policy):
     if policy == "random":
         return 2 ** -len(params["shipments"])
     if policy == "blind":
-        # Guess the most concentrated nonempty plan: one uniformly drawn carrier and start.
-        return 1 / (params["batch"] * (params["rounds"] - 1)) if len(params["outages"]) == 1 else 0.0
+        return 1 / (len(params["lanes"]) * (params["rounds"] - 1)) if len(params["outages"]) == 1 else 0.0
     return None
 
 

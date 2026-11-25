@@ -27,22 +27,30 @@ def test_commit_layouts(dose):
         inst = FAMILY.generate(SEED, i, 2, dose)
         assert inst == FAMILY.generate(SEED, i, 2, dose)
         layouts.add(json.dumps(inst, sort_keys=True))
-        assert inst["rounds"] == 6 and inst["batch"] == 4
-        assert len(inst["lanes"]) == 4 and len(inst["shipments"]) == 24
+        batch = FAMILY.SHIPMENTS_PER_ROUND.get(dose, FAMILY.BATCH)
+        assert inst["rounds"] == 6 and inst["batch"] == batch
+        assert len(inst["lanes"]) == 4 and len(inst["shipments"]) == 6 * batch
         assert len(inst["outages"]) == count
         assert all(first <= o["index"] <= last for o in inst["outages"])
+        if dose.endswith("-bulk"):
+            base = FAMILY.generate(SEED, i, 2, dose.removesuffix("-bulk"))
+            assert inst["lanes"] == base["lanes"] and inst["distractors"] == base["distractors"]
+            assert [{k: v for k, v in o.items() if k != "index"} for o in inst["outages"]] == [
+                {k: v for k, v in o.items() if k != "index"} for o in base["outages"]]
+            assert batch // FAMILY.BATCH >= 3
+            assert FAMILY.call_limit(inst) == 3 * len(inst["shipments"])
         lanes = {FAMILY.lane_key(lane): lane for lane in inst["lanes"]}
         primaries = sorted(lane["primary"] for lane in inst["lanes"])
         for r in range(1, 7):
             assert Counter(lanes[FAMILY.lane_key(s)]["primary"] for s in inst["shipments"] if s["round"] == r) == {
-                c: 1 for c in primaries}
+                c: batch // FAMILY.BATCH for c in primaries}
         if i < 8:
             keys = set()
             for carriers in itertools.combinations(primaries, count):
                 for starts in itertools.product(range(2, 7), repeat=count):
                     outages = [{"carrier": c, "start": s} for c, s in zip(carriers, starts, strict=True)]
                     keys.add(tuple(FAMILY.answer_key(inst, outages).values()))
-            assert len(keys) == {"canary": 20, "standard": 150, "heavy": 500}[dose]
+            assert len(keys) == {"canary": 20, "standard": 150, "heavy": 500}[dose.removesuffix("-bulk")]
         for arm in FAMILY.ARMS:
             setting = FAMILY.extension_arm(inst, arm, 2000, 30)
             params = setting["params"]
@@ -57,8 +65,8 @@ def test_commit_layouts(dose):
                 assert "at most 4 outage notices" in setting["instructions"]["p1"]
                 assert "You do not submit a report." in setting["instructions"]["p1"]
                 assert ("carrier board" if arm == "solo-seam" else "carrier desk") in setting["instructions"]["p1"]
-            assert setting["max_calls"] == FAMILY.MAX_CALLS
-            assert FAMILY.CALL_LIMIT in setting["instructions"]["p1"]
+            assert setting["max_calls"] == FAMILY.call_limit(inst)
+            assert FAMILY.call_limit_text(inst) in setting["instructions"]["p1"]
             if arm != "hint":
                 assert FAMILY.HINT not in setting["instructions"]["p1"]
     assert len(layouts) == 128
@@ -130,7 +138,8 @@ def test_commit_scheduler_sweep(tmp_path, dose, arm):
                 elif policy in ("naive", "script-loop"):
                     assert score["reward"] == int(arm in EARLY)
                     if arm not in EARLY and policy == "script-loop":
-                        assert score["stale_after_delivery"] == len(task["params"]["outages"])
+                        assert score["stale_after_delivery"] == (
+                            len(task["params"]["outages"]) * task["params"]["batch"] // FAMILY.BATCH)
                     if arm in ("probe-trap", "hint", "solo-seam") and policy == "naive":
                         assert score["stale_after_delivery"] == score["affected_total"] > 0
                 elif policy == "nop":
@@ -285,7 +294,7 @@ def test_commit_missing_carrier_report(tmp_path, dose):
         assert score["missing_relay"] == len(task["params"]["outages"])
         stalls = [e for e in result["events"] if e["kind"] == "commit_stall"]
         assert [(e["seat"], e["data"]["reason"]) for e in stalls] == [("p2", "report_waits")]
-        assert result["requests"]["p1"] <= 7 + FAMILY.IDLE_WAITS
+        assert result["requests"]["p1"] <= task["params"]["batch"] + 3 + FAMILY.IDLE_WAITS
 
 
 @pytest.mark.parametrize("dose", FAMILY.LEVELS)
@@ -351,7 +360,7 @@ def test_commit_missing_final_step(tmp_path, monkeypatch, dose):
     monkeypatch.setattr(SIM.POLICY, "play", no_final_step)
     result = SIM.simulate_built(path, "careful", 0)
     score = evidence(task, result)
-    assert score["fields_correct"] == 24 and score["missed"] == 0
+    assert score["fields_correct"] == len(task["params"]["shipments"]) and score["missed"] == 0
     assert score["reward"] == 0 and not score["closed"]
     assert score["p1_stalled"] == 1 and score["p2_stalled"] == 0
     assert score["stale_after_delivery"] is None
