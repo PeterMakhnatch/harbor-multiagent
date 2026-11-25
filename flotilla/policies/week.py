@@ -4,10 +4,13 @@ import hashlib
 import json
 
 SEAMS = ("digest", "interface", "commit", "handoff")
+FIXED = ("fixed-carrier", "fixed-BRW", "fixed-OST", "fixed-PEL")
+FLOORS = (*FIXED, "focal-default", "guess", "random-valid", "silent-careful")
+NO_ARTIFACTS = (*FIXED, "focal-default", "guess")
 
 
 def supports(name, variant):
-    return name in ("careful", "naive", "random-valid", *(f"naive-{s}" for s in SEAMS),
+    return name in ("careful", "naive", "random", *FLOORS, *(f"naive-{s}" for s in SEAMS),
                     "lapse-10", "lapse-20", "lapse-30", "lapse-50")
 
 
@@ -41,10 +44,12 @@ def from_note(note, forms, refs):
 
 def make_note(name, own, refs, forms):
     lines = ["KEYS " + ",".join(f"{c}={form}" for c, form in sorted(forms.items()))]
+    if name in NO_ARTIFACTS:
+        return ""
     pairs = sorted(refs.items())
     if name in ("naive", "naive-handoff"):
         pairs = pairs[:1]
-        lines.append("Most recent work complete; outstanding callbacks remain.")
+        lines.append("Callbacks pending.")
     else:
         pairs = [(ref, order) for ref, order in pairs if not failed(name, own, "handoff", ref)]
     lines.extend(f"{order} {ref}" for ref, order in pairs)
@@ -65,7 +70,7 @@ def account_actions(name, own, desk, body, family):
         if name.startswith("lapse-"):
             lines = [line for line in lines if not failed(name, own, "digest", line)]
         rules = family.read_handbook(lines, include_notes=name not in ("naive", "naive-digest"))
-        body["card"] = family.encode_card(rules)
+        body["card"] = "" if name in NO_ARTIFACTS else family.encode_card(rules)
     board = {row["order"]: row["departure"] for row in desk["board"]}
     body["answers"] = [{"question": q["id"], "eta": board[q["order"]]} for q in desk["questions"]
                        if q["order"] in board]
@@ -77,7 +82,7 @@ def dispatch_actions(name, own, desk, body, family, forms, amendments, refs):
     by_hub = {}
     for order in desk["orders"]:
         oid = order["id"]
-        early = failed(name, own, "commit", oid) or name == "random-valid"
+        early = failed(name, own, "commit", oid) or name in (*NO_ARTIFACTS, "random-valid")
         if round_no < 2 or not early and round_no <= order["amend_close"]:
             continue
         if by_hub.get(order["hub"], 0) >= 3:
@@ -87,10 +92,19 @@ def dispatch_actions(name, own, desk, body, family, forms, amendments, refs):
             carriers = [c for c in carriers if c == amendments[oid]]
         if not carriers:
             continue
-        carrier = choose(carriers, oid + ":carrier") if name == "random-valid" else carriers[0]
-        form = choose(family.FORMS, oid + ":form") if name == "random-valid" else forms.get(carrier, "C/Z")
+        if name in ("random-valid", "guess"):
+            carrier = choose(carriers, oid + ":carrier")
+        else:
+            fixed = name.removeprefix("fixed-")
+            carrier = fixed if fixed in carriers else carriers[0]
+        if name == "guess":
+            form = choose(family.FORMS, oid + ":form")
+        elif name == "focal-default":
+            form = "C/Z"
+        else:
+            form = forms.get(carrier)
         bookings.append({"order": oid, "carrier": carrier, "departure": order["departure"],
-                         "rate_key": family.rate_key(carrier, order["zone"], form)})
+                         "rate_key": family.rate_key(carrier, order["zone"], form) if form else ""})
         by_hub[order["hub"]] = by_hub.get(order["hub"], 0) + 1
     body["bookings"] = bookings
     reconciles = []
@@ -98,8 +112,12 @@ def dispatch_actions(name, own, desk, body, family, forms, amendments, refs):
         ref = callback["carrier_ref"]
         if ref in refs:
             order = refs[ref]
-        elif name == "random-valid" and refs:
-            order = choose(sorted(refs.values()), ref + ":reconcile")
+        elif name == "guess" and own["role"] == "n2":
+            candidates = sorted(row["order"] for row in desk["board"] if row["departure"] == own["shift"]
+                                and row["order"] not in refs.values())
+            if not candidates:
+                continue
+            order = choose(candidates, ref + ":reconcile")
         else:
             continue
         reconciles.append({"carrier_ref": ref, "order": order,
@@ -108,18 +126,37 @@ def dispatch_actions(name, own, desk, body, family, forms, amendments, refs):
 
 
 def play(name, client, own, family):
+    if name == "random":
+        name = "random-valid"
     role = own["role"]
     single = role == "all"
     forms, amendments, refs = {}, {}, {}
     pending = []
-    first = own["shift"] + 1 if role == "n2" else 1
-    last = own["shift"] if role == "n1" else own["rounds"]
+    duties = own["duties"]
+    first, last = duties[0], duties[-1]
     if role == "n2":
-        status, opened = yield from client.get("/await?until=active")
-        if status != 200 or opened["active"] != "active":
-            raise RuntimeError("late shift did not start")
-        interpret(opened, forms, amendments)
-    for round_no in range(first, last + 1):
+        while True:
+            status, opened = yield from client.get("/await?until=active")
+            if status != 200:
+                raise RuntimeError("late shift wait failed")
+            if opened.get("frozen"):
+                return
+            interpret(opened, forms, amendments)
+            if opened["active"] == "active":
+                break
+    for round_no in duties:
+        if round_no > 1:
+            while True:
+                status, opened = yield from client.get(f"/await?until=tick&after={round_no - 2}")
+                if status != 200:
+                    raise RuntimeError("work round wait failed")
+                if opened.get("frozen"):
+                    return
+                interpret(opened, forms, amendments)
+                if opened["tick"] == round_no - 1:
+                    break
+                if opened["tick"] > round_no - 1:
+                    raise RuntimeError("work round advanced without desk")
         status, desk = yield from client.get("/desk")
         if status != 200 or desk["round"] != round_no:
             raise RuntimeError("desk did not open the required round")
@@ -132,23 +169,22 @@ def play(name, client, own, family):
                 amendments.update({m["order"]: m["carrier"] for m in pending})
                 pending.clear()
             else:
-                delayed = []
+                # Each amendment has one visible round; a lapse omits it.
                 for amend in pending:
-                    if amend in desk["amendments"] and desk["questions"] and failed(name, own, "commit", amend["order"]):
-                        delayed.append(amend)
+                    if name in FLOORS or failed(name, own, "commit", amend["order"]):
                         continue
                     message = json.dumps({"amend": {amend["order"]: amend["carrier"]}})
                     status, reply = yield from client.post("/messages", {"to": amend["desk"], "text": message})
                     if status != 201:
                         raise RuntimeError("amendment relay failed")
                     interpret(reply, forms, amendments)
-                pending = delayed
-        if (single or role == "r") and (round_no - 1) % own["day_length"] == 0:
+                pending.clear()
+        if (single or role == "r") and round_no == 1:
             forms = {carrier: supported[0] for carrier, supported in desk["ratefiles"].items()}
             body["rates"] = forms
-            if not single:
+            if not single and name not in FLOORS:
                 announced = {c: form for c, form in forms.items()
-                             if not failed(name, own, "interface", (desk["day"], c))}
+                             if not failed(name, own, "interface", c)}
                 if announced:
                     status, reply = yield from client.post(
                         "/messages", {"to": "all", "text": json.dumps({"forms": announced})}
@@ -173,8 +209,3 @@ def play(name, client, own, family):
         interpret(reply, forms, amendments)
         if round_no == last:
             return
-        if reply["tick"] < round_no:
-            status, opened = yield from client.get(f"/await?until=tick&after={round_no - 1}")
-            if status != 200 or opened["tick"] != round_no:
-                raise RuntimeError("round barrier did not open")
-            interpret(opened, forms, amendments)

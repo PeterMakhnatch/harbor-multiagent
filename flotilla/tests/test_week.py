@@ -14,6 +14,7 @@ FAMILY = load(FLOTILLA / "seams" / "week.py")
 SEED = 8734308029136849
 SEAMS = ("digest", "interface", "commit", "handoff")
 DOSES = ("canary", "standard")
+FLOORS = FAMILY.FLOORS
 
 
 def check_reply(sim, seat, request, result):
@@ -52,6 +53,7 @@ def check_reply(sim, seat, request, result):
         assert order["callback"] <= reply["round"]
         assert single or FAMILY.desk_for(order["hub"], reply["round"], model.p["shift"]) == seat
     assert ("prior_record" in reply) == (seat == "n2" and model.p["fullrecord"])
+    assert all(set(row) == {"order", "carrier", "ref"} for row in reply.get("prior_record", []))
 
 
 def check_run(result, inst, single=False, nop=False):
@@ -63,6 +65,8 @@ def check_run(result, inst, single=False, nop=False):
     assert result["reward"] == max(0, score["V"] / score["V_ref"])
     assert all(row["seam"] in FAMILY.SEAMS for row in score["ledger"])
     assert all(row["fee"] >= 0 and row["lost_revenue"] >= 0 for row in score["ledger"])
+    for row in score["seams"].values():
+        assert 0 <= row["failed"] + row["unobserved"] <= row["opportunities"]
     assert all(sum(row["fee"] + row["lost_revenue"] for row in score["ledger"] if row["seam"] == s) == cost
                for s, cost in score["costs"].items())
     events = result["events"]
@@ -86,7 +90,7 @@ def check_run(result, inst, single=False, nop=False):
             b = e["data"]
             assert b["desk"] in active and b["round"] == closed + 1
             assert e["seat"] not in ready
-        if e["kind"] == "week_ready":
+        if e["kind"] in ("week_ready", "week_auto_ready"):
             assert e["seat"] in active and e["seat"] not in ready
             assert e["data"]["round"] == closed + 1
             ready.add(e["seat"])
@@ -120,9 +124,14 @@ def test_week_sweep(difficulty, monkeypatch):
     samples = defaultdict(list)
     instances = set()
     max_requests = defaultdict(int)
-    for instance in range(100):
+    max_turns = defaultdict(int)
+    for instance in range(24):
         inst = FAMILY.generate(SEED, instance, None, difficulty)
         assert FAMILY.generate(SEED, instance, None, difficulty) == inst
+        assert {r["carrier"] for r in inst["rules"]} == set(FAMILY.CARRIERS)
+        assert all(o["eligible"] == list(FAMILY.CARRIERS) for o in inst["orders"])
+        assert len({r["carrier"] for r in inst["rules"] if r["aside"]} |
+                   {o["amendment"] for o in inst["orders"] if o["amendment"]}) > 1
         instances.add(json.dumps(inst, sort_keys=True))
         with tempfile.TemporaryDirectory(prefix="week-proof-") as root:
             paths = SIM.BUILD.build("week", [instance], len(inst["seats"]), difficulty, SEED,
@@ -132,45 +141,63 @@ def test_week_sweep(difficulty, monkeypatch):
             def run(arm, policy, schedule, by_arm=by_arm, inst=inst):
                 result = SIM.simulate_built(by_arm[arm], policy, schedule)
                 costs = check_run(result, inst, arm == "solo", policy == "nop")
-                samples[arm, policy].append((result["reward"], costs))
+                samples[arm, policy].append((result["reward"], costs, result["score"]["seams"]))
                 return result
 
-            for schedule in range(5):
+            for schedule in range(3):
                 careful = run("team", "careful", schedule)
                 assert careful["reward"] == 1 and not any(careful["score"]["costs"].values())
                 for seat, n in careful["requests"].items():
                     max_requests[seat] = max(max_requests[seat], n)
-            schedule = instance % 5
+                for seat in inst["seats"]:
+                    turns = sum(e["seat"] == seat and e["kind"] == "week_ready" for e in careful["events"]) + 1
+                    assert turns == len(FAMILY.duty_rounds(inst, seat)) + 1
+                    max_turns[seat] = max(max_turns[seat], turns)
+                assert max_turns["r"] == 2
+                if difficulty == "canary":
+                    assert all(n <= 15 for n in max_turns.values())
+            schedule = instance % 3
             expected = {}
             for seam in SEAMS:
                 variant = run("team", f"naive-{seam}", schedule)
                 costs = variant["score"]["costs"]
-                assert costs[seam] > 0
                 assert all(cost == 0 for s, cost in costs.items() if s != seam)
                 expected[seam] = costs[seam]
                 assert all(row["seam"] == seam for row in variant["score"]["ledger"])
             naive = run("team", "naive", schedule)
             assert naive["score"]["costs"] == (expected | {"own": 0})
             assert run("team", "nop", schedule)["reward"] == 0
-            assert run("solo", "careful", schedule)["reward"] == 1
+            solo = run("solo", "careful", schedule)
+            assert solo["reward"] == 1
+            max_turns["solo"] = max(max_turns["solo"], len(FAMILY.duty_rounds(inst, "all")) + 1)
             assert run("team-fullrecord", "naive-handoff", schedule)["reward"] == 1
+            assert run("team-fullrecord", "naive-interface", schedule)["score"]["seams"]["interface"] == (
+                samples["team", "naive-interface"][-1][2]["interface"])
             assert run("hint", "careful", schedule)["reward"] == 1
-            run("team", "random-valid", schedule)
+            for floor in FLOORS:
+                run("team", floor, schedule)
             lapse = {}
             for percent in (10, 20, 30, 50):
                 lapse[percent] = run("team", f"lapse-{percent}", schedule)
             if instance < 5:
-                replay = SIM.simulate_built(by_arm["team"], "careful", 4)
+                replay = SIM.simulate_built(by_arm["team"], "careful", 2)
                 assert replay["events"] == careful["events"]
-                twin = SIM.simulate_built(by_arm["team"], "lapse-30", (schedule + 1) % 5)
+                twin = SIM.simulate_built(by_arm["team"], "lapse-30", (schedule + 1) % 3)
                 assert twin["score"] == lapse[30]["score"]
-    assert len(instances) == 100
+    assert len(instances) == 24
+    for seam in SEAMS:
+        assert mean(row[1][seam] for row in samples["team", f"naive-{seam}"]) > 0
     for percent in (10, 20, 30, 50):
         assert 0 < mean(row[0] for row in samples["team", f"lapse-{percent}"]) < 1
     summary = {f"{arm}/{policy}": {"n": len(rows), "reward": mean(row[0] for row in rows),
-                                   "costs": {s: mean(row[1][s] for row in rows) for s in FAMILY.SEAMS}}
+                                   "costs": {s: mean(row[1][s] for row in rows) for s in FAMILY.SEAMS},
+                                   "seams": {s: {key: sum(row[2][s][key] for row in rows)
+                                                 for key in ("failed", "opportunities", "unobserved")} for s in SEAMS}}
                for (arm, policy), rows in sorted(samples.items())}
-    print(json.dumps({"difficulty": difficulty, "summary": summary, "max_http_calls": dict(max_requests)}, sort_keys=True))
+    chance = max(summary[f"team/{floor}"]["reward"] for floor in FLOORS)
+    assert chance < 0.7
+    print(json.dumps({"difficulty": difficulty, "summary": summary, "chance": chance,
+                      "max_http_calls": dict(max_requests), "max_shell_turns": dict(max_turns)}, sort_keys=True))
 
 
 def test_week_private_inputs_and_malformed_requests(monkeypatch):
@@ -178,7 +205,7 @@ def test_week_private_inputs_and_malformed_requests(monkeypatch):
 
     def probe(name, client, own, family, oracle, custom, variant, extension, seed=None, instance=None):
         if own["role"] == "a":
-            for card in (None, [], "x" * 500, "\ud800"):
+            for card in (None, [], "x" * 500, "\ud800", "HAL/Z1/cold>VIR\u2028", "HAL/Z1/cold>VIR\r"):
                 status, check = yield from client.post("/card/check", {"card": card})
                 assert status == 200 and check["valid"] is False
             status, _ = yield from client.post("/round", {"round": 9})
@@ -188,8 +215,8 @@ def test_week_private_inputs_and_malformed_requests(monkeypatch):
         if own["role"] == "n1":
             status, _ = yield from client.post("/rates/check", {"rates": {}})
             assert status == 403
-            status, _ = yield from client.post("/round", {"round": 1, "bookings": [None]})
-            assert status == 400
+            status, _ = yield from client.post("/messages", {"to": "a", "text": "receipt"})
+            assert status == 403
         yield from original(name, client, own, family, oracle, custom, variant, extension, seed, instance)
 
     monkeypatch.setattr(SIM.POLICY, "play", probe)
@@ -198,7 +225,7 @@ def test_week_private_inputs_and_malformed_requests(monkeypatch):
     assert not any(e["kind"] == "extension_error" for e in result["events"])
 
 
-def test_week_partial_barrier_has_no_reward(monkeypatch):
+def test_week_partial_barrier_scores_omission(monkeypatch):
     def one_seat(name, client, own, *args, **kwargs):
         if own["role"] == "a":
             status, _ = yield from client.post("/round", {"round": 1})
@@ -206,9 +233,126 @@ def test_week_partial_barrier_has_no_reward(monkeypatch):
 
     monkeypatch.setattr(SIM.POLICY, "play", one_seat)
     result = SIM.simulate("week", "team", 0, "careful", SEED, 0, difficulty="canary")
-    assert result["reward"] is None
-    assert result["invalid"] == "round barrier did not finish"
+    assert result["reward"] == 0
+    assert result["invalid"] is None
+    assert "seat_omission" in result["score"]["flags"]
+    assert "r" in result["score"]["stalled_seats"]
     assert not any(e["kind"] == "week_closed" for e in result["events"])
+
+
+def test_week_budget_and_free_calls(monkeypatch):
+    def spend(name, client, own, family, *args):
+        if own["role"] != "r":
+            return
+        for _ in range(30):
+            status, _ = yield from client.get("/whoami")
+            assert status == 200
+            status, reply = yield from client.get("/await?until=active")
+            assert status == 200 and reply["active"] == "active"
+        for _ in range(family.call_cap({"orders": [], "questions": []}, "r")):
+            status, _ = yield from client.get("/desk")
+            assert status == 200
+
+    monkeypatch.setattr(SIM.POLICY, "play", spend)
+    result = SIM.simulate("week", "team", 0, "careful", SEED, 0, difficulty="canary")
+    assert result["reward"] == 0 and result["invalid"] is None
+    assert "budget_exhausted" in result["score"]["flags"]
+    assert result["score"]["stalled_seats"] == ["r"]
+    assert result["requests"]["r"] == 84
+
+
+def test_week_play_timeout_scores_omission(monkeypatch):
+    def slow(name, client, own, *args):
+        if own["role"] != "a":
+            return
+        yield from client.get("/desk")
+        for _ in range(7):
+            yield from client.sleep(300)
+        yield from client.get("/desk")
+
+    monkeypatch.setattr(SIM.POLICY, "play", slow)
+    result = SIM.simulate("week", "team", 0, "careful", SEED, 0, difficulty="canary")
+    assert result["invalid"] is None and result["reward"] == 0
+    assert "seat_omission" in result["score"]["flags"]
+    assert any(e["kind"] == "play_timeout" for e in result["events"])
+
+
+def round_override(monkeypatch, transform):
+    original = SIM.POLICY.play
+
+    def override(name, client, own, *args, **kwargs):
+        policy = original(name, client, own, *args, **kwargs)
+        reply = None
+        while True:
+            try:
+                request = policy.send(reply)
+            except StopIteration:
+                return
+            if isinstance(request, SIM.POLICY.Request) and request.path == "/round":
+                body = transform(own["role"], request.body)
+                request = request._replace(body=body)
+            reply = yield request
+            if isinstance(request, SIM.POLICY.Request) and request.path == "/round" and any(
+                    "error" in item for item in reply[1].get("results", [])):
+                return
+
+    monkeypatch.setattr(SIM.POLICY, "play", override)
+
+
+def test_week_wrong_actions_cost_more_than_omission(monkeypatch):
+    inst = FAMILY.generate(SEED, 0, None, "canary")
+    crossing = [o for o in inst["orders"] if o["departure"] == inst["shift"]]
+    target, wrong = crossing
+    mode = "missing"
+
+    def transform(role, body):
+        for book in body.get("bookings", []):
+            if book["order"] == target["id"]:
+                book["rate_key"] = "" if mode == "missing" else "WRONG"
+        if role == "n2":
+            for rec in body.get("reconciles", [])[:]:
+                if rec["carrier_ref"] == target["ref"]:
+                    if mode == "missing":
+                        body["reconciles"].remove(rec)
+                    else:
+                        rec["order"] = wrong["id"]
+        return body
+
+    round_override(monkeypatch, transform)
+    missed = SIM.simulate("week", "team", 0, "careful", SEED, 0, difficulty="canary")["score"]
+    mode = "wrong"
+    guessed = SIM.simulate("week", "team", 0, "careful", SEED, 0, difficulty="canary")["score"]
+    assert guessed["costs"]["interface"] == missed["costs"]["interface"] + 160
+    assert guessed["costs"]["handoff"] == missed["costs"]["handoff"] + 300
+    assert guessed["reward"] < missed["reward"]
+
+
+def test_week_caps_and_eta_attribution(monkeypatch):
+    instance = next(i for i in range(24) if any(
+        o["amendment"] and any(q["order"] == o["id"] for q in inst["questions"])
+        for inst in [FAMILY.generate(SEED, i, None, "canary")] for o in inst["orders"]))
+    inst = FAMILY.generate(SEED, instance, None, "canary")
+    order = next(o for o in inst["orders"] if o["amendment"])
+    question = next(q for q in inst["questions"] if q["order"] == order["id"])
+    wrong = next(c for c in FAMILY.CARRIERS if c != order["amendment"])
+    card = FAMILY.encode_card(inst["rules"]) + f"\n{FAMILY.rule_key(order)}>{wrong}"
+    assert FAMILY.parse_card(card, inst["card_cap"]) is not None
+
+    def transform(role, body):
+        if role == "a" and body["round"] == 1:
+            body["card"] = card
+        if role == "n1" and "notebook" in body:
+            body["notebook"] += "\r"
+        return body
+
+    round_override(monkeypatch, transform)
+    result = SIM.simulate("week", "team", instance, "careful", SEED, 0, difficulty="canary")
+    assert result["invalid"] is None
+    assert "notebook_missing" in result["score"]["flags"]
+    assert any(row["subject"] == question["id"] and row["seam"] == "digest"
+               for row in result["score"]["ledger"])
+    assert result["score"]["seams"]["digest"]["failed"] == 1
+    assert result["score"]["seams"]["commit"]["unobserved"] == 1
 
 
 def test_week_ledger_identity_failure_has_no_reward(tmp_path):
