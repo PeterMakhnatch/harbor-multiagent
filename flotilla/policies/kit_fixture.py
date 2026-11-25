@@ -30,6 +30,9 @@ def play(name, client, own, family):
         yield from client.post("/handoff", {"note": str(own["left"])})
         return
     if role == "read":
+        _, me = yield from client.get("/await?until=active")
+        if me["reason"] != "active":
+            return
         status, board = yield from client.get("/board")
         if status == 200 and "note" in board:
             yield from client.post("/commit", {"total": own["right"] + int(board["note"])})

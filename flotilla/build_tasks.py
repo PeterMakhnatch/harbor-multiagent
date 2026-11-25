@@ -928,6 +928,7 @@ def build(family_name: str, instances: list[int], n_seats: int | None, difficult
                 for field in ("push", "senders", "max_calls"):
                     task_json[field] = ext_arm[field]
                 task_json["play_timeout_sec"] = arm_play
+                task_json["start_after"] = ext_arm.get("start_after", {})
                 task_json["agent_timeout_sec"] = per_seat
             elif game:
                 task_json |= {"mode": "rounds", "game": arm, "round_seconds": round_seconds,

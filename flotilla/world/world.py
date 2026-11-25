@@ -358,7 +358,7 @@ if AUDIT is not None:
 _SEQ = [0]
 EVENT_SINK: Callable[[dict[str, Any]], None] | None = None
 EXTENSION_RESERVED = frozenset({
-    "start", "extension_start", "freeze", "play_timeout", "tick", "seat_transition",
+    "start", "extension_start", "freeze", "play_timeout", "tick", "seat_transition", "seat_end",
     "send", "message_route", "deliver", "delivered", "extension_call", "extension_error",
     "await", "call_budget", "simulation_stalled", "health", "whoami", "state",
     "bad_token", "invalid_http", "probe", "invalid", "denied", "late", "inactive",
@@ -388,6 +388,25 @@ class ExtensionHost:
         if any(type(value) is not int or value < 1 for value in self.max_calls.values()):
             raise ValueError("invalid extension call cap")
         self.budget_notified: set[str] = set()
+        self.start_after = task.get("start_after", {})
+        self.predecessors = {p for predecessors in self.start_after.values() for p in predecessors}
+        self.ended: set[str] = set()
+
+    def seat_end(self, seat: str) -> None:
+        if seat not in self.predecessors or seat in self.ended:
+            return
+        self.ended.add(seat)
+        record("seat_end", seat)
+        hook = getattr(EXTENSION, "on_seat_end", None)
+        if hook and not STATE["frozen"]:
+            try:
+                hook(seat)
+            except Exception as exc:  # noqa: BLE001 - contain family-code failures
+                self.fail(seat, "seat_end", exc)
+
+    def predecessor_ended(self, seat: str) -> bool:
+        predecessors = self.start_after.get(seat, [])
+        return bool(predecessors) and set(predecessors) <= self.ended
 
     def admit(self, seat: str) -> bool:
         if self.status[seat] != "active" or STATE["frozen"]:
@@ -1084,6 +1103,8 @@ class World(BaseHTTPRequestHandler):
                 STATE["first_call"] = now() if STATE["first_call"] is None else STATE["first_call"]
                 if HOST is not None:
                     STATE.setdefault("first_wall", time.monotonic())
+                    for predecessor in HOST.start_after.get(seat, []):
+                        HOST.seat_end(predecessor)
                 expire()
                 if SCHEDULED:
                     _post_scheduled(seat)  # version 14: the first request of a seat under test adds every post
@@ -1470,6 +1491,8 @@ class World(BaseHTTPRequestHandler):
                 reason = "retired"
             elif until == "active" and HOST.status[seat] == "active":
                 reason = "active"
+            elif until == "active" and HOST.predecessor_ended(seat):
+                reason = "predecessor_ended"
             elif until == "tick" and HOST.tick > after:
                 reason = "tick"
             elif until == "message" and _unread(seat):

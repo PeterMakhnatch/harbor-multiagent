@@ -267,7 +267,7 @@ def test_extension_play_clock_and_note_cap_over_http(tmp_path, start_world):
     world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"),
                         FLOTILLA_WAIT_SECONDS="0.05", FLOTILLA_PLAY_SECONDS="10")
     world.ordered = True
-    assert world.seat("p2", "GET", "/await?until=active")[1]["reason"] == "timeout"
+    assert world.seat("p1", "GET", "/await?until=tick&after=0")[1]["reason"] == "timeout"
     assert world.seat("p1", "POST", "/handoff", {"note": "1" * 13})[0] == 413
     assert world.seat("p1", "POST", "/handoff", {"note": "123"})[0] == 200
     assert world.seat("p1", "POST", "/handoff", {"note": "456"})[0] == 409
@@ -275,8 +275,25 @@ def test_extension_play_clock_and_note_cap_over_http(tmp_path, start_world):
     assert world.events()[-1]["kind"] == "delivered"
     world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"),
                         FLOTILLA_WAIT_SECONDS="1", FLOTILLA_PLAY_SECONDS="0.1")
-    assert world.seat("p2", "GET", "/await?until=active")[1]["reason"] == "frozen"
+    assert world.seat("p1", "GET", "/await?until=tick&after=0")[1]["reason"] == "frozen"
     assert any(e["kind"] == "play_timeout" for e in world.events())
+
+
+def test_staged_seat_end(tmp_path, start_world):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("staged",), tmp_path)
+    task = QA.load_task(path)
+    world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+    world.ordered = True
+    for _ in range(2):
+        status, reply = world.seat("p2", "GET", "/await?until=active")
+        assert status == 200 and reply["reason"] == "predecessor_ended"
+        assert reply["active"] == "waiting"
+    assert [e["seat"] for e in world.events() if e["kind"] == "seat_end"] == ["p1"]
+    sim = SIM.simulate_built(path, {"p1": "nop"}, 0)
+    actual = SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir)
+    assert actual["reward"] == sim["reward"] == 0
+    assert actual["handover_missing"] == sim["score"]["handover_missing"] is True
+    assert [e["seat"] for e in sim["events"] if e["kind"] == "seat_end"] == ["p1"]
 
 
 def test_rf1v_read_first_reliance_sweep(tmp_path):

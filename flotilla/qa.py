@@ -1062,6 +1062,8 @@ def check_extension(task: Task) -> Iterator[Finding]:
                         if "start_after" in config["agents"][seat]}
         if actual_edges != arm.get("start_after", {}):
             yield Finding("qa-error", task.name, "*", "extension start_after differs from generator")
+        if data.get("start_after", actual_edges) != actual_edges:
+            yield Finding("qa-error", task.name, "*", "world start_after differs from task config")
         play = metadata["play_timeout_sec"]
         agent = config["agent"]["timeout_sec"]
         BUILD.validate_timeout(play)

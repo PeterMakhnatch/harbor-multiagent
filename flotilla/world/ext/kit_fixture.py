@@ -37,6 +37,10 @@ class Fixture:
         self.host.record("fixture_budget", seat)
         self.host.freeze()
 
+    def on_seat_end(self, seat):
+        if self.protocol == "staged" and seat == "p1" and not self.handed_off:
+            self.host.record("handover_missing", seat)
+
     def message_delay(self, message, recipient):
         return self.params["delay"] if message["text"].startswith("handoff ") else None
 
@@ -118,4 +122,7 @@ def score(task, events):
         notes = [event for event in events if event["kind"] == "sealed_note"]
         receipts = [event for event in events if event["kind"] == "delivered" and event["seat"] == "p2"]
         correct = correct and len(notes) == 1 and bool(receipts)
-    return {"reward": float(correct), "handoffs": len(handoffs)}
+    result = {"reward": float(correct), "handoffs": len(handoffs)}
+    if task["params"].get("protocol") == "staged":
+        result["handover_missing"] = any(event["kind"] == "handover_missing" for event in events)
+    return result

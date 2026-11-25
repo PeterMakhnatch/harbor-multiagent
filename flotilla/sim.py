@@ -172,6 +172,8 @@ class Simulation:
             except StopIteration:
                 del ready_at[seat]
                 ended.add(seat)
+                if self.world.HOST is not None and hasattr(self.world.HOST, "seat_end"):
+                    self.world.HOST.seat_end(seat)
                 continue
             if isinstance(step, POLICY.Request):
                 replies[seat] = self.request(seat, step)
