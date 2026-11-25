@@ -213,6 +213,16 @@ Repeat the same 24-cell rehearsal if a diagnostics-only change makes the frozen 
 Use new generated folders, run static QA on them, and compare each observed reward with its own built-task
 simulation. Never substitute rewards from the earlier folders.
 
+### Negative control on the final build
+
+The pilot rehearsal expects 24 rewards of 1. That cannot show that a verifier distinguishes good and bad notes.
+Build one fresh instance (number 300, `standard`), with the same world for 4 combinations. Use `careful` or
+`pointer` at every seat, in `team` or `team-fullrecord`. Keep the paid and entry-check instances separate.
+Before any Docker trial, the predictions are: `careful` 1 in both arms; `pointer` 0.5 in `team`, 1 in
+`team-fullrecord`. All 4 should settle all 16 results correctly. Only the `pointer` team without the record
+should lose the ticket. Compare the outcomes from Docker with the same built-task simulator. This checks a
+scripted mechanism, not whether access to the record helps a model.
+
 ## Validity limits
 
 - Rules are stated, not learned from unfamiliar worlds. Frontier models can reach the ceiling.
