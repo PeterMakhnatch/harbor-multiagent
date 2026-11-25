@@ -253,3 +253,15 @@ def test_prior_shift_actions_do_not_reach_next_shift(tmp_path, start_world):
     baseline = signal(0)
     for bit in range(8):
         assert signal(1 << bit) == baseline
+
+
+def test_stalled_shift_is_invalid(tmp_path, start_world):
+    (path,) = SIM.BUILD.build("digest", [0], 2, "canary", SEED, ("team",), tmp_path, policy="careful")
+    env = path / "environment"
+    task_file = env / "task.json"
+    world = start_world("team", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task_file),
+                        FLOTILLA_WAIT_SECONDS="1", FLOTILLA_PLAY_SECONDS="0.1")
+    world.ordered = True
+    status, reply = world.seat("p2", "GET", "/await?until=active")
+    assert status == 200 and reply["reason"] == "frozen"
+    assert SIM.SCORE.extension_score(json.loads(task_file.read_text()), world.events(), env) == {"invalid": "play_timeout"}
