@@ -10,13 +10,25 @@
       "tasks_dir": "/tmp/seams1125/b3-commit/careful",
       "manifest": "/tmp/seams1125/b3-commit/careful/manifest.json",
       "instances": [0],
-      "arms": ["team", "probe-trap"]
+      "arms": ["team"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b3-commit/careful",
+      "manifest": "/tmp/seams1125/b3-commit/careful/manifest.json",
+      "instances": [0],
+      "arms": ["probe-trap"]
     },
     {
       "tasks_dir": "/tmp/seams1125/b3-commit/naive",
       "manifest": "/tmp/seams1125/b3-commit/naive/manifest.json",
       "instances": [0],
-      "arms": ["team", "probe-trap"]
+      "arms": ["team"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b3-commit/naive",
+      "manifest": "/tmp/seams1125/b3-commit/naive/manifest.json",
+      "instances": [0],
+      "arms": ["probe-trap"]
     }
   ],
   "models": [null],
