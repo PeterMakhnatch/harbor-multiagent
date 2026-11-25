@@ -109,6 +109,8 @@ RULES: dict[str, tuple[str, str]] = {
     "solo-sufficient": ("WARN", "in a team condition, a seat's own briefing alone gives a correct answer"),
     "canary": ("FAIL", "an extension task lacks the hidden contamination marker or exposes it to a seat"),
     "versions": ("FAIL", "an extension task's version stamps differ from its shipped files"),
+    "answer-leak": ("FAIL", "a seat-readable field contains a hidden value declared by the extension family"),
+    "leak-check-missing": ("WARN", "an extension family declares neither leak_values nor a QA hook"),
 }
 ALLOW_READABLE_NAMES = "--allow-readable-names"  # the flag that makes runtime-names a WARN
 ALLOW_PUBLIC_SEED = "--allow-public-seed"  # the flag that makes public-seed a WARN
@@ -305,7 +307,7 @@ def load_task(path: Path) -> Task:
     else:
         needs = ("settle", "score_game") if task.task_json.get("mode") == "rounds" else ("score", "oracle_answer")
         if task.task_json.get("mode") == "extension":
-            needs = ("generate", "extension_arm", "qa")
+            needs = ("generate", "extension_arm")
         if all(callable(getattr(module, name, None)) for name in needs):
             task.family = module
         else:
@@ -988,20 +990,52 @@ def check_canary(task: Task) -> Iterator[Finding]:
     for path in BUILD.canary_files(task.path, task.family_name):
         if path.name == "family_policy.py" and not path.exists():
             continue
-        if not path.is_file() or BUILD.CANARY_LINE not in path.read_bytes().splitlines():
+        if f"# {BUILD.CANARY}" not in (read_text(path) or "").splitlines():
             yield Finding("canary", task.name, "*", f"{relative(task, path)} lacks the marker")
+    guid = BUILD.CANARY.partition(" ")[2]
     for seat in task.seats:
         for name, text in task.view(seat).items():
-            if BUILD.CANARY in text or BUILD.CANARY in decoded(text):
+            if guid in name or guid in text or guid in decoded(text):
                 yield Finding("canary", task.name, seat, f"{name} contains the marker")
 
 
 def check_versions(task: Task) -> Iterator[Finding]:
     if task.task_json.get("mode") != "extension" or task.family is None:
         return
-    expected = BUILD.version_stamps(task.path, task.family, task.seats)
+    try:
+        expected = BUILD.version_stamps(task.path, task.family, task.seats)
+    except (OSError, AttributeError) as exc:
+        yield Finding("versions", task.name, "*", f"cannot check version stamps ({type(exc).__name__})")
+        return
     if task.task_json.get("versions") != expected:
         yield Finding("versions", task.name, "*", "version stamps differ from the shipped files")
+
+
+def check_answer_values(task: Task) -> Iterator[Finding]:
+    if task.task_json.get("mode") != "extension" or task.family is None:
+        return
+    hook = getattr(task.family, "leak_values", None)
+    if not callable(hook):
+        if not callable(getattr(task.family, "qa", None)):
+            yield Finding("leak-check-missing", task.name, "*", "declare leak_values or a family QA hook")
+        return
+    try:
+        values = hook(task.task_json)
+        if not isinstance(values, list) or any(not isinstance(value, str) or not value.strip() for value in values):
+            raise ValueError("leak_values must return a list of nonempty strings")
+        if not values:
+            return
+        alternatives = "|".join(re.escape(value) for value in sorted(set(values)))
+        pattern = re.compile(rf"(?<![\w-])(?:{alternatives})(?![\w-])", re.IGNORECASE)
+    except Exception as exc:  # noqa: BLE001 - a failed leak hook must not pass QA
+        yield Finding("qa-error", task.name, "*", f"leak_values failed ({type(exc).__name__})")
+        return
+    for seat in task.seats:
+        for name, text in task.view(seat).items():
+            if pattern.search(name):
+                yield Finding("answer-leak", task.name, seat, "a seat-visible field name contains a hidden value")
+            elif pattern.search(text) or pattern.search(decoded(text)):
+                yield Finding("answer-leak", task.name, seat, f"{name} contains a hidden value")
 
 
 def check_extension(task: Task) -> Iterator[Finding]:
@@ -1037,8 +1071,10 @@ def check_extension(task: Task) -> Iterator[Finding]:
                     or json.loads(task.env(seat)["SEAT_BRIEFING"]) != arm["briefings"][seat]):
                 yield Finding("qa-error", task.name, seat, "extension briefing or instruction differs from generator")
         task.cache[("extension", "arm")] = arm
-        for detail in task.family.qa(data, {seat: task.view(seat) for seat in seats}):
-            yield Finding("qa-error", task.name, "*", detail)
+        hook = getattr(task.family, "qa", None)
+        if callable(hook):
+            for detail in hook(data, {seat: task.view(seat) for seat in seats}):
+                yield Finding("qa-error", task.name, "*", detail)
     except Exception as exc:  # noqa: BLE001 - malformed extension task is a QA failure
         yield Finding("qa-error", task.name, "*", f"extension QA failed: {type(exc).__name__}")
 
@@ -1334,7 +1370,7 @@ def check_container_name(task: Task) -> Iterator[Finding]:
 TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
               check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient,
               check_game_secret, check_confederate_plan, check_audit_data, check_push, check_inbox, check_policy,
-              check_extension, check_policy_runner, check_canary, check_versions)
+              check_extension, check_policy_runner, check_canary, check_versions, check_answer_values)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------

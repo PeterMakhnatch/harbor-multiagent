@@ -93,6 +93,10 @@ def pair_difference(first, second, views_a, views_b):
     return [] if normalized == views_a else ["more than the protocol sentence differs"]
 
 
+def leak_values(task_json):
+    return [str(task_json["params"]["total"])]
+
+
 def qa(task, views):
     total = task["params"]["total"]
     for seat, view in views.items():

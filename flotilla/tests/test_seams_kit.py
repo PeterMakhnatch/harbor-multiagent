@@ -55,6 +55,42 @@ def test_extension_versions(tmp_path):
     file = path / "instructions" / "p2.md"
     file.write_text(file.read_text() + "\nModified.")
     assert any(f.rule == "versions" for f in QA.check([path])[0])
+    file.unlink()
+    assert any(f.rule == "versions" for f in QA.check([path])[0])
+
+
+@pytest.mark.parametrize("sink", ["instruction", "briefing", "file"])
+def test_extension_leak_values(tmp_path, sink):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("talk-trap",), tmp_path)
+    task = QA.load_task(path)
+    (value,) = task.family.leak_values(task.task_json)
+    assert not QA.check([path])[0]
+    if sink == "instruction":
+        file = path / "instructions" / "p2.md"
+        file.write_text(file.read_text() + f"\nLeak: {value}.")
+    elif sink == "briefing":
+        service = task.compose["services"]["p1"]
+        briefing = json.loads(service["environment"]["SEAT_BRIEFING"])
+        service["environment"]["SEAT_BRIEFING"] = json.dumps(briefing | {"extra": value})
+        (task.env_dir / "docker-compose.yaml").write_text(QA.yaml.safe_dump(task.compose))
+    else:
+        player = task.env_dir / "player"
+        (player / "extra.txt").write_text(value)
+        (player / "Dockerfile").write_text(BUILD.player_dockerfile(["extra.txt"]))
+    findings = [f for f in QA.check([path])[0] if f.rule == "answer-leak"]
+    expected = {"instruction": {"p2"}, "briefing": {"p1"}, "file": set(task.seats)}[sink]
+    assert {f.seat for f in findings} == expected
+    assert all(value not in f.detail for f in findings)
+
+
+def test_extension_missing_leak_check_warns(tmp_path, monkeypatch):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("talk",), tmp_path)
+    task = QA.load_task(path)
+    monkeypatch.delattr(task.family, "qa")
+    assert not QA.check([path])[0]
+    monkeypatch.delattr(task.family, "leak_values")
+    findings, _ = QA.check([path])
+    assert [(f.rule, f.level) for f in findings] == [("leak-check-missing", "WARN")]
 
 
 def test_fixture_lapse_sweep(tmp_path):
