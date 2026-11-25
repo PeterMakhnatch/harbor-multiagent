@@ -228,6 +228,11 @@ Repeat the same 24-cell rehearsal if a diagnostics-only change makes the frozen 
 Use new generated folders, run static QA on them, and compare each observed reward with its own built-task
 simulation. Never substitute rewards from the earlier folders.
 
+The v8 rehearsal of the scheduled packages stopped at 21/24 verified cells. All 21 scored 1 in Docker
+and in simulation. Three cells produced no trial after the allowed retry; all their failures were at
+Docker preflight. There were 7 preflight failures in 28 total starts. No model ran. The earlier v7
+receipt covers only its own folders. This is an incomplete rehearsal, not a policy failure.
+
 ### Negative control on the final build
 
 The pilot rehearsal expects 24 rewards of 1. That cannot show that a verifier distinguishes good and bad notes.

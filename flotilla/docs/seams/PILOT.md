@@ -26,6 +26,10 @@ stays in the suite as a canary for smaller models. It does not enter a frontier 
 Decision on 2026-11-25: **hold the paid pilot**. `handoff` has a repeatable failure mechanism, but its
 repaired build has no prospective sample for entry rule 3. Round 6 deliberately revisited earlier instances.
 Do not select an 8-trial window from those results and call it the entry test.
+The scheduled packages also lack a complete Docker rehearsal. On v8, 21/24 completed and all scored 1,
+matching the simulator. The other 3 exhausted the runner's 1 retry at Docker preflight. We kept those
+cells missing. The prior v7 result (24/24) does not certify v8. The separate 4-cell positive and negative
+policy control passed on `handoff`; it does not fill missing pilot cells.
 
 | Family | Entry | Reason |
 |---|---|---|
