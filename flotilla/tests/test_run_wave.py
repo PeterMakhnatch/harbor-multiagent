@@ -2116,3 +2116,39 @@ def test_staged_declared_profile_forecasts_each_cell_and_stage_with_zdr_warning(
     assert "low / expected / high total: $0.0372 / $0.0492 / $0.0732" in fewest
     assert f"ZDR warning: {M1}" in most
     assert not sources.balance_calls and sources.price_calls == 0 and sources.catalog_calls == 1
+
+
+def test_extension_outcomes_pair_valid_trials_and_count_flagged_omission(tmp_path):
+    repo = init_repo(tmp_path)
+    root = repo / "tasks"
+    BUILD.build("kit_fixture", [0, 1], 2, "canary", 1234567, ("talk-control", "talk-trap"), root)
+    plan = staged_plan(range(2), [])
+    plan.update(agent="oracle", models=[None], scripted_seats=["p1"])
+    plan["task_sets"][0]["arms"] = ["talk-control", "talk-trap"]
+    plan["stages"]["tests"][0]["arms"] = plan["task_sets"][0]["arms"]
+    paths = RUN.resolve_paths(plan, repo)
+    jobs_dir = tmp_path / "jobs"
+    outcomes = RUN.Outcomes(plan, repo, jobs_dir, paths)
+    jobs = []
+    for i, ((index, instance, arm), task) in enumerate(paths.items()):
+        job = f"job{i}"
+        trial, result = write_trial(jobs_dir / job, [{"seat": seat, "name": "oracle"} for seat in ("p1", "p2")])
+        data = RUN.extension_task(task)
+        score = {"family": "kit_fixture", "mode": "extension", "instance": instance, "condition": arm,
+                 "versions": data["versions"], "reward": 1, "error": None}
+        if arm == "talk-trap":
+            score.update(omission=True)
+        if instance == 1 and arm == "talk-control":
+            score.update(invalid="infrastructure", error="infrastructure")
+        (trial / "verifier" / "score.json").write_text(json.dumps(score))
+        (trial / "result.json").write_text(json.dumps(result))
+        jobs.append(job)
+    found = outcomes.paired(0, jobs, "oracle", plan["task_sets"][0]["arms"])
+    assert (found["b"], found["c"], found["n"]) == (1, 0, 1)
+    assert len(found["counted"]) == 2
+    assert outcomes.success(0, jobs, "oracle", "talk-control")["k"] == 1
+    assert RUN.primary_success({"reward": .2, "passed": True}, "passed")
+    assert RUN.primary_success({"accuracy": .8}, {"field": "accuracy", "gte": .8})
+    assert not RUN.primary_success({"accuracy": .79}, {"field": "accuracy", "gte": .8})
+    with pytest.raises(ValueError):
+        RUN.primary_success({}, "passed")

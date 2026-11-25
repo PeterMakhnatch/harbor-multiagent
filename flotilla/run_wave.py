@@ -51,6 +51,7 @@ families. A resume recomputes every look from the trial folders and refuses one 
 from __future__ import annotations
 
 import argparse
+import ast
 import dataclasses
 import functools
 import hashlib
@@ -803,6 +804,59 @@ def exception_kind(info) -> str:
     return str(info)[:80]
 
 
+@functools.cache
+def extension_task(task: str) -> dict:
+    path = Path(task) / "environment" / "task.json"
+    data = json.loads(path.read_text()) if path.is_file() else {}
+    return data if data.get("mode") == "extension" else {}
+
+
+@functools.cache
+def primary_of(task: str):
+    """Read the frozen family's literal PRIMARY without importing task code on the host."""
+    source = Path(task) / "environment" / "family.py"
+    for node in ast.parse(source.read_text()).body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "PRIMARY" for t in node.targets):
+            return ast.literal_eval(node.value)
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == "PRIMARY":
+            return ast.literal_eval(node.value)
+    return {"field": "reward", "gte": 1}
+
+
+def primary_success(score: dict, primary) -> bool:
+    if score.get("flags") or score.get("omission"):
+        return False
+    if isinstance(primary, str):
+        value = score.get(primary)
+        if type(value) is bool:
+            return value
+    elif isinstance(primary, dict) and set(primary) == {"field", "gte"}:
+        value, threshold = score.get(primary["field"]), primary["gte"]
+        if type(value) in (int, float) and type(threshold) in (int, float):
+            return value >= threshold
+    raise ValueError(f"missing or invalid primary outcome {primary!r}")
+
+
+def extension_problem(score: dict, task: str) -> str | None:
+    data = extension_task(task)
+    if not data:
+        return None
+    if score.get("invalid"):
+        return f"invalid extension result: {score['invalid']}"
+    if score.get("mode") != "extension" or score.get("family") != data["family"]:
+        return "score for another family"
+    if data.get("versions") != score.get("versions"):
+        return "extension version mismatch"
+    reward = score.get("reward")
+    if type(reward) not in (int, float) or not 0 <= reward <= 1:
+        return "missing or invalid extension reward"
+    try:
+        primary_success(score, primary_of(task))
+    except (ValueError, TypeError, KeyError) as exc:
+        return str(exc)
+    return None
+
+
 def trial_problem(trial: Path | None, result: dict | None, cell: dict) -> str | None:
     """Why a trial is not valid, or None when it is."""
     if trial is None or result is None:
@@ -820,6 +874,8 @@ def trial_problem(trial: Path | None, result: dict | None, cell: dict) -> str | 
         return f"score error {verdict['error']}"
     if (verdict.get("instance"), verdict.get("condition")) != (cell["instance"], cell["arm"]):
         return "score for another cell"
+    if problem := extension_problem(verdict, cell.get("task", "")):
+        return problem
     participants = trial_config(trial, result).get("participants") or []
     if not participants:
         return "no participants"
@@ -1275,10 +1331,14 @@ class Outcomes:
         self.plans = [{"name": plan["name"], "models": [stage_model(model) for model in plan["models"]],
                        "scripted": None if scripted is None else set(scripted), "instances": set(task_set["instances"]),
                        "arms": set(arms_of(task_set)), "sets": []} for task_set in plan["task_sets"]]
+        self.paths = paths
+        self.extensions = set()
         tested = {test["task_set"] for test in stage_tests(plan)}
         for (index, _instance, _arm), task in paths.items():
-            if index in tested and (self.tasks.get(Path(task).name) or {}).get("family") != "probe":
-                raise SystemExit(f"refused: a staged test reads probe outcomes; task set {index} has a non-probe task")
+            if extension_task(task):
+                self.extensions.add(index)
+            elif index in tested and (self.tasks.get(Path(task).name) or {}).get("family") != "probe":
+                raise SystemExit(f"refused: a staged test reads probe or extension outcomes; task set {index} has neither")
         self.jobs_dir = jobs_dir
         self.rows: dict[str, dict | None] = {}
 
@@ -1289,8 +1349,49 @@ class Outcomes:
                 trial, self.tasks, self.roots, self.plans[task_set])
         return self.rows[job]
 
+    def extension_rows(self, task_set: int, jobs: list[str], model: str) -> dict:
+        rows = {}
+        for job in jobs:
+            trial, result = read_trial(self.jobs_dir, job)
+            if trial is None or result is None:
+                continue
+            path = trial / "verifier" / "score.json"
+            if not path.is_file():
+                continue
+            score = json.loads(path.read_text())
+            instance, arm = score.get("instance"), score.get("condition")
+            task = self.paths.get((task_set, instance, arm))
+            if not task:
+                continue
+            cell = {"task": task, "instance": instance, "arm": arm, "model": None if model == "oracle" else model,
+                    "scripted": roster_of(task)[1]}
+            if trial_problem(trial, result, cell):
+                continue
+            key = instance, arm
+            row = {"correct": primary_success(score, primary_of(task)), "job": job, "trial": trial.name,
+                   "started": result.get("started_at") or ""}
+            if key not in rows or (row["started"], job) < (rows[key]["started"], rows[key]["job"]):
+                rows[key] = row
+        return rows
+
+    def success(self, task_set: int, jobs: list[str], model: str, arm: str) -> dict:
+        if task_set in self.extensions:
+            rows = [row for (_, name), row in self.extension_rows(task_set, jobs, model).items() if name == arm]
+        else:
+            counted, _ = self.analysis.XM.choose([row for job in jobs if (row := self.row(task_set, job)) is not None])
+            rows = [row for row in counted.values() if row["condition"] == arm]
+        return {"k": sum(row["correct"] for row in rows), "n": len(rows),
+                "counted": sorted(f"{row['job']}/{row['trial']}" for row in rows)}
+
     def paired(self, task_set: int, jobs: list[str], model: str, arms: list[str]) -> dict:
         """b (only the first arm correct), c and n (complete counted pairs), as probe_analysis.mcnemar counts them."""
+        if task_set in self.extensions:
+            rows = self.extension_rows(task_set, jobs, model)
+            pairs = [(row, rows[instance, arms[1]]) for (instance, arm), row in rows.items()
+                     if arm == arms[0] and (instance, arms[1]) in rows]
+            return {"b": sum(a["correct"] and not b["correct"] for a, b in pairs),
+                    "c": sum(b["correct"] and not a["correct"] for a, b in pairs), "n": len(pairs),
+                    "counted": sorted(f"{row['job']}/{row['trial']}" for pair in pairs for row in pair)}
         rows = [row for job in jobs if (row := self.row(task_set, job)) is not None]
         counted, _duplicates = self.analysis.XM.choose(rows)
         families = sorted({row["family"] for row in counted.values()})
