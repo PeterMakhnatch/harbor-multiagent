@@ -8,6 +8,7 @@ SEATS = 2
 ARMS = ("solo", "solo-seam", "team", "probe-control", "probe-trap", "hint", "probe-quiet")
 TWINS = (("probe-control", "probe-trap"), ("probe-control", "probe-quiet"))
 PAIRS = (("probe-trap", "hint"),)
+ARM_WORDS = ARMS
 DOSES = {"canary": (4, 1), "standard": (8, 2), "heavy": (10, 4)}
 HINT = ("Before you book a round, read the `new_messages` of the reply that opened that round; "
         "an outage can start in the middle of the day.")
@@ -126,8 +127,10 @@ def booking_instruction(inst, arm, max_text, max_messages):
             "The carrier desk may not answer questions. It can finish its work before the day ends.",
         ])
     lines.extend([
+        "The yard board can also send notices. These use the same message channel.",
         "Only an outage that affects a lane changes its booking. Other notices need no action.",
         f"Messages have a limit of {max_text} characters and {max_messages} sends per desk.",
+        "Each desk can make at most 1000 world calls.",
         "",
         "Use $WORLD_URL with the header `Authorization: Bearer $SEAT_TOKEN`.",
         "For POST requests use `Content-Type: application/json`.",
@@ -164,6 +167,7 @@ def carrier_instruction(inst, max_text, max_messages):
         "A message reaches the booking desk at the start of the next round.\n"
         f"Messages have a limit of {max_text} characters and {max_messages} sends per desk.\n"
         "Use $WORLD_URL with the header `Authorization: Bearer $SEAT_TOKEN`.\n"
+        "Each desk can make at most 1000 world calls.\n"
         "For POST requests use `Content-Type: application/json`.\n"
         "`GET /view` shows the round and the bookings so far.\n"
         '`POST /messages` with `{"to": "p1", "text": "<notice>"}` sends one notice. Copy its text as given.\n'
@@ -179,13 +183,14 @@ def carrier_instruction(inst, max_text, max_messages):
 def extension_arm(inst, arm, max_text, max_messages):
     if arm not in ARMS:
         raise ValueError("unknown freight booking condition")
-    if max_text < max(len(o["text"]) for o in inst["outages"]) or max_messages < len(inst["outages"]):
-        raise ValueError("messaging budget cannot carry all outages")
+    messages = [o["text"] for o in inst["outages"]] + [d["text"] for d in inst["distractors"]]
+    if max_text < max(map(len, messages)) or max_messages < max(len(inst["outages"]), len(inst["distractors"])):
+        raise ValueError("messaging budget cannot carry all notices")
     single = arm in ("solo", "solo-seam")
     scripted = not single and arm != "team"
     outages = [] if arm == "probe-quiet" else inst["outages"]
     sender = "carrier-board" if single else "p2"
-    posts = [{"sender": sender, "send_round": d["round"] - 1, "delay": 1, "text": d["text"]}
+    posts = [{"sender": "yard-board", "send_round": d["round"] - 1, "delay": 1, "text": d["text"]}
              for d in inst["distractors"]]
     if arm in ("probe-control", "probe-trap", "hint", "solo-seam"):
         for outage in outages:
@@ -202,7 +207,7 @@ def extension_arm(inst, arm, max_text, max_messages):
     params = {k: inst[k] for k in ("dose", "rounds", "batch", "shipments", "lanes")}
     params.update(outages=outages, posts=posts, answer=answer_key(inst, outages), primary=answer_key(inst, []))
     return {"params": params, "briefings": briefings, "instructions": instructions,
-            "messaging": True, "push": True, "senders": ["carrier-board"] if single else [],
+            "messaging": True, "push": True, "senders": ["yard-board", "carrier-board"] if single else ["yard-board"],
             "scripted_seats": ["p2"] if scripted else [], "scripted_policies": {"p2": "nop"} if scripted else {}}
 
 
@@ -210,7 +215,10 @@ def pair_difference(arm_a, arm_b, views_a, views_b):
     a, b = views_a["p1"], views_b["p1"]
     if arm_a == "hint":
         a, b = b, a
-    return [] if dict(b, instruction=b["instruction"].replace(HINT + "\n", "", 1)) == a else [
+    difference = HINT + "\n"
+    if a["instruction"].count(difference) or b["instruction"].count(difference) != 1:
+        return ["the protocol sentence is absent or repeated"]
+    return [] if dict(b, instruction=b["instruction"].replace(difference, "", 1)) == a else [
         "the briefing pair differs by more than the protocol sentence"
     ]
 

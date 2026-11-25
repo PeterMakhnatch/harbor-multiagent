@@ -58,7 +58,7 @@ def select(name, shipment, lane, r, outages):
 
 def wait_next(client, view, name, outages):
     r = view["round"]
-    for _ in range(12):
+    for _ in range(30):
         status, reply = yield from client.get(f"/await?until=tick&after={r - 1}")
         if status != 200 or reply.get("frozen"):
             return None

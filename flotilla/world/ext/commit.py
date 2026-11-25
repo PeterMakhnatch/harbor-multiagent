@@ -19,6 +19,7 @@ class Freight:
         self.bookings = {}
         self.messages = {}
         self.opened = False
+        self.post_due(1)
 
     @property
     def round(self):
@@ -38,13 +39,17 @@ class Freight:
                         "id": message["id"], "carrier": outage["carrier"], "round": self.round,
                     })
 
+    def post_due(self, r):
+        for post in self.params["posts"]:
+            if post["send_round"] == r:
+                message = self.host.post(post["sender"], "p1", post["text"], delay=post["delay"])
+                self.messages[message["id"]] = message
+
     def open_round(self):
         self.opened = True
         self.host.record("commit_round_open", None, {"round": self.round})
-        for post in self.params["posts"]:
-            if post["send_round"] == self.round:
-                notice = self.host.post(post["sender"], "p1", post["text"], delay=post["delay"])
-                self.on_message(notice)
+        if self.round > 1:
+            self.post_due(self.round)
 
     def view(self, seat):
         data = {"round": self.round, "stepped": seat in self.stepped, "finished": self.round > self.rounds}
@@ -149,6 +154,12 @@ def score(task, events):
             outage_by_id[data["id"]] = data["carrier"]
             if seat == "p2":
                 send_rounds.setdefault(data["carrier"], data["round"])
+        elif kind == "send" and seat in ("p2", "carrier-board") and data.get("to") in ("p1", "all"):
+            for outage in params["outages"]:
+                if outage["text"] in data.get("text", ""):
+                    outage_by_id[data["id"]] = outage["carrier"]
+                    if seat == "p2":
+                        send_rounds.setdefault(outage["carrier"], event["t"] + 1)
         elif kind == "deliver" and seat == "p1":
             delivered.update(outage_by_id[id_] for id_ in data["ids"] if id_ in outage_by_id)
         elif kind == "commit_book" and seat == "p1":

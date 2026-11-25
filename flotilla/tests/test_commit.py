@@ -103,6 +103,11 @@ def evidence(task, result):
                                 "solo-seam": start - 1}.get(task["condition"], data["round"])
             notices[data["id"]] = expected_arrival
             assert 1 <= data["round"] <= params["rounds"]
+        elif kind == "send" and seat in ("p2", "carrier-board") and data.get("to") in ("p1", "all"):
+            for outage in params["outages"]:
+                if outage["text"] in data.get("text", ""):
+                    arrival = 0 if task["condition"] == "probe-control" else outage["start"] - 1
+                    notices[data["id"]] = arrival
         elif kind == "message_route":
             if data["to"] == "p1":
                 routes[data["id"]] = data["arrival"]
@@ -116,6 +121,7 @@ def evidence(task, result):
         elif kind == "extension_call":
             assert 200 <= data["status"] < 500
     score = EXT.score(task, events)
+    assert result["invalid"] is None and score == result["score"]
     assert score["reward"] in (0, 1)
     assert score["reward"] == result["reward"]
     assert 0 <= score["fields_correct"] <= len(params["answer"])
@@ -158,8 +164,10 @@ def test_commit_scheduler_sweep(tmp_path, dose, arm):
                 expected = int(policy in ("lone", "primary") and arm == "probe-quiet")
                 assert SIM.simulate_built(path, policy, 0)["reward"] == expected
             if arm == "team":
-                for seat in ("p1", "p2"):
-                    assert SIM.simulate_built(path, {seat: "nop"}, 0)["reward"] == 0
+                assert SIM.simulate_built(path, {"p1": "nop"}, 0)["reward"] == 0
+                stalled = SIM.simulate_built(path, {"p2": "nop"}, 0)
+                assert stalled["reward"] is None and stalled["invalid"]
+                assert any(event["kind"] == "play_timeout" for event in stalled["events"])
                 assert SIM.simulate_built(path, {"p1": "lone"}, 0)["reward"] == 0
                 assert SIM.simulate_built(path, {"p2": "naive"}, 0)["reward"] == 0
         if arm == "probe-trap":
