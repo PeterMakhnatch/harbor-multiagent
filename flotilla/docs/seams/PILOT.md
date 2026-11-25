@@ -41,12 +41,24 @@ playtests across `digest`, `handoff`, `tell`, `interface` and `commit`.
 Test access to the earlier record, not removal of a sentence. Use `standard`, `team` and `team-fullrecord`.
 Freeze 8 fresh instances, 200–207, from one private build before any seat plays. Both arms and both models
 use those same 8 instances: 32 four-seat playtests. Never use these instances for the paid stages.
-The local build is `.flotilla-local/seams-entry-20261125`. Its `manifest.json` SHA-256 is
-`78abf0fb8d356408faa29cf5236709dbf6f6bb0c69651d873d61106cdc574a7e`. All 16 tasks passed static QA.
-The world parameters match across arms in each pair. No assistant has played this build.
-The content commitment is `89b4eadb7016ae021a3863f630947391d9c84e9bfda5aaabb59a8be00c929e67`.
+The current local build is `.flotilla-local/seams-entry-v2`. Its `manifest.json` SHA-256 is
+`c163179851847b99b44c7c7b14c17dd06f4e85056c6b4eb37ecdb27a7eb9deb1`. All 16 tasks passed static QA.
+The world parameters match across arms in each pair. No assistant has played either build.
+The new content commitment is `9ecb6126075bf6fec85c8dee8eb304eeff5608b977e47cfabd944155b26174fb`.
 Compute it as SHA-256 of compact JSON for sorted `[instance, condition, Harbor content digest]` rows.
 Use the lowercase hex digest from `Packager.compute_content_hash` without a `sha256:` prefix.
+The Harbor digest omits per-seat briefs and file modes. Check the briefs against their manifest hashes.
+
+We kept the original build at `.flotilla-local/seams-entry-20261125` (manifest SHA-256
+`78abf0fb8d356408faa29cf5236709dbf6f6bb0c69651d873d61106cdc574a7e`; content commitment
+`89b4eadb7016ae021a3863f630947391d9c84e9bfda5aaabb59a8be00c929e67`). Its oracle payload was
+owner-only. The new package keeps the same 8 instances, seed, world, briefs and policies. In task file
+contents, only the opaque package names and local service credentials changed. The relevant file modes
+now allow the container's non-root player to run the solver. The host build root remains private.
+
+Before any model play, 96 in-process script runs on the original 16 tasks matched the predicted contrast
+(2 policies × 3 schedules per task). Only `pointer` without the record lost the ticket; it scored 0.5.
+Every run settled 16/16 results correctly. These checks do not count toward the model entry screen.
 
 Opus is the primary model because its development notes contain the failure. Sol is a comparison, not a
 second opportunity to pass. Use fresh native CLI seats. On even instances, play `team` first for Opus and

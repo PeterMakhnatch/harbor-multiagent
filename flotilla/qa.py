@@ -27,6 +27,7 @@ import json
 import os
 import re
 import shlex
+import stat
 import sys
 import tomllib
 import types
@@ -86,6 +87,9 @@ RULES: dict[str, tuple[str, str]] = {
                              "answer key; --allow-public-seed makes it a WARN, only to repeat a published build")),
     "container-name": ("FAIL", ("a service sets container_name: a seat reads that fixed name by a reverse DNS "
                                 "lookup (Harbor's own names are opaque), and concurrent trials would share it")),
+    "solution-access": ("FAIL", ("the seat's player user, neither owner nor group of the solution files once Harbor "
+                                 "uploads them as root, cannot enter or list a solution/ folder, read a solution/ "
+                                 "file or read and execute solution/solve.sh")),
     "confederate-plan": ("FAIL", ("a probe task's subject is not the only seat under test, its scheduled posts or a "
                                   "confederate's briefing are not the family's plan for the task's arm (made at the "
                                   "first submission when task.json post_trigger says so), a reply post is not a "
@@ -145,6 +149,8 @@ TASK_NAME = re.compile(r"^(?P<label>.+)-(?P<instance>\d+)-(?P<condition>[a-z]+(?
 OPAQUE_NAME: re.Pattern[str] = BUILD.OPAQUE_NAME  # t-<12 hex>, the folder name; the task name is flotilla/<it>
 CONDITION_WORDS = tuple(sorted({word for name in (*BUILD.CONDITION_TEXT, *PROBE_ARMS) for word in name.split("-")}))
 HEX_ONLY = re.compile(r"^[0-9a-f]+$")
+SOLUTION_ENTRY = "solve.sh"  # what Harbor's oracle runs in /solution
+MAX_SOLUTION_ENTRIES = 10_000  # a solver payload is a handful of files; more means a wrong folder
 
 
 @dataclass(frozen=True)
@@ -1386,10 +1392,68 @@ def check_container_name(task: Task) -> Iterator[Finding]:
             yield Finding("container-name", task.name, name, f"service {name} sets container_name")
 
 
+def access_gaps(mode: int, entry: bool, folder: bool) -> str:
+    """The other-user bits (o+r, o+x) that a solution path lacks: a folder needs both to be entered and listed (a
+    Python solver imports its siblings by listing its folder), the entry needs both to run, any other file read."""
+    wanted = (stat.S_IROTH, stat.S_IXOTH) if folder or entry else (stat.S_IROTH,)
+    return "".join("r" if bit == stat.S_IROTH else "x" for bit in wanted if not mode & bit)
+
+
+def check_solution_access(task: Task) -> Iterator[Finding]:
+    """Harbor uploads solution/ to /solution with its modes, owned by root and group root; a seat's player user is
+    neither, so only the other bits count. A builder under umask 077 shipped solution/ 0700 and policy.json 0600
+    (2026-11-25, pointer-access careful handoff): every seat exited 126 and the verifier rewarded 0, while QA passed.
+    Only the solver payload is checked: the task folder, its parents and the truth outside solution/ stay private.
+    A task without solution/ ships no solver. QA reads the modes and never changes them; symlinks are not followed."""
+    solution = task.path.resolve() / "solution"
+    try:
+        top = solution.lstat()
+    except OSError:
+        return
+    if not stat.S_ISDIR(top.st_mode):
+        return
+    unlisted: list[Path] = []
+    entries = 0
+    for root, _dirs, files in os.walk(solution, onerror=lambda exc: unlisted.append(Path(exc.filename))):
+        folder = Path(root)
+        for path, is_folder in ((folder, True), *((folder / name, False) for name in sorted(files))):
+            entries += 1
+            if entries > MAX_SOLUTION_ENTRIES:
+                yield Finding("qa-error", task.name, "*", f"solution/ has more than {MAX_SOLUTION_ENTRIES} entries")
+                return
+            yield from solution_path_access(task, solution, path, is_folder)
+    for path in unlisted:
+        yield from solution_path_access(task, solution, path, True)
+        yield Finding("qa-error", task.name, "*", f"{relative(task, path)} cannot be listed")
+
+
+def solution_path_access(task: Task, solution: Path, path: Path, is_folder: bool) -> Iterator[Finding]:
+    """The finding for one folder or regular file of solution/ that the player cannot use; nothing for a symlink."""
+    try:
+        mode = path.lstat().st_mode
+    except OSError as exc:
+        yield Finding("qa-error", task.name, "*", f"{relative(task, path)} cannot be read ({type(exc).__name__})")
+        return
+    if not (stat.S_ISDIR(mode) if is_folder else stat.S_ISREG(mode)):
+        return
+    entry = not is_folder and path.parent == solution and path.name == SOLUTION_ENTRY
+    missing = access_gaps(mode, entry, is_folder)
+    if not missing:
+        return
+    name = relative(task, path)
+    verbs = {"r": "list" if is_folder else "read", "x": "enter" if is_folder else "execute"}
+    kind = "folder" if is_folder else ("entry script" if entry else "file")
+    yield Finding("solution-access", task.name, "*",
+                  f"{kind} {name} is mode {stat.S_IMODE(mode):04o}: the player user cannot "
+                  f"{' or '.join(verbs[bit] for bit in missing)} it once uploaded; ship it with o+{missing} "
+                  f"(chmod o+{missing} {name}, inside solution/ only; the task folder and its parents stay private)")
+
+
 TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
-              check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient,
-              check_game_secret, check_confederate_plan, check_audit_data, check_push, check_inbox, check_policy,
-              check_extension, check_policy_runner, check_canary, check_versions, check_answer_values)
+              check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solution_access,
+              check_solo_sufficient, check_game_secret, check_confederate_plan, check_audit_data, check_push,
+              check_inbox, check_policy, check_extension, check_policy_runner, check_canary, check_versions,
+              check_answer_values)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------
