@@ -70,9 +70,10 @@ The score does not grade note syntax, settlement order, or ticket timing. A corr
 still earns its item. The hunt and reference probes use their target item's reward as primary;
 `full_reward` remains in `score.json` for every arm.
 
-The same world event log scores every arm. It records the handovers, the issued references,
-settlements, ticket, and desk replies. Operator metrics include correctness by lag, the number of
-bindings preserved or lost, candidate-lot token coverage and first loss at a shift boundary.
+The world event log scores every arm. It records handovers, dispatch, settlement, ticket and desk
+replies. A separate delivery receipt records each successful reply write, including its note and
+result IDs. Missing receipts invalidate the run. Metrics include correctness by lag, lost bindings,
+candidate-lot token coverage and first loss at a shift boundary.
 Other metrics count early tickets, a wrong settlement despite its binding in the note, and
 handovers without a ticket after the complete evidence pins the lot. Token presence is only a
 proxy for note meaning, not a score.
@@ -99,8 +100,8 @@ in `C`. The blind policy uses only the visible IDs, not the answer key or secret
 | Heavy | 8 | 16 | 300 | 12 / 20 / 24 | ≤18 |
 
 The heavy level has 9 planned batches per shift, including carrier results due after the run.
-The standard level has 7–9. This adds normal work while keeping the same rules. No wall-clock
-race determines an outcome. The model turn cap must allow waiting plus work at each shift.
+The standard level has 7–9. Shifts start after their predecessors end. A waiting call handles
+activation. No wall-clock race determines an outcome. The world call cap is 15/30/45 per seat.
 
 Predictions (INFERRED from the cited paper, not measured): canary should score ≥0.90 and within
 0.05 of solo. Standard should lose 5–20 percentage points on lag-2 and ticket items, with lag-1 near
@@ -127,8 +128,10 @@ pipeline and the scripted mechanism, not model behavior.
   only byte of information shared by the world.
 - The generated constraint groups repeat lot combinations to guarantee the evidence span. IDs,
   order, filler lots and the middle heavy evidence shift vary. This is a synthetic task.
-- A stopped seat without handover stalls the chain. Transport or runner failures must be marked
-  invalid, not interpreted as mistakes. The note parser belongs to the scripts, never to the grader.
+- Exhausting the world call cap hands over an empty note. A runner stop before handover can
+  stall the chain; the kit has no runner-stop signal yet. Observed transport failures invalidate.
+- The note parser belongs to the scripts, never to the grader. The broad sweep uses the real
+  family code and logical scheduler; each arm/policy has a built-task simulator parity check.
 
 ## Build and simulate
 
