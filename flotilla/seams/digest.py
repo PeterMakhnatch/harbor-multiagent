@@ -33,7 +33,7 @@ DOSES = {
 OUTCOMES = ("N", "E", "S", "W", "P", "C", "X", "F", "Q", "hold")
 CHECKS = {"credit": ("ok", "stop"), "press": ("free", "busy"),
           "freight": ("booked", "none"), "ink": ("ready", "short")}
-PRODUCTS = ("BC", "FL", "PO", "BN", "PC", "BK", "EN", "LB")
+PRODUCTS = ("BC", "FL", "PO", "BN", "PC", "BK", "EN", "LB", "CA", "ST", "MB", "BR")
 DEFAULTS = {"rush": "no", "proof": "approved", "account": "standard", "stock": "house",
             "finish": "plain", "ship": "pickup", "due": "today", "ink": "process",
             "bind": "stapled", "pack": "loose"}
@@ -89,7 +89,7 @@ def rule_pool(rng, dose, products):
 
 def matches(job, condition):
     for clause in condition.split(","):
-        field, op, value = re.fullmatch(r"(\w+)([=<>])(\w+)", clause).groups()
+        field, op, value = re.fullmatch(r"(\w+)([=<>])([\w-]+)", clause).groups()
         if field not in job:
             return False
         if op == "=" and str(job[field]) != value:
@@ -126,7 +126,9 @@ def resolve(action, home, job, replies):
 def note_text(home, rules):
     lines = ["home " + " ".join(f"{k}={v}" for k, v in home.items())]
     lines.append("First matching rule wins; later clauses on its line are nested exceptions.")
-    lines.extend("; ".join(f"{condition}=>{action}" for condition, action in rule["clauses"]) for rule in rules)
+    for rule in rules:
+        clauses = [f"{re.sub(r'([=<>])', r' \1 ', c).replace(',', ', ')} => {a}" for c, a in rule["clauses"]]
+        lines.append("; ".join(clauses))
     return "\n".join(lines)
 
 
@@ -146,19 +148,40 @@ def parse_note(text, card=False):
     if head != "home":
         raise ValueError("missing home table")
     home = dict(p.split("=") for p in pairs)
+    if any(lane not in OUTCOMES[:4] for lane in home.values()):
+        raise ValueError("invalid home lane")
     rules = []
     for i, line in enumerate(lines[1:]):
-        if not line.strip() or line.startswith("First matching rule wins"):
+        if not line.strip() or (not card and line.startswith("First matching rule wins")):
             continue
         clauses = []
         for clause in line.split(";"):
             condition, action = (part.strip() for part in clause.split("=>"))
             condition = re.sub(r"\s+", "", condition)
+            if card:
+                for predicate in condition.split(","):
+                    match = re.fullmatch(r"(\w+)=([\w-]+)|qty([<>])(\d+)", predicate)
+                    if match is None:
+                        raise ValueError("invalid card condition")
+                validate_card_outcome(action)
             clauses.append([condition, action])
         rules.append({"id": i + 1, "clauses": clauses})
     if card:
         rules.sort(key=lambda r: -len(r["clauses"][0][0].split(",")))
     return home, rules
+
+
+def validate_card_outcome(action):
+    allowed = (*OUTCOMES, "home")
+    if action in allowed:
+        return
+    first, *choices = action.split()
+    name = first.removeprefix("check:")
+    if not first.startswith("check:") or name not in CHECKS:
+        raise ValueError("invalid card outcome")
+    mapping = dict(p.split("=") for p in choices)
+    if set(mapping) != set(CHECKS[name]) or any(v not in allowed for v in mapping.values()):
+        raise ValueError("invalid check replies")
 
 
 def make_job(rng, products, defaults, rules, home, target, reply_choice=None):
@@ -228,11 +251,8 @@ def generate(seed, instance, n_seats, difficulty):
     if n_seats != hops + 1:
         raise ValueError(f"{difficulty} requires {hops + 1} seats")
     rng = random.Random(f"digest:{seed}:{instance}:{difficulty}")
-    products = list(PRODUCTS[:n_products])
-    rng.shuffle(products)
+    products = rng.sample(PRODUCTS, n_products)
     defaults = dict(list(DEFAULTS.items())[:4] if count == 4 else DEFAULTS)
-    if count == 8:
-        defaults = {k: v for k, v in defaults.items() if k not in ("bind", "pack")}
     for _ in range(100):
         home = {product: rng.choice(OUTCOMES[:4]) for product in products}
         rules = rule_pool(rng, difficulty, products)
@@ -286,7 +306,7 @@ def render_manual(home, rules):
              "The home lane is the normal destination for each product."]
     lines.extend(f"Product {p} has home lane {lane}." for p, lane in home.items())
     lines.extend(["", ("Apply the first numbered rule that fits the ticket. "
-                       "Within that rule, apply its deepest matching exception. "
+                       "Within that rule, apply its deepest matching exception. Use only that clause's action and checks. "
                        "Each exception adds its conditions to all preceding conditions in that rule. "
                        "If no rule applies, send the job home."), ""])
     for index, rule in enumerate(rules, 1):
@@ -362,10 +382,15 @@ def extension_arm(inst, arm, max_text, max_messages):
 
 
 def public_briefing(fields):
-    extra = ", ".join(f for f in fields if f not in ("rush", "proof", "account", "stock"))
+    choices = {"finish": "finish (plain, laminate or foil)", "ship": "ship (pickup, delivery, courier or freight)",
+               "due": "due (today or later)", "ink": "ink (process or spot)", "bind": "bind (stapled or perfect)",
+               "pack": "pack (loose or boxed)"}
+    extra = ", ".join(choices[f] for f in fields if f in choices)
+    accounts = "standard, key, new or gov" if "pack" in fields else "standard, key or new"
     return (
         "You work the finishing desk at Harbor Print. Each ticket has an ID, product code and quantity "
-        "(`qty`). It also has rush (yes or no), proof (approved or pending), account, and stock (house or custom)"
+        f"(`qty`). It also has rush (yes or no), proof (approved or pending), account ({accounts}), "
+        "and stock (house or custom)"
         + (f", and {extra}" if extra else "") + ".\n"
         "Every job must end with one final action: send it to a lane or desk (N, E, S, W, P, C, X, F, Q), "
         "or hold it. Some jobs need a check first. Check systems are credit (ok or stop), press (free or busy), "
@@ -373,7 +398,7 @@ def public_briefing(fields):
         "Use `$WORLD_URL` with `Authorization: Bearer $SEAT_TOKEN`. For POST use `Content-Type: application/json`.\n"
         "If your shift has not started, wait until GET /whoami returns `active` equal to `active`. "
         "GET /work returns your role, up to 5 open jobs, and your incoming note on the first read. "
-        "POST /check with `{\"job\":\"example\",\"what\":\"credit\"}` returns the check reply. "
+        "POST /check with `{\"job\":\"example\",\"what\":\"credit\"}` returns the check reply for an open job on your page. "
         "POST /act with `{\"actions\":[{\"job\":\"example\",\"do\":\"send\",\"to\":\"C\"}]}` sends one job. "
         "For a hold action, use `\"do\":\"hold\"` and omit `to`. Replace the example ID with an open job ID. "
         "You can send 1 to 5 actions per call, only for your current page. GET /work then shows the next jobs. "

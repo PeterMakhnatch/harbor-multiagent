@@ -99,7 +99,7 @@ class Digest:
         next_seat = self.seats[self.seats.index(seat) + 1]
         self.notes[next_seat] = text
         forwarded = seat in self.notes and self.notes[seat] == text
-        self.host.record("note_seal", seat, size | {"copy_forward": forwarded, "id": f"note-{next_seat}"})
+        self.host.record("note_seal", seat, size | {"copy_forward": forwarded, "id": f"note-{next_seat}", "text": text})
         self.host.advance()
         self.host.retire(seat)
         self.host.activate(next_seat)
@@ -159,7 +159,7 @@ def score(task, events):
               sum(c.endswith(f".{depth}") for c in cells) for depth in range(4)
               if any(c.endswith(f".{depth}") for c in cells)}
     rules = {rid: all(v == 1 for c, v in cells.items() if c.startswith(f"{rid}."))
-             for rid in {c.split(".")[0] for c in cells} - {"0"}}
+             for rid in sorted({c.split(".")[0] for c in cells} - {"0"})}
     return {"reward": sum(cells.values()) / len(cells), "exact": all(v == 1 for v in cells.values()),
             "cells": cells, "depth_accuracy": depths, "rule_survival": rules, "check_omissions": omissions,
             "exception_jobs_with_note_read": exception_reads, "notes_fraction": note_sizes,

@@ -3,6 +3,7 @@
 import json
 import math
 import os
+import shutil
 from collections import Counter, defaultdict
 from statistics import mean
 
@@ -81,6 +82,14 @@ def test_generator_sweep(dose):
             control["params"]["batches"][s], key=lambda r: r["job"]["id"])
         exceptions = len(cells) - 1 - D.DOSES[dose].rules
         assert all(not row["cell"].endswith(".0") for row in control["params"]["batches"][s][:exceptions])
+        team = D.extension_arm(inst, "team", 4000, 200)
+        hint = D.extension_arm(inst, "hint", 4000, 200)
+        assert team["params"] == hint["params"] and team["briefings"] == hint["briefings"]
+        for seat in team["instructions"]:
+            rendered = hint["instructions"][seat].replace(
+                "\nRules that seldom apply matter as much as common ones: keep every rule and every exception "
+                "in the note, and cut background and reasons first.", "")
+            assert rendered == team["instructions"][seat]
 
 
 def check_result(task, result, reward):
@@ -132,6 +141,9 @@ def test_simulation_sweep(dose, tmp_path):
                     for seat in task["seats"]:
                         assert SIM.simulate_built(path, {s: "careful" if s == seat else "nop" for s in task["seats"]},
                                                   0)["reward"] == 0
+                    for outcome in D.OUTCOMES:
+                        assert SIM.simulate_built(path, {final: f"constant-{outcome}"}, 0)["reward"] <= 0.2 + 1e-9
+        shutil.rmtree(tmp_path / f"i{i}")
     if SWEEP >= 200:
         assert abs(mean(random_rewards) - 0.1) < 0.05
     for (arm, policy), values in sorted(scores.items()):
@@ -194,3 +206,34 @@ def test_alternative_note_and_route_legality(tmp_path, start_world):
     reversed_groups = [e for job in reversed(list(rows)) for e in events
                        if e["kind"] in ("check", "act") and e["data"]["job"] == job]
     assert EXT.score(task, reversed_groups)["reward"] == 1
+
+
+def test_prior_shift_actions_do_not_reach_next_shift(tmp_path, start_world):
+    (path,) = SIM.BUILD.build("digest", [1], 3, "standard", SEED, ("team",), tmp_path, policy="careful")
+    task_file = path / "environment" / "task.json"
+    text = D.generate(SEED, 1, 3, "standard")["reference"]
+
+    def signal(bits):
+        world = start_world("team", ("p1", "p2", "p3"), FLOTILLA_TASK_JSON=str(task_file))
+        count = 0
+        while True:
+            status, page = world.seat("p1", "GET", "/work")
+            assert status == 200
+            if page["done"]:
+                break
+            acts = []
+            for job in page["jobs"]:
+                bit = (bits >> (count % 8)) & 1
+                if bit:
+                    assert world.seat("p1", "POST", "/check", {"job": job["id"], "what": "credit"})[0] == 200
+                    assert world.seat("p1", "POST", "/check", {"job": ["bad"], "what": "press"})[0] == 400
+                acts.append({"job": job["id"], "do": "send", "to": "N"} if bit else
+                            {"job": job["id"], "do": "hold"})
+                count += 1
+            assert world.seat("p1", "POST", "/act", {"actions": acts})[0] == 200
+        assert world.seat("p1", "POST", "/note/seal", {"text": text})[0] == 201
+        return [world.seat("p2", "GET", route) for route in ("/whoami", "/work", "/note")]
+
+    baseline = signal(0)
+    for bit in range(8):
+        assert signal(1 << bit) == baseline
