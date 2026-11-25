@@ -153,7 +153,9 @@ def test_dose_response_and_guess_ceiling(tmp_path):
                 values.append(result["reward"])
         newest.append(mean(scores))
         survival.append(mean(shares))
-        chance.append(max(mean(values) for values in guess.values()))
+        winner = max(guess, key=lambda name: mean(guess[name]))
+        chance.append(mean(guess[winner]))
+        print(dose, "best guess policy:", winner, chance[-1])
     print("newest-only:", newest, "2+ hops:", survival, "best guess:", chance)
     assert newest[0] > newest[1] > newest[2]
     assert survival[0] < survival[1] < survival[2]
@@ -284,7 +286,7 @@ def test_fullrecord_access(tmp_path, start_world):
             assert "record" not in page
 
 
-def test_play_deadline_is_valid_omission(tmp_path, start_world):
+def test_world_deadline_is_infrastructure_fault(tmp_path, start_world):
     path = build(tmp_path, "canary", ("team",))["team"]
     env = path / "environment"
     task_file = env / "task.json"
@@ -295,6 +297,16 @@ def test_play_deadline_is_valid_omission(tmp_path, start_world):
     status, reply = world.seat("p1", "GET", "/await?until=tick&after=0")
     assert status == 200 and reply["reason"] == "frozen"
     result = SIM.SCORE.extension_score(task, world.events(), env)
-    assert "invalid" not in result and result["reward"] == 0 and "p1" in result["stalled_seats"]
-    assert result["shift_omissions"] == {"p1": "deadline"}
-    assert result["handover_missing"] == task["seats"][:-1]
+    assert result["invalid"] == "play_timeout" and "p1" in result["stalled_seats"]
+    assert "reward" not in result
+
+
+def test_ended_worker_is_valid_omission(tmp_path):
+    path = build(tmp_path, "canary", ("team",))["team"]
+    task = json.loads((path / "environment/task.json").read_text())
+    final = task["seats"][-1]
+    result = SIM.simulate_built(path, {final: "nop"}, 0)
+    assert result["invalid"] is None and result["reward"] == 0
+    assert result["score"]["shift_omissions"] == {final: "play_incomplete"}
+    assert not result["score"]["handover_missing"]
+    assert result["score"]["unfinished_jobs"][final] == 24

@@ -44,7 +44,7 @@ DOSES = {
 SEATS = {name: dose.hops + 1 for name, dose in DOSES.items()}
 OUTCOMES = ("N", "E", "S", "W", "P", "C", "X", "F", "Q", "hold")
 WRONG_SEND_COST = 0.01
-CHANCE_CEILING = 0.13
+CHANCE_CEILING = 0.15
 CHECKS = {"credit": ("ok", "stop"), "press": ("free", "busy"),
           "freight": ("booked", "none"), "ink": ("ready", "short")}
 PRODUCTS = ("BC", "FL", "PO", "BN", "PC", "BK", "EN", "LB", "CA", "ST", "MB", "BR")

@@ -15,8 +15,6 @@ class Digest:
         self.host = host
         self.seats = task["seats"]
         self.params = task["params"]
-        self.task = task
-        self.scoring_events = []
         self.rows = {s: {row["job"]["id"]: row for row in rows} for s, rows in self.params["batches"].items()}
         self.order = {s: [row["job"]["id"] for row in rows] for s, rows in self.params["batches"].items()}
         self.pages = {s: [] for s in self.seats}
@@ -26,9 +24,6 @@ class Digest:
         self.work_seen = set()
         self.sealed = {}
 
-    def record(self, kind, seat, data):
-        self.host.record(kind, seat, data)
-        self.scoring_events.append({"kind": kind, "seat": seat, "data": data})
 
     def pending(self, seat):
         return self.host.status[seat] == "active" and (
@@ -36,19 +31,14 @@ class Digest:
 
     def on_budget(self, seat):
         if self.pending(seat):
-            self.record("shift_omission", seat, {"reason": "call_budget"})
+            self.host.record("shift_omission", seat, {"reason": "call_budget"})
             self.host.freeze()
 
     def on_seat_end(self, seat):
         if self.pending(seat):
-            self.record("shift_omission", seat, {"reason": "seat_end"})
+            self.host.record("shift_omission", seat, {"reason": "seat_end"})
             self.host.freeze()
 
-    def on_deadline(self, stalled_seats):
-        for seat in stalled_seats:
-            if self.pending(seat):
-                self.record("shift_omission", seat, {"reason": "deadline"})
-        return score(self.task, self.scoring_events)
 
     def on_retired_call(self, seat, method, path, body, query):
         if method == "POST" and path == "/note/seal" and seat in self.sealed:
@@ -95,7 +85,7 @@ class Digest:
             return 409, {"error": "job is not open on your page"}
         reply = self.rows[seat][job]["replies"][what]
         data = {"job": job, "what": what, "reply": reply}
-        self.record("check", seat, data)
+        self.host.record("check", seat, data)
         return 200, data, [f"check-{job}-{what}"]
 
     def act(self, seat, body):
@@ -118,7 +108,7 @@ class Digest:
             moves[job] = outcome
         for job, outcome in moves.items():
             self.actions[seat].add(job)
-            self.record("act", seat, {"job": job, "outcome": outcome})
+            self.host.record("act", seat, {"job": job, "outcome": outcome})
         return 200, {"accepted": list(moves)}
 
     def seal(self, seat, body, measure):
@@ -153,7 +143,7 @@ class Digest:
         self.notes[next_seat] = text
         self.history.append({"seat": seat, "note": text, "amendment": self.params["amendments"].get(seat, "")})
         forwarded = seat in self.notes and self.notes[seat] == text
-        self.record("note_seal", seat, size | {"copy_forward": forwarded, "id": f"note-{next_seat}", "text": text})
+        self.host.record("note_seal", seat, size | {"copy_forward": forwarded, "id": f"note-{next_seat}", "text": text})
         self.host.advance()
         self.host.retire(seat)
         self.host.activate(next_seat)
@@ -218,10 +208,16 @@ def score(task, events):
              for rid in sorted({c.split(".")[0] for c in cells} - {"0"})}
     sealed = {e["seat"] for e in events if e["kind"] == "note_seal"}
     missing = [s for s in task["seats"][:-1] if s not in sealed]
+    shift_omissions = {e["seat"]: e["data"]["reason"] for e in events if e["kind"] == "shift_omission"}
+    for event in events:
+        if event["kind"] == "play_incomplete":
+            for seat in event["data"]["stalled_seats"]:
+                if unfinished[seat] or seat in missing:
+                    shift_omissions.setdefault(seat, "play_incomplete")
     reward = max(0.0, sum(points[c] / n for c, n in totals.items()) / len(totals))
     return {"reward": reward, "exact": all(v == 1 for v in cells.values()),
             "cells": cells, "depth_accuracy": depths, "rule_survival": rules, "check_omissions": omissions,
-            "shift_omissions": {e["seat"]: e["data"]["reason"] for e in events if e["kind"] == "shift_omission"},
+            "shift_omissions": shift_omissions,
             "extra_checks": extras, "notes_fraction": note_sizes, "handover_missing": missing,
             "unfinished_jobs": unfinished,
             "unparsed": sum(bool(e["data"].get("bad_lines")) for e in events if e["kind"] == "note_seal"),
