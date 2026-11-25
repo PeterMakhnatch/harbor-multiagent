@@ -12,10 +12,15 @@ echo "== analysis tests"
 (cd flotilla/analysis && uvx --quiet --python "$PY" --with pytest pytest -q tests)
 echo "== lint"
 uvx --quiet ruff check flotilla/families flotilla/games flotilla/world flotilla/build_tasks.py flotilla/make_jobs.py \
-    flotilla/qa.py flotilla/analysis/flotilla_analysis flotilla/analysis/tests
+    flotilla/qa.py flotilla/analysis/flotilla_analysis flotilla/analysis/tests flotilla/seams flotilla/policies \
+    flotilla/sim.py flotilla/eval_card.py flotilla/playtest.py flotilla/pilot_plan.py flotilla/token_profile.py
 echo "== build and QA"
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/flotilla-check.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
+for family in handoff digest commit interface tell settle week; do  # the Seams families, every arm (docs/seams)
+    uvx --quiet --python "$PY" --with pyyaml python flotilla/build_tasks.py --family "$family" --difficulty canary \
+        --instances 0 --out "$tmp" >/dev/null
+done
 uvx --quiet --python "$PY" python flotilla/build_tasks.py --family commons --difficulty a --seats 3 --instances 0-1 \
     --out "$tmp" >/dev/null  # a game family (docs/COMMONS.md)
 uvx --quiet --python "$PY" python flotilla/build_tasks.py --family split --difficulty a --seats 2 --instances 0-1 \
