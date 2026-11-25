@@ -191,6 +191,54 @@
       "source": "Claude final result usage (cache creation at miss rate); Codex turn.completed usage",
       "uncertainty": 2.0,
       "n": 22
+    },
+    {
+      "kind": "handoff",
+      "level": "standard",
+      "arm": "team-implicit-all",
+      "role": "s1",
+      "miss": 6717.5,
+      "hit": 140952,
+      "out": 1130.85,
+      "source": "Claude final result usage (cache creation at miss rate); Codex turn.completed usage",
+      "uncertainty": 2.0,
+      "n": 26
+    },
+    {
+      "kind": "handoff",
+      "level": "standard",
+      "arm": "team-implicit-all",
+      "role": "s2",
+      "miss": 7559.19,
+      "hit": 143711.92,
+      "out": 1290.69,
+      "source": "Claude final result usage (cache creation at miss rate); Codex turn.completed usage",
+      "uncertainty": 2.0,
+      "n": 26
+    },
+    {
+      "kind": "handoff",
+      "level": "standard",
+      "arm": "team-implicit-all",
+      "role": "s3",
+      "miss": 7949.08,
+      "hit": 150289.85,
+      "out": 1394.08,
+      "source": "Claude final result usage (cache creation at miss rate); Codex turn.completed usage",
+      "uncertainty": 2.0,
+      "n": 26
+    },
+    {
+      "kind": "handoff",
+      "level": "standard",
+      "arm": "team-implicit-all",
+      "role": "s4",
+      "miss": 8045.96,
+      "hit": 133094.69,
+      "out": 1278.31,
+      "source": "Claude final result usage (cache creation at miss rate); Codex turn.completed usage",
+      "uncertainty": 2.0,
+      "n": 26
     }
   ]
 }

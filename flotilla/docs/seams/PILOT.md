@@ -27,7 +27,7 @@ Result on 2026-11-25 (playtests of GPT-6.2 Sol and Claude Opus 5.5; see README.m
 
 | Family | Entry | Reason |
 |---|---|---|
-| `handoff` | Yes, with the twin pair | `team-implicit`: Opus lost 10 of 25, Sol 1 of 16 (not at the seam); `team`: 0 of 20 lost |
+| `handoff` | Yes, with the dose arms | Opus: `team` 0 of 17 lost, `team-implicit` 10 of 25, `team-implicit-all` 5 of 10. Sol: 0 of 3, 1 of 16 (not at the seam), 0 of 16 |
 | `digest`, `commit`, `tell`, `interface`, `settle` (base arms) | No | No loss at the seam, or 1, in 20 to 52 playtests each; canaries for this class |
 | `week` | No | An integration scenario; it has no matched pair |
 
@@ -55,10 +55,11 @@ Run a stage with `python3 flotilla/run_wave.py <plan> --stop-after-stage A`, rea
 the same plan without the flag. Each stage has its own cumulative cap in the plan.
 
 For `handoff`, stage B tests the 2 scripted-successor pairs. No live playtest has exercised them since their
-repair, and the playtest finding is in the twin pair `team` / `team-implicit`, which the plan runs in stage C.
-With a loss on about 1 instance in 8 (the fresh-instance rate for Opus), 12 pairs show 2 or more losses with
-a probability of about 0.45, so a 12-pair gate on the twin pair would be too weak. The recommended first paid
-step is therefore stage A, then the twin pair alone on the stage C instances (94 per model).
+repair, and the playtest finding is in the dose arms `team`, `team-implicit` and `team-implicit-all` (0, 1 or
+3 facts about the desk left unstated), which the plan runs in stage C. With a loss on about 1 instance in 8
+(the fresh-instance rate for Opus in `team-implicit`), 12 pairs show 2 or more losses with a probability of
+about 0.45, so a 12-pair gate on these arms would be too weak. The recommended first paid step is therefore
+stage A, then the 3 dose arms alone on the stage C instances (94 per model).
 
 ## 5. Outcomes
 
@@ -89,8 +90,8 @@ Retire a family for this model class when one of these is true:
 ## 8. Cost
 
 `pilot-forecast.md` has the table per stage, arm and model, with low, expected and high values, and
-`flotilla/plans/seams/handoff.json` is the plan (1,076 trials, `standard` only, 2 models). Token use per seat
-comes from 72 playtests of this family (`flotilla/plans/seams/handoff.playtest-profile.json`: about 7,000
+`flotilla/plans/seams/handoff.json` is the plan (1,264 trials, `standard` only, 2 models). Token use per seat
+comes from 98 playtests of this family (`flotilla/plans/seams/handoff.playtest-profile.json`: about 7,000
 fresh input tokens, 150,000 cached input tokens and 1,700 output tokens per seat in the native CLIs) with an
 uncertainty factor of 2; arms without a playtest use the turn model of the earlier probe waves. Terminus 2
 can differ from both. The envelope has every branch and no early stop.
@@ -99,9 +100,12 @@ can differ from both. The envelope has every branch and no early stop.
 |---|---:|---:|---:|
 | Stage A (controls) | 40 | $24 | $47 |
 | Stage B (2 scripted-successor pairs) | 96 | $11 | $22 |
-| Stage C, twin pair only (`team`, `team-implicit`) | 376 | $107 | $213 |
+| Stage C, dose arms only (`team`, `team-implicit`, `team-implicit-all`) | 564 | $155 | $309 |
 | Stage C, other arms (`hint`, `solo-seam`, `team-fullrecord`) | 564 | $213 | $425 |
-| All | 1,076 | $355 | $707 |
+| All | 1,264 | $403 | $802 |
+
+The plan's task folders are in `.flotilla-local/pilot/` of the worktree that made the plan (not in git). A
+rehearsal of those folders with the `oracle` agent on local Docker is `flotilla/plans/oracle/handoff-pilot-oracle.json`.
 
 ## 9. Before any paid stage
 
