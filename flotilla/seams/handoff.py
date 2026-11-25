@@ -2,13 +2,14 @@
 
 import random
 import re
-from itertools import combinations, pairwise
+from itertools import pairwise
 
 FAMILY = "handoff"
 TITLE = "Operate a print dispatch desk"
 DOSES = {"canary": 3, "standard": 4, "heavy": 8}
 SEATS = DOSES
-CALL_CAPS = {600: 15, 400: 30, 300: 45}
+CALL_CAP = 18
+NOTE_CAP = 200
 ARMS = ("solo", "solo-seam", "team", "hint", "twin", "team-record",
         "probe-hunt-control", "probe-hunt-trap", "probe-ref-control", "probe-ref-trap")
 TWINS = (("probe-hunt-control", "probe-hunt-trap"), ("probe-ref-control", "probe-ref-trap"))
@@ -61,78 +62,40 @@ def arrival(batch):
 
 
 def schedule(dose, probe):
-    if dose == "canary" and not probe:
-        return [(2, 2, 0), (2, 0, 0)]
-    if dose == "canary":
-        return [(2, 0, 3), (2, 2, 0), (2, 0, 0)]
-    if dose == "standard":
-        return [(2, 2, 5), (2, 4, 3), (2, 2, 0), (2, 0, 0)]
-    return [(2, 3, 4)] * 4 + [(1, 3, 4)] * 2 + [(1, 2, 0), (1, 0, 0)]
+    shifts = DOSES[dose]
+    lag = {"canary": 2 if probe else 1, "standard": 2, "heavy": 3}[dose]
+    return [min(lag, shifts - shift) for shift in range(1, shifts)]
 
 
 def make_case(rng, dose, probe):
-    counts = schedule(dose, probe)
-    shifts = len(counts)
-    lots = identifiers(rng, "L", {"canary": 6, "standard": 10, "heavy": 16}[dose], {12, 27, 35, 48, 53, 66})
-    bad, a, b, c, d, *_ = lots
-    early = [bad, a] if dose == "canary" and not probe else [bad, a, b]
-    common = [bad, b] if dose == "canary" and not probe else [bad, b, c]
-    if dose == "heavy":
-        early = [bad, a, b, c]
-        common = [bad, b, c, d]
-    safe = [lot for lot in lots if lot not in set(early + common)]
-    if dose == "canary" and not probe:
-        safe = [lot for lot in lots if lot not in (bad, a, b)]
-    alternative = rng.choice(safe)
-    other_safe = [lot for lot in safe if lot != alternative]
-    middle = rng.choice((3, 4, 5)) if dose == "heavy" else None
+    shifts = DOSES[dose]
+    lots = identifiers(rng, "L", 32, {12, 27, 35, 48, 53, 66})
+    # Choose the complete plan independently of the fault. Each complementary
+    # pair reveals one bit of evidence only once its carrier results arrive.
     batches = []
-    for shift, sizes in enumerate(counts, 1):
-        for lag, size in enumerate(sizes):
-            for j in range(size):
-                due = shift + lag
-                returned = j % 2 == 0
-                if lag == 0 and shift == shifts:
-                    returned = False
-                if (dose != "canary" and due == shifts) or due == middle:
-                    returned = False
-                elif dose == "standard" and due == 3 and lag == 0:
-                    returned = True
-                elif dose == "standard" and lag == 2:
-                    returned = j < size - 1
-                elif (dose == "standard" and lag == 1 and shift == 2) or (dose == "heavy" and lag == 2):
-                    returned = j < 3
-                inks = (early if due == 1 else common) if returned else rng.sample(safe, 2)
-                batches.append({"shift": shift, "lag": lag, "lots": sorted(inks),
-                                "status": "returned" if returned else "delivered"})
-                if shift == shifts and lag == 0 and dose == "canary" and not probe and j == 1:
-                    batches[-1].update(lots=sorted([bad, alternative]), status="returned")
-                elif due == shifts and not returned:
-                    if lag:
-                        batches[-1]["lots"] = sorted([alternative, rng.choice(other_safe)])
-                    else:
-                        filler = rng.sample(other_safe, 2) if len(other_safe) >= 2 else [a, other_safe[0]]
-                        batches[-1]["lots"] = sorted(filler)
-        minimum = {"canary": 0, "standard": 7, "heavy": 9}[dose]
-        for _ in range(max(0, minimum - sum(sizes))):
-            inks = rng.sample(lots, 2)
-            batches.append({"shift": shift, "lag": None, "lots": sorted(inks),
-                            "status": "returned" if bad in inks else "delivered"})
-    decisive = next(batch for batch in batches if batch["shift"] == shifts and batch["lag"] == 0)
-    rival = a if dose == "canary" and not probe else c if dose == "heavy" else b
-    decisive["lots"] = sorted([rival, rng.choice(other_safe)])
-    if dose == "heavy":
-        earlier = next(batch for batch in batches if arrival(batch) == middle and batch["status"] == "delivered")
-        earlier["lots"] = sorted([b, rng.choice(safe)])
-    target = next((batch for batch in batches if batch["shift"] == shifts - 2 and batch["lag"] == 2), decisive)
+    for shift, lag in enumerate(schedule(dose, probe), 1):
+        immediate, delayed = (1, 2) if shift == 1 else (4, 8) if shift == 2 else (
+            rng.choice((4, 6, 10, 12, 14)), rng.choice((2, 8, 10, 12, 14)))
+        for mask, delay in ((immediate, 0), (delayed, lag)):
+            for parity in (0, 1):
+                inks = sorted(lot for index, lot in enumerate(lots) if (index & mask).bit_count() % 2 == parity)
+                batches.append({"shift": shift, "lag": delay, "lots": inks})
+    for mask in (16, 4):
+        for parity in (0, 1):
+            inks = sorted(lot for index, lot in enumerate(lots) if (index & mask).bit_count() % 2 == parity)
+            batches.append({"shift": shifts, "lag": 0, "lots": inks})
+    bad = rng.choice(lots)
+    for batch in batches:
+        batch["status"] = "returned" if bad in batch["lots"] else "delivered"
+    target = next(batch for batch in batches if batch["shift"] < shifts - 1 and arrival(batch) == shifts) if (
+        probe or dose != "canary") else next(batch for batch in batches if batch["lag"])
     rng.shuffle(batches)
     ids = identifiers(rng, "B", len(batches), {14, 21, 33, 47, 52, 58})
     refs = identifiers(rng, "R", len(batches), {82, 7, 45, 19, 63, 30})
     for batch, desk_id, ref in zip(batches, ids, refs):
         batch.update(batch=desk_id, reference=ref)
-    return {"shifts": shifts, "cap": {"canary": 600, "standard": 400, "heavy": 300}[dose],
-            "lots": sorted(lots), "bad": bad, "batches": batches,
-            "hunt_target": decisive["batch"], "ref_target": target["batch"]}
+    return {"shifts": shifts, "cap": NOTE_CAP, "lots": sorted(lots), "bad": bad,
+            "batches": batches, "ref_target": target["batch"]}
 
 
 def generate(seed, instance, n_seats, difficulty):
@@ -151,13 +114,7 @@ def arm_case(inst, arm):
     if arm not in ARMS:
         raise ValueError("unknown arm")
     source = inst["probe" if arm.startswith("probe-") else "base"]
-    params = source | {"batches": [dict(batch) for batch in source["batches"]]}
-    for batch in params["batches"]:
-        if arm == "probe-hunt-control" and batch["batch"] == params["hunt_target"]:
-            batch["shift"] -= 1
-        if arm == "probe-ref-control" and batch["batch"] == params["ref_target"]:
-            batch["lag"] = 1
-    return params
+    return source | {"batches": [dict(batch) for batch in source["batches"]]}
 
 
 def visible_possibilities(lots, known, open_batches, results):
@@ -197,37 +154,26 @@ def chance_baseline(params):
 
 def validate_case(params, dose, arm):
     batches, lots = params["batches"], params["lots"]
-    scored = [b for b in batches if b["lag"] is not None]
     shifts = params["shifts"]
     if any((params["bad"] in b["lots"]) != (b["status"] == "returned") for b in batches):
         raise ValueError("inconsistent carrier results")
-    if not 0.4 <= sum(b["status"] == "returned" for b in scored) / len(scored) <= 0.6:
-        raise ValueError("result mix outside 40-60%")
-    if not arm.startswith("probe-"):
-        for lag in (0, 1, 2):
-            group = [b for b in scored if b["lag"] == lag]
-            if 2 * sum(b["status"] == "returned" for b in group) != len(group):
-                raise ValueError("result status correlates with the lag class")
-    if candidates(lots, scored) != [params["bad"]]:
-        raise ValueError("lot does not have a unique diagnosis")
+    if any(len(b["lots"]) != len(lots) // 2 for b in batches):
+        raise ValueError("batch size differs")
     for shift in range(1, shifts + 1):
+        planned = [b for b in batches if b["shift"] == shift]
+        if len(planned) != 4 or sum(b["status"] == "returned" for b in planned) != 2:
+            raise ValueError("shift workload or result mix differs")
         known, pending, results = shift_view(params, shift)
         possible, bindings = visible_possibilities(lots, known, pending, results)
-        if any(len(bindings[b["status"]]) < 2 for b in results):
-            raise ValueError("a delayed binding is inferable from the receiving view")
-        past = [b for b in scored if arrival(b) <= shift]
+        if len(possible) < 2 or any(len(bindings[b["status"]]) < 2 for b in results):
+            raise ValueError("receiving view resolves a hidden item")
+        past = [b for b in batches if arrival(b) <= shift]
         outstanding = [b for b in batches if b["shift"] <= shift < arrival(b)]
-        length = len("Pending ; Suspects ") + 8 * len(outstanding) + 4 * len(candidates(lots, past))
-        if shift < shifts and length > 0.8 * params["cap"]:
-            raise ValueError("canonical note exceeds 80% of the cap")
-    if dose != "canary" and not arm.startswith("probe-"):
-        if len(possible) < (3 if dose == "standard" else 4):
-            raise ValueError("last shift has too much diagnostic information")
-        span = 3 if dose == "standard" else 4
-        for group in combinations(range(1, shifts + 1), span - 1):
-            if len(candidates(lots, [b for b in scored if arrival(b) in group])) == 1:
-                raise ValueError("diagnosis requires too few shifts")
-    if not arm.endswith("-control") and len(candidates(lots, [b for b in scored if arrival(b) < shifts])) == 1:
+        if len(write_note({b["batch"]: b["reference"] for b in outstanding}, candidates(lots, past))) > params["cap"]:
+            raise ValueError("canonical note exceeds the cap")
+    if candidates(lots, batches) != [params["bad"]]:
+        raise ValueError("lot does not have a unique diagnosis")
+    if len(candidates(lots, [b for b in batches if arrival(b) < shifts])) == 1:
         raise ValueError("diagnosis pins before the last shift")
 
 
@@ -259,7 +205,7 @@ Calls:
 - `POST /handover {{"note":"..."}}`: end this shift. This also closes work if not already closed.
   The note can contain up to {cap} characters. A longer note is refused.
 
-Carrier results arrive 0, 1 or 2 shifts after dispatch, or after the run.
+Carrier results arrive 0, 1, 2 or 3 shifts after dispatch.
 The carrier uses only the carrier reference and the status `returned` or `delivered`.
 The `inbox` field in each desk call reply contains results that have not been settled.
 A result due in the current shift appears in the reply to the next desk call after dispatch.
@@ -275,7 +221,7 @@ def extension_arm(inst, arm, max_text, max_messages):
     params = arm_case(inst, arm)
     count = params["shifts"]
     seats = inst["seats"][:1 if arm == "solo" else count]
-    budget = CALL_CAPS[params["cap"]] * (count if arm == "solo" else 1)
+    budget = CALL_CAP * (count if arm == "solo" else 1)
     common = COMMON.format(shifts=count, cap=params["cap"], budget=budget)
     instructions, briefings = {}, {}
     for index, seat in enumerate(seats, 1):

@@ -270,7 +270,7 @@ def score(task, events):
             tickets.append(data["lot"])
     ticket = float(bool(tickets) and tickets[0] == params["bad"])
     rates = {}
-    for lag in (0, 1, 2):
+    for lag in (0, 1, 2, 3):
         eligible = {ref for ref, batch in scored.items() if batch["lag"] == lag}
         rates[f"lag{lag}"] = len(correct & eligible) / len(eligible) if eligible else None
     full = 0.5 * (len(correct) / len(scored) + ticket)
