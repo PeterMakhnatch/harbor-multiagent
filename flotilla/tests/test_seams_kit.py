@@ -347,6 +347,30 @@ def test_free_control_calls(tmp_path, start_world):
     assert status == 429 and reply["budget"] == "max_calls" and reply["limit"] == 20
 
 
+def test_retired_repeat(tmp_path, start_world):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("staged",), tmp_path)
+    task = QA.load_task(path)
+    world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+    world.ordered = True
+    note = str(json.loads(task.env("p1")["SEAT_BRIEFING"])["left"])
+    first = world.seat("p1", "POST", "/handoff", {"note": note})
+    assert first[0] == 200
+    assert world.seat("p1", "POST", "/handoff", {"note": note}) == first
+    assert world.seat("p1", "POST", "/handoff", {"note": "999999"})[0] == 409
+    assert world.seat("p1", "GET", "/board")[0] == 409
+    assert world.seat("p2", "GET", "/board")[1]["note"] == note
+    assert world.seat("p2", "POST", "/commit", {"total": task.task_json["params"]["total"]})[0] == 200
+    assert world.seat("p1", "POST", "/handoff", {"note": note}) == first
+    sim = SIM.simulate_built(path, {"p1": "retry"}, 0)
+    actual = SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir)
+    assert actual == {k: v for k, v in sim["score"].items() if k != "versions"}
+    assert sim["reward"] == 1
+    assert sum(e["kind"] == "sealed_note" for e in world.events()) == 1
+    assert sum(e["kind"] == "sealed_note" for e in sim["events"]) == 1
+    assert sum(e["kind"] == "retired_retry" for e in world.events()) == 2
+    assert sum(e["kind"] == "retired_retry" for e in sim["events"]) == 1
+
+
 def test_rf1v_read_first_reliance_sweep(tmp_path):
     for policy in ("naive", "careful"):
         paths = BUILD.build("probe", [0], 4, "easy", SEED, ("talk-quiet", "talk-false"), tmp_path / policy,

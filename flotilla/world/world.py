@@ -359,7 +359,7 @@ _SEQ = [0]
 EVENT_SINK: Callable[[dict[str, Any]], None] | None = None
 EXTENSION_RESERVED = frozenset({
     "start", "extension_start", "freeze", "play_timeout", "tick", "seat_transition", "seat_end",
-    "send", "message_route", "deliver", "delivered", "extension_call", "extension_error",
+    "send", "message_route", "deliver", "delivered", "extension_call", "extension_error", "retired_retry",
     "await", "call_budget", "simulation_stalled", "play_incomplete", "deadline_score", "health", "whoami", "state",
     "bad_token", "invalid_http", "probe", "invalid", "denied", "late", "inactive",
     "submit", "gated", "audit", "open", "close", "season-over", "look", "wait",
@@ -1169,7 +1169,9 @@ class World(BaseHTTPRequestHandler):
             return
         if HOST is not None and seat != "admin" and path not in ("/whoami", "/await"):
             with LOCK:
-                if STATE["frozen"] or HOST.status[seat] != "active":
+                replay = (HOST.status[seat] == "retired" and path in EXTENSION_ROUTES
+                          and callable(getattr(EXTENSION, "on_retired_call", None)))
+                if (STATE["frozen"] or HOST.status[seat] != "active") and not replay:
                     record("late" if STATE["frozen"] else "inactive", seat, {"path": path})
                     self._reply(409, {"error": "play has ended" if STATE["frozen"] else "seat is not active"})
                     return
@@ -1237,6 +1239,8 @@ class World(BaseHTTPRequestHandler):
         with LOCK:
             expire()
             if STATE["frozen"] or HOST.status[seat] != "active":
+                if HOST.status[seat] == "retired" and self._retired_call(seat, method, path, body):
+                    return
                 record("late" if STATE["frozen"] else "inactive", seat, {"path": path})
                 self._reply(409, {"error": "play has ended" if STATE["frozen"] else "seat is not active"})
                 return
@@ -1262,6 +1266,31 @@ class World(BaseHTTPRequestHandler):
                 status, reply, receipt = 500, {"error": "world failed"}, None
             record("extension_call", seat, {"method": method, "path": path, "status": status})
             self._reply(status, reply, receipt=receipt)
+
+
+    def _retired_call(self, seat: str, method: str, path: str, body: dict[str, Any]) -> bool:
+        hook = getattr(EXTENSION, "on_retired_call", None)
+        if not hook:
+            return False
+        try:
+            result = hook(seat, method, path, body, parse_qs(urlsplit(self.path).query))
+            if result is None:
+                return False
+            if not isinstance(result, tuple) or len(result) != 2:
+                raise ValueError("invalid retired retry result")
+            status, reply = result
+            if type(status) is not int or not 200 <= status < 500 or not isinstance(reply, dict):
+                raise ValueError("invalid retired retry reply")
+            if "new_messages" in reply:
+                raise ValueError("reserved reply field")
+            json.dumps(reply, allow_nan=False)
+            record("retired_retry", seat, {"method": method, "path": path, "status": status})
+        except Exception as exc:  # noqa: BLE001 - contain family-code failures
+            HOST.fail(seat, path, exc)
+            status, reply = 500, {"error": "world failed"}
+        self.push_seat = None
+        self._reply(status, reply)
+        return True
 
 
     def _audit(self, seat: str, body: dict[str, Any]) -> None:

@@ -127,6 +127,7 @@ class Simulation:
     def request(self, seat: str, request: Any) -> tuple[int, Any] | None:
         self.clock.step()
         frozen = self.world.STATE["frozen"]
+        event_start = len(self.events)
         accepted = len(self.world.STATE["submissions"])
         handler = self.handler(self.tokens[seat], request)
         handler._handle(request.method)
@@ -140,7 +141,8 @@ class Simulation:
         status, reply = handler.response
         if not 200 <= status < 500 and not (status == 500 and self.world.HOST and self.world.STATE["frozen"]):
             raise AssertionError(f"invalid reply status {status}")
-        if frozen and seat != "admin" and request.method == "POST" and status < 400:
+        if (frozen and seat != "admin" and request.method == "POST" and status < 400
+                and not any(e["kind"] == "retired_retry" for e in self.events[event_start:])):
             raise AssertionError("world accepted a move after freeze")
         if frozen and len(self.world.STATE["submissions"]) != accepted:
             raise AssertionError("world recorded a late submission")

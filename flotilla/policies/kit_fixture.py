@@ -5,7 +5,7 @@ import re
 
 def supports(name, variant):
     return (name in ("careful", "naive", "sender", "exhaust", "stall", "fault", "wait-message",
-                     "script-loop", "free-calls")
+                     "script-loop", "free-calls", "retry")
             or re.fullmatch(r"lapse-(?:0|[1-9][0-9]?|100)", name) is not None)
 
 
@@ -33,7 +33,11 @@ def play(name, client, own, family):
         yield from client.post("/commit", {"total": own["left"] + own["right"]})
         return
     if role == "seal":
-        yield from client.post("/handoff", {"note": str(own["left"])})
+        _, reply = yield from client.post("/handoff", {"note": str(own["left"])})
+        if name == "retry":
+            status, repeated = yield from client.post("/handoff", {"note": str(own["left"])})
+            if status != 200 or reply != repeated:
+                raise RuntimeError("retired retry differs from the original reply")
         return
     if role == "read":
         _, me = yield from client.get("/await?until=active")

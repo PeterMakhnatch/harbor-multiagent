@@ -49,6 +49,11 @@ class Fixture:
         if self.protocol == "staged":
             return {"reward": 0, "handover_missing": not self.handed_off, "omission": bool(stalled_seats)}
 
+    def on_retired_call(self, seat, method, path, body, query):
+        if (self.protocol == "staged" and seat == "p1" and method == "POST" and path == "/handoff"
+                and body == {"note": self.note} and not query and self.handed_off):
+            return 200, {"tick": 1}
+
     def message_delay(self, message, recipient):
         return self.params["delay"] if message["text"].startswith("handoff ") else None
 
