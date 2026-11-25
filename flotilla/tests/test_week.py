@@ -196,3 +196,28 @@ def test_week_private_inputs_and_malformed_requests(monkeypatch):
     result = SIM.simulate("week", "team", 3, "careful", SEED, 2, difficulty="canary")
     assert result["reward"] == 1
     assert not any(e["kind"] == "extension_error" for e in result["events"])
+
+
+def test_week_partial_barrier_has_no_reward(monkeypatch):
+    def one_seat(name, client, own, *args, **kwargs):
+        if own["role"] == "a":
+            status, _ = yield from client.post("/round", {"round": 1})
+            assert status == 200
+
+    monkeypatch.setattr(SIM.POLICY, "play", one_seat)
+    result = SIM.simulate("week", "team", 0, "careful", SEED, 0, difficulty="canary")
+    assert result["reward"] is None
+    assert result["invalid"] == "round barrier did not finish"
+    assert not any(e["kind"] == "week_closed" for e in result["events"])
+
+
+def test_week_ledger_identity_failure_has_no_reward(tmp_path):
+    (path,) = SIM.BUILD.build("week", [0], 4, "canary", SEED, ("team",), tmp_path, policy="careful")
+    result = SIM.simulate_built(path, "careful", 0)
+    assert result["reward"] == 1
+    env = path / "environment"
+    task = json.loads((env / "task.json").read_text())
+    task["params"]["v_ref"] += 1
+    invalid = SIM.SCORE.extension_score(task, result["events"], env)
+    assert invalid["invalid"] == "ledger identity failed"
+    assert "reward" not in invalid
