@@ -39,6 +39,15 @@ def file_convention(group, file, kind):
     return None
 
 
+def declared_convention(group, file):
+    if not file or not file["rows"]:
+        return None
+    keys = {r["key"] for r in file["rows"]}
+    matches = [c for c in CONVENTIONS if c[1] == file["unit"]
+               and keys <= {key_for(row, c) for row in group["rows"]}]
+    return matches[0] if len(matches) == 1 else None
+
+
 def join_result(group, catalog, order):
     cat = file_convention(group, catalog, "catalog")
     ord_ = file_convention(group, order, "order")
@@ -205,6 +214,8 @@ def score(task, events):
         upload = next((e for e in published if e["data"]["file"]["kind"] == "order"), None)
         order = upload["data"]["file"] if upload else None
         cat, ord_, valid, total, gold = join_result(group, catalog, order)
+        declared_cat = declared_convention(group, catalog)
+        declared_order = declared_convention(group, order)
         before = [e for e in events if upload is None or e["seq"] < upload["seq"]]
         views = [e for e in before if e["kind"] == "staging_view" and e["seat"] == "p1"
                  and e["data"]["group"] == name and any(f["kind"] == "catalog" for f in e["data"]["files"])]
@@ -217,13 +228,15 @@ def score(task, events):
         announcements = [m for m in messages if m["from"] == group["desk"] and any(k in m["text"] for k in keys)]
         exposed = bool(views) or any(m["id"] in ids for m in announcements)
         saved = tuple(params["buyer"])
-        kept = ord_ == saved and cat is not None and cat != saved
+        kept = declared_order == saved and declared_cat is not None and declared_cat != saved
         details[name] = {"valid": valid, "cat_ok": cat is not None, "ord_ok": ord_ is not None,
                          "total": total, "gold": gold, "looked": bool(views), "exposed": exposed,
-                         "adapted": ord_ is not None and ord_ != saved and ord_ == cat, "default_kept": kept,
+                         "adapted": declared_order is not None and declared_order != saved
+                         and declared_order == declared_cat, "default_kept": kept,
                          "read_not_used": exposed and kept, "blind_match": valid and not exposed,
                          "asked": sum(m["from"] == "p1" for m in messages), "announced": bool(announcements),
-                         "mismatch_axis": mismatch_axes(cat, ord_), "incomplete": catalog is None or order is None,
+                         "mismatch_axis": mismatch_axes(declared_cat, declared_order),
+                         "incomplete": catalog is None or order is None,
                          "distance": upload["data"]["step"] - notices[0]["data"]["step"] if upload and notices else None}
     target = params["target"]
     rest = [entry["valid"] for name, entry in details.items() if name != target]

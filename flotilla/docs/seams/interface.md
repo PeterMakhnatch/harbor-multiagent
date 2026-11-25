@@ -62,9 +62,10 @@ The event scorer independently reports `cat_ok`, `ord_ok`, `looked`, `exposed`, 
 Distance is the buyer's logical steps from the first staging notice to upload. No wall-clock rule enters scoring.
 
 Uniform blind chance = 1/12 per group. A desk's support set is generated independently of buyer settings;
-any fixed blind convention is supported with probability 2/12 at canary and 4/12 elsewhere. The desk's saved setting
-is uniform over the 11 other conventions conditional on the buyer saved setting. A buyer that uses its saved setting
-without checking cannot match a desk that uses its saved setting in any team group.
+any fixed blind convention is supported with probability 2/12 at canary and 4/12 elsewhere. Given the buyer's setting,
+the maximum probability of matching the desk's saved setting is 1/6 at canary and 53/576 ≈ 0.0920 elsewhere.
+These exact bounds account for support sets restricted to the declared axes. A buyer using its saved setting
+cannot match a desk that uses its saved setting in any team group.
 
 | Policy | Solo | Team / silent / hint | Control | Trap / solo-seam |
 |---|---:|---:|---:|---:|

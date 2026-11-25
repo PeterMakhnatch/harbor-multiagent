@@ -5,6 +5,7 @@ import json
 import os
 import statistics
 import tempfile
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -95,6 +96,22 @@ def test_instances_and_twins(level):
             stale = file_for(altered, group["saved"], "order")
             assert not WORLD.join_result(group, correct, stale)[2]
     assert len(distinct) == 200
+
+
+def test_exact_blind_bounds():
+    canary = [tuple(c for c in FAMILY.CONVENTIONS if c[0][4] == sep and c[1] == unit)
+              for sep in "/:-" for unit in ("each", "case")]
+    for supports, bound in ((canary, Fraction(1, 6)), (FAMILY.SUPPORTS, Fraction(53, 576))):
+        maximum = Fraction(0)
+        for buyer in FAMILY.CONVENTIONS:
+            for guess in FAMILY.CONVENTIONS:
+                support_prob = Fraction(sum(guess in group for group in supports), len(supports))
+                assert support_prob == Fraction(len(supports[0]), 12)
+                if buyer == guess:
+                    continue
+                prob = sum(Fraction(1, len(group) - int(buyer in group)) for group in supports if guess in group)
+                maximum = max(maximum, prob / len(supports))
+        assert maximum == bound
 
 
 @pytest.mark.parametrize("level", LEVELS)
