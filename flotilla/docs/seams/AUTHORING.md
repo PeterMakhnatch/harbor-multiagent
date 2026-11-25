@@ -117,15 +117,21 @@ does it lose reward and why; do the family's measures see that loss; what breaks
     fact about the other seat's view, and change nothing else. The fact must stay within the team's reach:
     the seat can see it in its own view, or one seat is told it and has to pass it on. The pair `team` /
     `team-implicit` measures the cost of that inference; `hint` minus `team` measures the habit. First case,
-    `handoff`: without the sentence "Once a batch is settled, it leaves the desk; no later shift can see its
-    lot list on the desk", Claude Opus 5.5 lost the ticket in 10 of 25 live playtests on 16 instances; with
-    it, it lost 0 of 17 on 14 of those instances; with all 3 facts about the desk left out it lost 5 of 10.
-    GPT-6.2 Sol lost 0 at the seam in all 3 arms. Counter-cases:
-    in `digest` the left-out usage rule is written in the planner's manual, every planner copied it into its
-    note, and the twin showed no loss in 16 playtests; in `settle` the desks wrote their own sheet order into
-    their first message (57 of 62), so the difference showed itself, and the twin showed no loss in 18. The
-    twin bites when the fact is written nowhere and the seat must infer it from its own view. These are
-    playtests, not an experiment.
+    `handoff`, as first built: without the sentence "Once a batch is settled, it leaves the desk; no later
+    shift can see its lot list on the desk", Claude Opus 5.5 lost the ticket in 10 of 25 live playtests on 16
+    instances; with it, it lost 0 of 17 on 14 of those instances; with all 3 facts about the desk left out it
+    lost 5 of 10. GPT-6.2 Sol lost 0 at the seam in all 3 arms. Counter-cases: in `digest` the left-out usage
+    rule is written in the planner's manual, every planner copied it into its note, and the twin showed no
+    loss in 16 playtests; in `settle` the desks wrote their own sheet order into their first message (57 of
+    62), so the difference showed itself, and the twin showed no loss in 18. The twin bites when the fact is
+    written nowhere and the seat must infer it from its own view. These are playtests, not an experiment.
+26. The seat's own view must not contradict the fact that it has to infer. An independent check of the
+    `handoff` twin found that the writer's own plan still showed a settled batch with its lots, while a later
+    shift saw nothing of it. That is a contrary cue, and a loss after it is partly the task's fault. Read
+    what the seat sees after each of its own actions, in every arm, before you call an arm fair.
+27. A stated fact must not name the thing to write down. The first wording ("... can see its lot list ...")
+    made the stated arm nearly the same as `hint`. State what the other seat will see, not what it will miss.
+    After every such repair, play the pair again; the page of the family says which wording each result used.
 
 ## What the first reviews found (2026-11-25)
 
