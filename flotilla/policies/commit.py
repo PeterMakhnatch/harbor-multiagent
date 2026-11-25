@@ -1,10 +1,11 @@
 """Freight policies that differ only in consumption of the dispatch mail."""
 
 import hashlib
+import itertools
 import re
 
 OUTAGE = re.compile(r"^(.+?) is out of service from round (\d+) to the end of the day\.")
-POLICIES = ("careful", "naive", "lone", "primary", "backup", "random", "script-loop",
+POLICIES = ("careful", "naive", "lone", "primary", "backup", "blind", "random", "script-loop",
             "lapse-10", "lapse-20", "lapse-30", "lapse-50")
 
 
@@ -30,6 +31,8 @@ def consume(reply, outages):
 
 def carrier_desk(name, client, own):
     notices = [] if name in ("naive", "lone") else own["outages"]
+    if own.lapse_percent is not None:
+        notices = [n for n in notices if not own.lapse(own.lapse_percent, ["tell", n["carrier"], n["start"]])]
     status, _ = yield from client.post("/relay", {"notices": notices})
     if status != 200:
         raise RuntimeError("carrier report was refused")
@@ -58,6 +61,29 @@ def wait_next(client):
     return None
 
 
+def blind_plan(own, view):
+    carriers = sorted({lane["primary"] for lane in own["lanes"]})
+    k = own["max_outages"]
+    combinations = list(itertools.combinations(carriers, k))
+    starts = list(itertools.product(range(2, len(view["rounds"]) + 1), repeat=k))
+    ids = "|".join(id_ for batch in view["rounds"].values() for id_ in batch)
+    draw = int.from_bytes(hashlib.sha256(ids.encode()).digest(), "big")
+    return dict(zip(combinations[draw % len(combinations)], starts[draw // len(combinations) % len(starts)],
+                    strict=True))
+
+
+def consume_shipment(name, shipment, outages, own):
+    if name in ("naive", "script-loop", "blind"):
+        return
+    for message in shipment.get("new_messages", []):
+        text = message["text"]
+        if not OUTAGE.match(text):
+            continue
+        if own.lapse_percent is not None and own.lapse(own.lapse_percent, ["read", text]):
+            continue
+        read_outages([text], outages)
+
+
 def booking_desk(name, client, own):
     lanes = {key(lane): lane for lane in own["lanes"]}
     outages = {}
@@ -65,7 +91,10 @@ def booking_desk(name, client, own):
     status, view = yield from client.get("/view")
     if status != 200:
         return
-    consume(view, outages)
+    if name == "blind":
+        outages = blind_plan(own, view)
+    else:
+        consume(view, outages)
     for _ in range(len(view["rounds"])):
         r = view["round"]
         if view["finished"]:
@@ -76,8 +105,7 @@ def booking_desk(name, client, own):
             if status != 200:
                 raise RuntimeError("shipment lookup was refused")
             shipments.append(shipment)
-            if name not in ("naive", "script-loop"):
-                consume(shipment, outages)
+            consume_shipment(name, shipment, outages, own)
         bookings = [{"shipment": s["id"], "carrier": select(name, s, lanes[key(s)], r, outages)}
                     for s in shipments]
         status, view = yield from client.post("/step", {"round": r, "bookings": bookings})
@@ -87,7 +115,7 @@ def booking_desk(name, client, own):
             view = yield from wait_next(client)
             if view is None:
                 return
-        if name != "naive":
+        if name not in ("naive", "blind"):
             consume(view, outages)
 
 
