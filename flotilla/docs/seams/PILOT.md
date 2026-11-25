@@ -57,11 +57,11 @@ the same plan without the flag. Each stage has its own cumulative cap in the pla
 ## 6. What the pilot cannot show
 
 - No human baseline, no matched-token arm, no cross-model team (`team-x`). Each needs its own approval.
-- One harness. The live playtests already showed that the harness changes behaviour: GPT-6 Luna passed the
-  early-report task in the Codex CLI in 4 of 4 playtests, and failed it 32 of 32 times under Terminus 2.
 - One harness. The live playtests already showed that the harness can change behaviour: in the Codex CLI,
   GPT-6 Luna opened its data files in 4 of 4 playtests and passed the false-report arm in 2 of 2; under
   Terminus 2 it failed that arm in 32 of 32 paid trials. The playtest numbers are too small for a comparison.
+- The power plan comes from scripted lapse policies. It is a plan, not an effect estimate.
+
 ## 7. Kill rules
 
 Retire a family for this model class when one of these is true:
