@@ -71,8 +71,8 @@ Report missed shipments, affected/unaffected correctness and report coverage alo
 Secondary binary reward is 1 only if all shipments have correct bookings and, in live team, the complete correct report
 was submitted. `missing_relay` counts actual missing report entries and `report_ok` checks report equality.
 The structured report avoids a canonical-text recognition requirement for the live sender. The dispatch mail service
-renders its supplied fields as a notice. `scripted_batch` counts rounds with all bookings accepted consecutively with no
-intervening successful extension GET. This is an API-level proxy, not a model-step join or an output-filtering detector.
+renders its supplied fields as a notice. The round's single booking step is the briefed default, not evidence of batching.
+A model-step join is needed to observe which lookups and bookings a model issued in the same tool step.
 
 Each primary has one shipment in each round. Given the visible layout, selecting `k` of the 4 primaries uniformly and
 assigning each its independent start in rounds 2–6 yields exactly `C(4,k)*5^k` distinct keys with equal probability.

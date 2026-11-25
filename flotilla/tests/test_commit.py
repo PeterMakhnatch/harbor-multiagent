@@ -63,6 +63,7 @@ def evidence(task, result):
     params = task["params"]
     assert result["invalid"] is None
     replay = EXT.score(task, result["events"])
+    assert "scripted_batch" not in score and "scripted_batch" not in replay
     unavailable = {"stale_after_delivery", "affected_after_delivery", "stale_rate", "delivered_outages"}
     for key, value in replay.items():
         if key in unavailable and score[key] is None and "stalled_seats" in score:
@@ -217,7 +218,7 @@ def test_commit_partial_and_interleaved_bookings(tmp_path, start_world):
         assert world.seat("p1", "GET", "/view")[0] == 200
     assert world.seat("p1", "POST", "/step", {"round": 1, "bookings": []})[0] == 200
     score = EXT.score(task, world.events())
-    assert score["fields_correct"] == 3 and score["missed"] == 21 and score["scripted_batch"] == 0
+    assert score["fields_correct"] == 3 and score["missed"] == 21
 
 
 def test_commit_round_validation(tmp_path, start_world):
@@ -237,7 +238,7 @@ def test_commit_round_validation(tmp_path, start_world):
     assert world.seat("p1", "POST", "/step", body)[0] == 200
     assert world.seat("p1", "POST", "/step", body)[0] == 409
     score = EXT.score(task, world.events())
-    assert score["fields_correct"] == 4 and score["scripted_batch"] == 1
+    assert score["fields_correct"] == 4
 
 
 @pytest.mark.parametrize("seat", ("p1", "p2"))

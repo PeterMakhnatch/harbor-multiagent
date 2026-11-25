@@ -245,8 +245,6 @@ def score(task, events):
     booked = set()
     stale = exposed = 0
     stalls = set()
-    batch_rounds = set()
-    consecutive = 0
     for event in events:
         kind, data, seat = event["kind"], event["data"], event["seat"]
         if kind == "commit_report":
@@ -265,12 +263,6 @@ def score(task, events):
             if shipment in affected and params["primary"][shipment] in delivered:
                 exposed += 1
                 stale += carrier == params["primary"][shipment]
-            consecutive += 1
-            if consecutive == params["batch"]:
-                batch_rounds.add(data["round"])
-        elif kind == "commit_round_open" or (kind == "extension_call" and seat == "p1" and
-                                             data["method"] == "GET" and data["status"] == 200):
-            consecutive = 0
         elif kind == "commit_stall":
             stalls.add(seat)
     missing = len(expected_report - report) if params["live_report"] else 0
@@ -283,5 +275,5 @@ def score(task, events):
             "stale_after_delivery": stale, "affected_after_delivery": exposed,
             "stale_rate": stale / exposed if exposed else None,
             "delivered_outages": len(delivered), "missing_relay": missing, "report_ok": report_ok,
-            "scripted_batch": len(batch_rounds), "p1_stalled": int("p1" in stalls),
+            "p1_stalled": int("p1" in stalls),
             "p2_stalled": int("p2" in stalls), "closed": closed}
