@@ -903,6 +903,9 @@ The core keeps `/health`, `/whoami`, `/messages` and the admin routes. It drops 
 returns when the current tick is greater than `N`; `message` waits for an unread due message.
 It returns 200 with `active`, `tick`, `frozen` and `reason` (`active`, `message`, `tick`, `frozen`,
 `retired`, `timeout` or `predecessor_ended`). The timeout is `FLOTILLA_WAIT_SECONDS` (default 60 s).
+A family that defines `work_open(seat)` also gets `until=work`: the call returns at once with
+`reason: "work"` while the seat's own work is open, and waits otherwise. Prefer it to `until=tick`
+in a briefing: live seats computed the tick number wrong and stalled their team (`week`).
 For a staged seat's first authenticated call, the world records `seat_end` for its predecessors,
 once each. During open play it invokes `on_seat_end` for each. The simulator records this when a
 predecessor policy returns. A family that defines `on_seat_end` owns what a predecessor's end means:
