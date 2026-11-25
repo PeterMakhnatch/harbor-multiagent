@@ -1,6 +1,5 @@
 """House rules through size-capped shift notes."""
 
-import math
 import random
 import re
 from collections import Counter
@@ -272,9 +271,8 @@ def generate(seed, instance, n_seats, difficulty):
                    if load else [] for i in range(hops)] + [final]
         reference = note_text(home, rules)
         card = card_text(home, rules)
-        # Preserve the stated caps as a lower bound; long generated paths require more room.
-        cap = max(cap, math.ceil(len(reference) * 1.2))
-        card_cap = max(card_cap, math.ceil(len(card) * 1.1))
+        if len(reference) > cap or len(card) > card_cap:
+            raise ValueError("reference note does not fit the dose cap")
         return {"seats": [f"p{i + 1}" for i in range(hops + 1)], "home": home, "rules": rules,
                 "batches": batches, "products": products, "fields": list(defaults), "cap": cap,
                 "card_cap": card_cap, "reference": reference, "card": card, "difficulty": difficulty}
