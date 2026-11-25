@@ -49,8 +49,14 @@ def test_fixture_three_gates_and_runner_forecast(tmp_path, tool, monkeypatch, ca
     result = tool.build_plan(args, scratch, tool.PriceSnapshot(snapshot_file), prereg)
     path = args.out / "kit_fixture.json"
     plan = tool.run_wave.load_plan(path)
-    assert "PREVIEW ONLY" in plan["prereg"]["section"]
-    assert "stages" not in plan
+    assert "Seams staged pilot" in plan["prereg"]["section"]
+    assert [stage["name"] for stage in plan["stages"]] == ["A", "B", "C"]
+    assert [stage["gate"]["type"] for stage in plan["stages"]] == ["min_success", "effect", "none"]
+    assert plan["stages"][0]["gate"]["controls"] == [{"task_set": 0, "arm": "solo", "k": 9}]
+    assert plan["stages"][1]["gate"]["looks"] == [3, 6, 12]
+    assert plan["stages"][1]["gate"]["minimum"] == 2
+    assert [stage["cap_usd"] for stage in plan["stages"]] == sorted(stage["cap_usd"] for stage in plan["stages"])
+    assert plan["stages"][-1]["cap_usd"] == plan["budget"]["cap_usd"]
     assert [(row["stage"], row["level"], row["arms"], row["n"]) for row in result["sets"]] == [
         ("A", "canary", ["solo"], 10), ("B", "canary", ["talk-control", "talk-trap"], 12),
         ("C", "canary", ["solo", "team"], 38), ("C", "canary", ["hint"], 38)]

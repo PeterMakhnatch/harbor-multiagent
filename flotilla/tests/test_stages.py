@@ -634,5 +634,14 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def test_effect_screen_keeps_sampling_for_descriptive_threshold():
+    rule = STAGES.SequentialTest([8, 12])
+    assert rule.effect_disposition([(8, 0, 8)], 2).status == "pass"
+    assert rule.effect_disposition([(0, 0, 8)], 2).status == "continue"
+    assert rule.effect_disposition([(0, 0, 8), (0, 0, 12)], 2).status == "no-effect"
+    assert rule.effect_disposition([(0, 0, 7), (0, 0, 11)], 2).status == "incomplete"
+    assert rule.effect_disposition([(0, 0, 8), (2, 0, 12)], 2).status == "pass"
+
+
 if __name__ == "__main__":
     sys.exit(main())

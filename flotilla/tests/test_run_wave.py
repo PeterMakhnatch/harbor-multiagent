@@ -497,7 +497,8 @@ def forecast_block(out: str) -> list[str]:
 
 
 def test_help_and_example_dry_run(tmp_path, monkeypatch, capsys):
-    help_run = subprocess.run([sys.executable, str(FLOTILLA / "run_wave.py"), "--help"], capture_output=True, text=True)
+    help_run = subprocess.run([sys.executable, str(FLOTILLA / "run_wave.py"), "--help"],
+                              capture_output=True, text=True, check=False)
     assert help_run.returncode == 0 and "dry-run" in help_run.stdout
     assert "--smoke" in help_run.stdout and "--history-jobs" in help_run.stdout
     offline = Sources({}, lambda *_args: 10.0)
@@ -778,7 +779,6 @@ def test_a_seat_on_the_wrong_model_is_invalid(tmp_path):
     config = json.loads(next((tmp_path / "cross" / "run" / "configs").glob("*.json")).read_text())
     assert [row["model_name"] for row in config["participants"]] == [DEEPSEEK, OPENROUTER]
     assert all(row["kwargs"]["max_turns"] == 4 for row in config["participants"])
-    matched = {order[0]["key"]: spec_for("ok")}
     again = RUN.run(path, run_dir=tmp_path / "cross" / "run", jobs_dir=tmp_path / "cross" / "jobs",
                     harbor=tmp_path / "cross" / "harbor", wrapper=tmp_path / "cross" / "wrapper",
                     sources=Sources({}, lambda *_args: 10.0), base_env=env, namer=lambda _n: "000200",
@@ -1727,12 +1727,12 @@ class Wave:
                          .replace("__TRIES__", json.dumps(str(tmp / "tries")))
                          .replace("__LOG__", json.dumps(str(tmp / "harbor.jsonl"))))
 
-    def run(self, namer=None):
+    def run(self, namer=None, **kwargs):
         prices = {model: {"prompt": "0.0000001", "completion": "0.000002"} for model in self.plan["models"]}
         return RUN.run(self.path, run_dir=self.tmp / "run", jobs_dir=self.tmp / "jobs", harbor=self.harbor,
                        wrapper=self.tmp / "wrapper", sources=Sources(prices, lambda *_args: 100.0),
                        base_env={"PATH": os.environ["PATH"], "HOME": str(self.tmp), "OPENROUTER_API_KEY": "or"},
-                       namer=namer or (lambda _n: f"{namer_box(self.tmp):06x}"))
+                       namer=namer or (lambda _n: f"{namer_box(self.tmp):06x}"), **kwargs)
 
     def summary(self) -> dict:
         return json.loads((self.tmp / "run" / RUN.STAGES_FILE).read_text())
@@ -2116,3 +2116,143 @@ def test_staged_declared_profile_forecasts_each_cell_and_stage_with_zdr_warning(
     assert "low / expected / high total: $0.0372 / $0.0492 / $0.0732" in fewest
     assert f"ZDR warning: {M1}" in most
     assert not sources.balance_calls and sources.price_calls == 0 and sources.catalog_calls == 1
+
+
+def test_extension_outcomes_pair_valid_trials_and_count_flagged_omission(tmp_path):
+    repo = init_repo(tmp_path)
+    root = repo / "tasks"
+    BUILD.build("kit_fixture", [0, 1], 2, "canary", 1234567, ("talk-control", "talk-trap"), root)
+    plan = staged_plan(range(2), [])
+    plan.update(agent="oracle", models=[None], scripted_seats=["p1"])
+    plan["task_sets"][0]["arms"] = ["talk-control", "talk-trap"]
+    plan["stages"]["tests"][0]["arms"] = plan["task_sets"][0]["arms"]
+    paths = RUN.resolve_paths(plan, repo)
+    jobs_dir = tmp_path / "jobs"
+    outcomes = RUN.Outcomes(plan, repo, jobs_dir, paths)
+    jobs = []
+    for i, ((index, instance, arm), task) in enumerate(paths.items()):
+        job = f"job{i}"
+        trial, result = write_trial(jobs_dir / job, [{"seat": seat, "name": "oracle"} for seat in ("p1", "p2")])
+        data = RUN.extension_task(task)
+        score = {"family": "kit_fixture", "mode": "extension", "instance": instance, "condition": arm,
+                 "versions": data["versions"], "reward": 1, "error": None}
+        if arm == "talk-trap":
+            score.update(omission=True)
+        if instance == 1 and arm == "talk-control":
+            score.update(invalid="infrastructure", error="infrastructure")
+        (trial / "verifier" / "score.json").write_text(json.dumps(score))
+        (trial / "result.json").write_text(json.dumps(result))
+        jobs.append(job)
+    found = outcomes.paired(0, jobs, "oracle", plan["task_sets"][0]["arms"])
+    assert (found["b"], found["c"], found["n"]) == (1, 0, 1)
+    assert len(found["counted"]) == 2
+    assert outcomes.success(0, jobs, "oracle", "talk-control")["k"] == 1
+    assert RUN.primary_success({"reward": .2, "passed": True}, "passed")
+    assert RUN.primary_success({"accuracy": .8}, {"field": "accuracy", "gte": .8})
+    assert not RUN.primary_success({"accuracy": .79}, {"field": "accuracy", "gte": .8})
+    assert not RUN.primary_success({"reward": 1, "stalled_seats": ["p2"]}, {"field": "reward", "gte": 1})
+    assert not RUN.primary_success({"passed": True, "flags": ["missing duty"]}, "passed")
+    assert RUN.read_score(tmp_path / "absent.json") is None
+    with pytest.raises(ValueError):
+        RUN.primary_success({}, "passed")
+
+
+def named_plan():
+    plan = staged_plan(range(9), [M1, M2], family="model")
+    def row(instances, arms, models=None):
+        return {"task_set": 0, "level": "standard", "instances": list(instances), "arms": arms,
+                "models": models or [M1, M2]}
+    plan["stages"] = [
+        {"name": "A", "cells": [row(range(3), [PROBE_ARMS[0]])],
+         "gate": {"type": "min_success", "controls": [{"task_set": 0, "arm": PROBE_ARMS[0], "k": 2}]}},
+        {"name": "B", "cells": [row(range(3, 7), PROBE_ARMS)],
+         "gate": {"type": "effect", "looks": [2, 4], "minimum": 2, "alpha": .05,
+                  "tests": [{"task_set": 0, "arms": PROBE_ARMS}]}},
+        {"name": "C", "cells": [row(range(7, 9), [PROBE_ARMS[1]])], "gate": {"type": "none"}},
+    ]
+    return plan
+
+
+@pytest.mark.parametrize("signal", [False, True])
+def test_named_gates_drop_failed_models_and_only_run_headline_after_effect(tmp_path, signal):
+    plan = named_plan()
+    def outcome(cell):
+        correct = cell["model"] == M1 and (not signal or cell["arm"] == PROBE_ARMS[0])
+        return correct, 1 if cell["instance"] == 3 and cell["arm"] == PROBE_ARMS[0] else 0
+    wave = Wave(tmp_path, plan, outcome)
+    assert wave.run()[-1]["reason"] == ("done" if signal else "gate")
+    stages = wave.summary()["stages"]
+    assert [stage["name"] for stage in stages] == (["A", "B", "C"] if signal else ["A", "B"])
+    assert [row["status"] for row in stages[0]["decisions"]] == ["pass", "fail"]
+    assert (stages[0]["tests"][0]["required"], stages[0]["tests"][0]["k"]) == (2, 3)
+    tests = stages[1]["tests"]
+    assert len(tests) == 1 and tests[0]["status"] == ("pass" if signal else "no-effect")
+    assert tests[0]["looks"][-1]["n"] == 4
+    assert tests[0]["looks"][-1]["b"] == (4 if signal else 0)
+    assert all(row["model"] == M1 for row in wave.starts() if row["instance"] >= 3)
+    count = len(wave.starts())
+    assert count == (17 if signal else 15)
+    assert wave.run()[-1]["reason"] == ("done" if signal else "gate")
+    assert len(wave.starts()) == count
+    if signal:
+        assert stages[2]["decisions"] == [{"level": "standard", "model": M1, "status": "complete", "valid": 2, "planned": 2}]
+
+
+def test_named_incomplete_pairs_are_not_no_effect(tmp_path):
+    plan = named_plan()
+    plan["budget"]["max_invalid_streak"] = 20
+    wave = Wave(tmp_path, plan, lambda cell: (True, 2 if cell["instance"] == 3 else 0))
+    assert wave.run()[-1]["reason"] == "gate"
+    stage = wave.summary()["stages"][-1]
+    assert stage["name"] == "B"
+    assert {row["status"] for row in stage["decisions"]} == {"incomplete"}
+
+
+def test_named_no_gate_records_incomplete_headline(tmp_path):
+    plan = named_plan()
+    plan["budget"]["max_invalid_streak"] = 20
+    wave = Wave(tmp_path, plan, lambda cell: (wins(cell)[0], 2 if cell["instance"] >= 7 else 0))
+    assert wave.run()[-1]["reason"] == "done"
+    stage = wave.summary()["stages"][-1]
+    assert stage["name"] == "C"
+    assert all(row["status"] == "incomplete" and row["valid"] == 0 and row["planned"] == 2 for row in stage["decisions"])
+
+
+def test_named_operator_pause_and_caps(tmp_path):
+    plan = named_plan()
+    plan["notes"] = "A pre-registered operator approval boundary."
+    for stage, cap in zip(plan["stages"], (.2, .4, .6), strict=True):
+        stage["cap_usd"] = cap
+    wave = Wave(tmp_path / "pause", plan, wins)
+    assert wave.run(stop_after_stage="A")[-1]["reason"] == "paused"
+    count = len(wave.starts())
+    assert count == 6 and wave.state()["stages"]["stage"] == 1
+    assert wave.run(stop_after_stage="A")[-1]["reason"] == "paused"
+    assert len(wave.starts()) == count
+    assert wave.run(stop_after_stage="B")[-1]["reason"] == "paused"
+    assert len(wave.starts()) == 22 and wave.state()["stages"]["stage"] == 2
+    assert wave.run(stop_after_stage="C")[-1]["reason"] == "done"
+    assert len(wave.starts()) == 26
+    assert "must name a stage" in refusal(lambda: wave.run(stop_after_stage="D"))
+
+    cap_plan = named_plan()
+    cap_plan["stages"][0]["cap_usd"] = .005
+    blocked = Wave(tmp_path / "blocked", cap_plan, wins)
+    assert blocked.run()[-1]["reason"] == "cap"
+    assert not blocked.starts()
+
+
+def test_named_stage_selection_is_explicit_and_refuses_overlaps(tmp_path):
+    plan = named_plan()
+    plan["stages"][0]["cells"][0]["models"] = [M1]
+    plan["stages"][2]["cells"][0]["instances"] = [8]
+    path = tmp_path / "named.json"
+    path.write_text(json.dumps(plan))
+    parsed = RUN.load_plan(path)
+    cells = RUN.order_of(parsed)
+    assert [(cell["stage"], cell["model"]) for cell in cells[:3]] == [(0, M1)] * 3
+    assert {(cell["arm"], cell["instance"]) for cell in cells if cell["stage"] == 2} == {(PROBE_ARMS[1], 8)}
+    assert len(cells) == 3 + 16 + 2
+    plan["stages"][2]["cells"][0]["instances"] = [3]
+    path.write_text(json.dumps(plan))
+    assert "repeats a cell" in refusal(lambda: RUN.load_plan(path))

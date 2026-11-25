@@ -51,11 +51,13 @@ families. A resume recomputes every look from the trial folders and refuses one 
 from __future__ import annotations
 
 import argparse
+import ast
 import dataclasses
 import functools
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import random
 import secrets
@@ -107,6 +109,7 @@ _JOBS.loader.exec_module(JOBS)
 PLAN_KEYS = frozenset({
     "name", "prereg", "task_sets", "models", "agent", "make_jobs", "budget", "order_seed", "seat_assignments",
     "scripted_seats", "stages", "token_profiles",
+    "notes",
 })
 PREREG_KEYS = frozenset({"commit", "doc", "section"})
 JOB_KEYS = frozenset({"max_turns", "env", "concurrency", "start_spacing_s"})
@@ -194,6 +197,8 @@ def assert_free(plan: dict) -> None:
 def load_plan(path: Path, *, smoke: bool = False) -> dict:
     plan = json.loads(path.read_text())
     refuse_unknown(plan, PLAN_KEYS, "plan")
+    if "notes" in plan and not isinstance(plan["notes"], str):
+        raise SystemExit("refused: notes must be text")
     required = ["name", "prereg", "task_sets", "agent", "make_jobs", "budget", "order_seed"]
     oracle = plan.get("agent") == "oracle"
     model_less = oracle and "seat_assignments" not in plan
@@ -300,6 +305,9 @@ def check_test(plan: dict, number: int, test) -> tuple[int, frozenset]:
 def check_stages(plan: dict, *, smoke: bool) -> None:
     """Refuse a stages block that stages.py cannot run. A smoke ignores the block, so it skips the stage cells."""
     spec = plan["stages"]
+    if isinstance(spec, list):
+        check_named_stages(plan)
+        return
     if not isinstance(spec, dict):
         raise SystemExit("refused: stages must be an object")
     refuse_unknown(spec, STAGE_KEYS, "stages")
@@ -345,7 +353,7 @@ def streak_of(plan: dict) -> int:
 def repo_of(path: Path) -> Path:
     for start in (path.parent, Path.cwd()):
         result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"], cwd=start, capture_output=True, text=True)
+            ["git", "rev-parse", "--show-toplevel"], cwd=start, capture_output=True, text=True, check=False)
         if result.returncode == 0:
             return Path(result.stdout.strip())
     raise SystemExit("refused: plan is not in a git checkout")
@@ -354,24 +362,24 @@ def repo_of(path: Path) -> Path:
 def assert_committed(plan_path: Path, repo: Path) -> None:
     rel = plan_path.resolve().relative_to(repo.resolve())
     tracked = subprocess.run(
-        ["git", "ls-files", "--error-unmatch", "--", str(rel)], cwd=repo, capture_output=True, text=True)
+        ["git", "ls-files", "--error-unmatch", "--", str(rel)], cwd=repo, capture_output=True, text=True, check=False)
     if tracked.returncode != 0:
         raise SystemExit(f"refused: {rel} is not committed")
-    diff = subprocess.run(["git", "diff", "--quiet", "HEAD", "--", str(rel)], cwd=repo)
+    diff = subprocess.run(["git", "diff", "--quiet", "HEAD", "--", str(rel)], cwd=repo, check=False)
     if diff.returncode != 0:
         raise SystemExit(f"refused: {rel} differs from HEAD")
 
 
 def assert_prereg(plan: dict, repo: Path) -> None:
     commit = plan["prereg"]["commit"]
-    exists = subprocess.run(["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=repo, capture_output=True)
+    exists = subprocess.run(["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=repo, capture_output=True, check=False)
     if exists.returncode != 0:
         raise SystemExit(f"refused: prereg commit {commit} does not exist")
-    ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", commit, "HEAD"], cwd=repo)
+    ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", commit, "HEAD"], cwd=repo, check=False)
     if ancestor.returncode != 0:
         raise SystemExit(f"refused: prereg commit {commit} is not an ancestor of HEAD")
     shown = subprocess.run(
-        ["git", "show", f"{commit}:{plan['prereg']['doc']}"], cwd=repo, capture_output=True, text=True)
+        ["git", "show", f"{commit}:{plan['prereg']['doc']}"], cwd=repo, capture_output=True, text=True, check=False)
     if shown.returncode != 0 or plan["prereg"]["section"] not in shown.stdout:
         raise SystemExit(f"refused: prereg section {plan['prereg']['section']!r} is not in {commit}:{plan['prereg']['doc']}")
 
@@ -457,7 +465,131 @@ def order_of(plan: dict, paths: dict[tuple[int, int, str], str] | None = None,
         for block in blocks:
             rng.shuffle(block)
     ordered = grouped[0] if len(grouped) == 1 else interleave(grouped, rng)
-    return [cell for block in ordered for cell in block]
+    cells = [cell for block in ordered for cell in block]
+    if isinstance(plan.get("stages"), list):
+        selected = named_selection(plan)
+        cells = [{**cell, "stage": selected[cell["key"]][0], "level": selected[cell["key"]][1]}
+                 for cell in cells if cell["key"] in selected]
+        cells.sort(key=lambda cell: cell["stage"])
+    return cells
+
+
+def named_selection(plan: dict) -> dict:
+    """Map each selected cell key to its stage number and level, with no Cartesian expansion across stages."""
+    selected = {}
+    for stage, spec in enumerate(plan["stages"]):
+        for row in spec["cells"]:
+            for model in row["models"]:
+                for instance in row["instances"]:
+                    for arm in row["arms"]:
+                        key = cell_key(row["task_set"], instance, arm, model)
+                        if key in selected:
+                            raise SystemExit("refused: a named stage repeats a cell")
+                        selected[key] = stage, row["level"]
+    return selected
+
+
+def check_named_stages(plan: dict) -> None:
+    if plan.get("seat_assignments"):
+        raise SystemExit("refused: staged waves do not support seat_assignments")
+    names = set()
+    if not isinstance(plan["models"], list) or len(set(plan["models"])) != len(plan["models"]):
+        raise SystemExit("refused: named stages need distinct models")
+    previous_cap = 0
+    total_cap = plan["budget"]["cap_usd"]
+    if type(total_cap) not in (int, float) or not math.isfinite(total_cap) or total_cap < 0:
+        raise SystemExit("refused: total cap_usd must be finite and nonnegative")
+    for spec in plan["stages"]:
+        if not isinstance(spec, dict):
+            raise SystemExit("refused: named stage must be an object")
+        refuse_unknown(spec, frozenset({"name", "cells", "gate", "cap_usd"}), "named stage")
+        name, cells = spec.get("name"), spec.get("cells")
+        if not isinstance(name, str) or not name or name in names or not isinstance(cells, list) or not cells:
+            raise SystemExit("refused: named stages need distinct names and nonempty cells")
+        names.add(name)
+        cap = spec.get("cap_usd", total_cap)
+        if type(cap) not in (int, float) or not previous_cap <= cap <= total_cap:
+            raise SystemExit("refused: stage cap_usd must be cumulative, nondecreasing and within the total cap")
+        previous_cap = cap
+        seen_sets = set()
+        for row in cells:
+            fields = frozenset({"task_set", "level", "arms", "instances", "models"})
+            if not isinstance(row, dict) or set(row) != fields:
+                raise SystemExit("refused: named stage cell needs task_set, level, arms, instances and models")
+            index = row["task_set"]
+            if not _whole(index) or not 0 <= index < len(plan["task_sets"]):
+                raise SystemExit("refused: named stage cell task_set is out of range")
+            if index in seen_sets:
+                raise SystemExit("refused: each task set can occur once per named stage")
+            seen_sets.add(index)
+            task_set = plan["task_sets"][index]
+            for field, allowed in (("arms", arms_of(task_set)), ("instances", task_set["instances"]),
+                                   ("models", plan["models"])):
+                values = row[field]
+                if (not isinstance(values, list) or not values
+                        or any(type(value) not in (int, str, type(None)) for value in values)
+                        or len(set(values)) != len(values) or not set(values) <= set(allowed)):
+                    raise SystemExit(f"refused: named stage {name} has invalid {field}")
+            if not isinstance(row["level"], str) or not row["level"]:
+                raise SystemExit("refused: named stage cell needs a level")
+        check_named_gate(spec)
+    if not names:
+        raise SystemExit("refused: stages must be nonempty")
+    named_selection(plan)
+
+
+def check_named_gate(spec: dict) -> None:
+    gate = spec.get("gate")
+    if not isinstance(gate, dict):
+        raise SystemExit("refused: named stage needs a gate")
+    kind = gate.get("type")
+    fields = {"none": {"type"}, "min_success": {"type", "controls"},
+              "effect": {"type", "tests", "looks", "minimum", "alpha"}}
+    if not isinstance(kind, str) or kind not in fields or set(gate) != fields[kind]:
+        raise SystemExit("refused: unknown or incomplete named stage gate")
+    if kind == "none":
+        return
+    if kind == "effect":
+        try:
+            rule = STAGES.SequentialTest(gate["looks"], alpha=gate["alpha"])
+            rule.effect_disposition([], gate["minimum"])
+        except (TypeError, ValueError) as exc:
+            raise SystemExit(str(exc)) from None
+    seen, comparisons = set(), set()
+    tests = gate["controls" if kind == "min_success" else "tests"]
+    if not isinstance(tests, list) or not tests:
+        raise SystemExit("refused: gate needs a nonempty test list")
+    for test in tests:
+        expected = {"task_set", "arm", "k"} if kind == "min_success" else {"task_set", "arms"}
+        if not isinstance(test, dict) or set(test) != expected:
+            raise SystemExit("refused: malformed gate test")
+        arms = [test["arm"]] if kind == "min_success" else test["arms"]
+        if (not isinstance(arms, list) or any(not isinstance(arm, str) for arm in arms)
+                or len(arms) != (1 if kind == "min_success" else 2) or len(set(arms)) != len(arms)):
+            raise SystemExit("refused: gate requires distinct arms")
+        if not _whole(test["task_set"]):
+            raise SystemExit("refused: gate task_set must be an integer")
+        comparison = test["task_set"], frozenset(arms)
+        if comparison in comparisons:
+            raise SystemExit("refused: repeated gate test")
+        comparisons.add(comparison)
+        matching = [row for row in spec["cells"] if row["task_set"] == test["task_set"] and set(arms) <= set(row["arms"])]
+        if not matching:
+            raise SystemExit("refused: gate arms must be selected within this stage")
+        for row in matching:
+            n = len(row["instances"])
+            if kind == "min_success":
+                if not _whole(test["k"]) or not 1 <= test["k"] <= n:
+                    raise SystemExit("refused: invalid min_success threshold")
+            elif n != gate["looks"][-1]:
+                raise SystemExit("refused: effect looks must end at the planned pair count")
+        for arm in arms:
+            key = test["task_set"], arm
+            if key in seen and kind == "min_success":
+                raise SystemExit("refused: repeated control")
+            seen.add(key)
+    if seen != {(row["task_set"], arm) for row in spec["cells"] for arm in row["arms"]}:
+        raise SystemExit("refused: every gated cell needs a gate test")
 
 
 def resolve_paths(plan: dict, repo: Path) -> dict[tuple[int, int, str], str]:
@@ -803,6 +935,67 @@ def exception_kind(info) -> str:
     return str(info)[:80]
 
 
+@functools.cache
+def extension_task(task: str) -> dict:
+    path = Path(task) / "environment" / "task.json"
+    data = json.loads(path.read_text()) if path.is_file() else {}
+    return data if data.get("mode") == "extension" else {}
+
+
+@functools.cache
+def primary_of(task: str):
+    """Read the frozen family's literal PRIMARY without importing task code on the host."""
+    source = Path(task) / "environment" / "family.py"
+    for node in ast.parse(source.read_text()).body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "PRIMARY" for t in node.targets):
+            return ast.literal_eval(node.value)
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == "PRIMARY":
+            return ast.literal_eval(node.value)
+    return {"field": "reward", "gte": 1}
+
+
+def primary_success(score: dict, primary) -> bool:
+    if any(score.get(key) for key in ("flags", "flagged", "omission", "stalled_seats")):
+        return False
+    if isinstance(primary, str):
+        value = score.get(primary)
+        if type(value) is bool:
+            return value
+    elif isinstance(primary, dict) and set(primary) == {"field", "gte"}:
+        value, threshold = score.get(primary["field"]), primary["gte"]
+        if all(type(item) in (int, float) and math.isfinite(item) for item in (value, threshold)):
+            return value >= threshold
+    raise ValueError(f"missing or invalid primary outcome {primary!r}")
+
+
+def extension_problem(score: dict, task: str) -> str | None:
+    data = extension_task(task)
+    if not data:
+        return None
+    if score.get("invalid"):
+        return f"invalid extension result: {score['invalid']}"
+    if score.get("mode") != "extension" or score.get("family") != data["family"]:
+        return "score for another family"
+    if not isinstance(data.get("versions"), dict) or data["versions"] != score.get("versions"):
+        return "extension version mismatch"
+    reward = score.get("reward")
+    if type(reward) not in (int, float) or not 0 <= reward <= 1:
+        return "missing or invalid extension reward"
+    try:
+        primary_success(score, primary_of(task))
+    except (ValueError, TypeError, KeyError, SyntaxError, OSError) as exc:
+        return str(exc)
+    return None
+
+def read_score(path: Path) -> dict | None:
+    try:
+        score = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    return score if isinstance(score, dict) else None
+
+
+
 def trial_problem(trial: Path | None, result: dict | None, cell: dict) -> str | None:
     """Why a trial is not valid, or None when it is."""
     if trial is None or result is None:
@@ -815,11 +1008,15 @@ def trial_problem(trial: Path | None, result: dict | None, cell: dict) -> str | 
     score_path, state_path = trial / "verifier" / "score.json", trial / "verifier" / "world-state.json"
     if not score_path.is_file() or not state_path.is_file():
         return "no verifier output"
-    verdict = json.loads(score_path.read_text())
+    verdict = read_score(score_path)
+    if verdict is None:
+        return "invalid verifier output"
     if verdict.get("error") is not None:
         return f"score error {verdict['error']}"
     if (verdict.get("instance"), verdict.get("condition")) != (cell["instance"], cell["arm"]):
         return "score for another cell"
+    if problem := extension_problem(verdict, cell.get("task", "")):
+        return problem
     participants = trial_config(trial, result).get("participants") or []
     if not participants:
         return "no participants"
@@ -914,7 +1111,7 @@ def smoke_charge(cell: dict, result: dict | None) -> dict:
 
 def run_process(command: list[str], log_path: Path, env: dict[str, str], cwd: Path) -> int:
     with log_path.open("w") as handle:
-        return subprocess.run(command, cwd=cwd, env=env, stdout=handle, stderr=subprocess.STDOUT).returncode
+        return subprocess.run(command, cwd=cwd, env=env, stdout=handle, stderr=subprocess.STDOUT, check=False).returncode
 
 
 def new_job(name: str, jobs_dir: Path, namer) -> str:
@@ -1030,7 +1227,7 @@ def read_balance(sources, provider: str, sleep) -> tuple[Balance | None, BaseExc
         try:
             value = sources.balance(provider)
             return (value if isinstance(value, Balance) else Balance(float(value))), None
-        except (Exception, SystemExit) as exc:
+        except (Exception, SystemExit) as exc:  # noqa: BLE001 - all balance read failures must stop admission
             last = exc
             if attempt == len(BALANCE_BACKOFF):
                 return None, exc
@@ -1224,6 +1421,9 @@ def smoke_run_dir(run_dir: Path | None, wave: dict) -> Path:
 def stage_tests(plan: dict) -> list[dict]:
     """Each staged test with its planned looks: the distinct planned pair counts and the stage (0-based) of each."""
     spec = plan["stages"]
+    if isinstance(spec, list):
+        return [{"task_set": row["task_set"]} for stage in spec if stage["gate"]["type"] != "none"
+                for row in stage["cells"]]
     found = []
     for number, test in enumerate(spec["tests"], 1):
         counts = STAGES.stage_counts(len(plan["task_sets"][test["task_set"]]["instances"]), spec["fractions"])
@@ -1275,12 +1475,38 @@ class Outcomes:
         self.plans = [{"name": plan["name"], "models": [stage_model(model) for model in plan["models"]],
                        "scripted": None if scripted is None else set(scripted), "instances": set(task_set["instances"]),
                        "arms": set(arms_of(task_set)), "sets": []} for task_set in plan["task_sets"]]
+        self.paths = paths
+        self.extensions = set()
         tested = {test["task_set"] for test in stage_tests(plan)}
         for (index, _instance, _arm), task in paths.items():
-            if index in tested and (self.tasks.get(Path(task).name) or {}).get("family") != "probe":
-                raise SystemExit(f"refused: a staged test reads probe outcomes; task set {index} has a non-probe task")
+            if extension_task(task):
+                self.extensions.add(index)
+            elif index in tested and (self.tasks.get(Path(task).name) or {}).get("family") != "probe":
+                raise SystemExit(f"refused: a staged test reads probe or extension outcomes; task set {index} has neither")
+        if isinstance(plan["stages"], list):
+            for stage in plan["stages"]:
+                for row in stage["cells"]:
+                    for instance in row["instances"]:
+                        for arm in row["arms"]:
+                            data = extension_task(paths[row["task_set"], instance, arm])
+                            if data and data["difficulty"] != row["level"]:
+                                raise SystemExit(f"refused: task set {row['task_set']} does not match the stage level")
+                if stage["gate"]["type"] == "effect":
+                    for test in stage["gate"]["tests"]:
+                        row = next(row for row in stage["cells"] if row["task_set"] == test["task_set"])
+                        self.check_pairs(test["task_set"], row["instances"], test["arms"])
         self.jobs_dir = jobs_dir
         self.rows: dict[str, dict | None] = {}
+
+    def check_pairs(self, index, instances, arms):
+        if index not in self.extensions:
+            return
+        for instance in instances:
+            a, b = (extension_task(self.paths[index, instance, arm]) for arm in arms)
+            if not a or not b or any(a[key] != b[key] for key in ("family", "seed", "difficulty", "seats")):
+                raise SystemExit(f"refused: task set {index} has unmatched extension instances")
+            if any(a["versions"].get(key) != b["versions"].get(key) for key in ("family", "world", "extension")):
+                raise SystemExit(f"refused: task set {index} has unmatched extension versions")
 
     def row(self, task_set: int, job: str) -> dict | None:
         if job not in self.rows:
@@ -1289,8 +1515,49 @@ class Outcomes:
                 trial, self.tasks, self.roots, self.plans[task_set])
         return self.rows[job]
 
+    def extension_rows(self, task_set: int, jobs: list[str], model: str) -> dict:
+        rows = {}
+        for job in jobs:
+            trial, result = read_trial(self.jobs_dir, job)
+            if trial is None or result is None:
+                continue
+            path = trial / "verifier" / "score.json"
+            score = read_score(path)
+            if score is None:
+                continue
+            instance, arm = score.get("instance"), score.get("condition")
+            task = self.paths.get((task_set, instance, arm))
+            if not task:
+                continue
+            cell = {"task": task, "instance": instance, "arm": arm, "model": None if model == "oracle" else model,
+                    "scripted": roster_of(task)[1]}
+            if trial_problem(trial, result, cell):
+                continue
+            key = instance, arm
+            row = {"correct": primary_success(score, primary_of(task)), "job": job, "trial": trial.name,
+                   "started": result.get("started_at") or ""}
+            if key not in rows or (row["started"], job) < (rows[key]["started"], rows[key]["job"]):
+                rows[key] = row
+        return rows
+
+    def success(self, task_set: int, jobs: list[str], model: str, arm: str) -> dict:
+        if task_set in self.extensions:
+            rows = [row for (_, name), row in self.extension_rows(task_set, jobs, model).items() if name == arm]
+        else:
+            counted, _ = self.analysis.XM.choose([row for job in jobs if (row := self.row(task_set, job)) is not None])
+            rows = [row for row in counted.values() if row["arm"] == arm]
+        return {"k": sum(row["correct"] for row in rows), "n": len(rows),
+                "counted": sorted(f"{row['job']}/{row['trial']}" for row in rows)}
+
     def paired(self, task_set: int, jobs: list[str], model: str, arms: list[str]) -> dict:
         """b (only the first arm correct), c and n (complete counted pairs), as probe_analysis.mcnemar counts them."""
+        if task_set in self.extensions:
+            rows = self.extension_rows(task_set, jobs, model)
+            pairs = [(row, rows[instance, arms[1]]) for (instance, arm), row in rows.items()
+                     if arm == arms[0] and (instance, arms[1]) in rows]
+            return {"b": sum(a["correct"] and not b["correct"] for a, b in pairs),
+                    "c": sum(b["correct"] and not a["correct"] for a, b in pairs), "n": len(pairs),
+                    "counted": sorted(f"{row['job']}/{row['trial']}" for pair in pairs for row in pair)}
         rows = [row for job in jobs if (row := self.row(task_set, job)) is not None]
         counted, _duplicates = self.analysis.XM.choose(rows)
         families = sorted({row["family"] for row in counted.values()})
@@ -1439,8 +1706,173 @@ def run_stages(staged: Staged, state: dict, launch_cells, outcomes: Outcomes, *,
     return "done"
 
 
+class NamedStaged:
+    def __init__(self, plan: dict, order: list[dict]):
+        self.plan, self.order, self.specs = plan, order, plan["stages"]
+        self.count = len(self.specs)
+
+    def block_stage(self, cell: dict) -> int:
+        return cell["stage"]
+
+    def planned(self, every_look: bool) -> list[dict]:
+        return self.order if every_look else [cell for cell in self.order if cell["stage"] == 0]
+
+
+def group_of(cell: dict) -> tuple[str, str]:
+    return cell["level"], stage_model(cell["model"])
+
+
+def jobs_for(cells: list[dict], finished: dict) -> list[str]:
+    return [attempt["job"] for cell in cells for attempt in attempts_of(finished.get(cell["key"]))]
+
+
+def run_named_cells(cells, state, launch_cells, starts, run_dir, name) -> str:
+    for retry in (False, True):
+        pending = pending_of(cells, state["finished"], retry)
+        if pending:
+            log(run_dir, f"stage {name}: {len(pending)} {'invalid cells to retry' if retry else 'cells to run'}")
+            reason = launch_cells(pending, starts)
+            if reason != "done":
+                return reason
+    return "done"
+
+
+def gate_batches(spec, cells, group):
+    """One sequence of matched instances per set; each group uses the same seeded order."""
+    gate = spec["gate"]
+    for test in gate["tests"]:
+        matched = [cell for cell in cells if group_of(cell) == group and cell["task_set"] == test["task_set"]
+                   and cell["arm"] in test["arms"]]
+        if matched:
+            instances = list(dict.fromkeys(cell["instance"] for cell in matched))
+            yield test, matched, instances
+
+
+def named_effect(spec, cells, state, launch_cells, starts, run_dir, outcomes):
+    gate = spec["gate"]
+    tests = []
+    for group in sorted({group_of(cell) for cell in cells}):
+        batches = list(gate_batches(spec, cells, group))
+        rule = STAGES.SequentialTest(gate["looks"], family_size=len(batches), alpha=gate["alpha"])
+        for test, selected, instances in batches:
+            tests.append({"group": group, "test": test, "cells": selected, "instances": instances,
+                          "rule": rule, "history": [], "looks": [], "status": "continue"})
+    for look, n in enumerate(gate["looks"]):
+        live = [test for test in tests if test["status"] == "continue"]
+        if not live:
+            break
+        keys = {cell["key"] for test in live for cell in test["cells"] if cell["instance"] in test["instances"][:n]}
+        batch = [cell for cell in cells if cell["key"] in keys]
+        reason = run_named_cells(batch, state, launch_cells, starts, run_dir, spec["name"])
+        if reason != "done":
+            return reason, []
+        for test in live:
+            selected = [cell for cell in test["cells"] if cell["instance"] in test["instances"][:n]]
+            found = outcomes.paired(test["test"]["task_set"], jobs_for(selected, state["finished"]),
+                                    test["group"][1], test["test"]["arms"])
+            test["history"].append([found["b"], found["c"], found["n"]])
+            disp = test["rule"].effect_disposition(test["history"], gate["minimum"])
+            test["status"], test["p"] = disp.status, disp.p
+            test["looks"].append({"look": look + 1, "planned_pairs": n, **found, "disposition": dataclasses.asdict(disp)})
+    records = [{"level": test["group"][0], "model": test["group"][1], **test["test"],
+                "looks": test["looks"], "status": test["status"], "p": test["p"]} for test in tests]
+    for group in {test["group"] for test in tests}:
+        rows = [row for row in records if (row["level"], row["model"]) == group]
+        for row, p in zip(rows, STAGES.holm([row["p"] for row in rows]), strict=True):
+            row["p_holm"] = p
+    return "done", records
+
+
+def named_gate(spec, cells, state, launch_cells, starts, run_dir, outcomes):
+    gate = spec["gate"]
+    if gate["type"] == "effect":
+        return named_effect(spec, cells, state, launch_cells, starts, run_dir, outcomes)
+    reason = run_named_cells(cells, state, launch_cells, starts, run_dir, spec["name"])
+    if reason != "done" or gate["type"] == "none":
+        return reason, []
+    records = []
+    for level, model in sorted({group_of(cell) for cell in cells}):
+        for control in gate["controls"]:
+            selected = [cell for cell in cells if group_of(cell) == (level, model)
+                        and cell["task_set"] == control["task_set"] and cell["arm"] == control["arm"]]
+            if selected:
+                found = outcomes.success(control["task_set"], jobs_for(selected, state["finished"]), model, control["arm"])
+                status = "incomplete" if found["n"] != len(selected) else "pass" if found["k"] >= control["k"] else "fail"
+                records.append({"level": level, "model": model, "task_set": control["task_set"], "arm": control["arm"],
+                                "required": control["k"], "planned": len(selected), **found, "status": status})
+    return "done", records
+
+
+def run_named_stages(staged, state, launch_cells, outcomes, *, run_dir, digest, stop_after_stage=None) -> str:
+    recorded = state["stages"]["looks"]
+    if stop_after_stage in [row["name"] for row in recorded]:
+        return "paused"
+    live = {group_of(cell) for cell in staged.order}
+    records = []
+    starts = {}
+    def no_replay_launch(_pending, _starts):
+        raise SystemExit("refused: a completed stage has missing attempts")
+
+    for stage, spec in enumerate(staged.specs):
+        cells = [cell for cell in staged.order if cell["stage"] == stage and group_of(cell) in live]
+        if not cells:
+            return "gate"
+        launch = no_replay_launch if stage < len(recorded) else launch_cells
+        reason, tests = named_gate(spec, cells, state, launch, starts, run_dir, outcomes)
+        if reason != "done":
+            return reason
+        cap = spec.get("cap_usd", staged.plan["budget"]["cap_usd"])
+        if stage >= len(recorded) and state["spent_usd"] > cap + 1e-9:
+            log(run_dir, f"stage {spec['name']}: accounted model spend exceeds cumulative cap ${cap:.2f}")
+            return "cap"
+        kind = spec["gate"]["type"]
+        decisions = []
+        for group in sorted({group_of(cell) for cell in cells}):
+            decision = {"level": group[0], "model": group[1]}
+            if kind == "none":
+                selected = [cell for cell in cells if group_of(cell) == group]
+                valid = sum(cell_valid(state["finished"].get(cell["key"])) for cell in selected)
+                decision.update(valid=valid, planned=len(selected))
+                status = "complete" if valid == len(selected) else "incomplete"
+            else:
+                statuses = [row["status"] for row in tests if (row["level"], row["model"]) == group]
+                passed = all(s == "pass" for s in statuses) if kind == "min_success" else "pass" in statuses
+                status = "pass" if passed else "incomplete" if "incomplete" in statuses else "no-effect" if kind == "effect" else "fail"
+            decisions.append({**decision, "status": status})
+            line = f"stage {spec['name']}: {group[0]} {group[1]} {status}"
+            log(run_dir, line)
+            print(line)
+        if kind != "none":
+            live &= {(row["level"], row["model"]) for row in decisions if row["status"] == "pass"}
+        record = {"name": spec["name"], "decisions": decisions, "tests": tests}
+        if stage < len(recorded) and recorded[stage] != record:
+            raise SystemExit("refused: named gate recomputed from trial folders differs from state.json")
+        records.append(record)
+        state["stages"] = {"stage": max(len(recorded), stage + 1), "looks": records + recorded[stage + 1:]}
+        save_state(run_dir / STAGES_FILE, {"plan": staged.plan["name"], "plan_sha256": digest,
+                                         "stages_done": len(records), "stages": records})
+        save_state(run_dir / "state.json", state)
+        if not live:
+            return "gate"
+        if stop_after_stage == spec["name"] and stage + 1 < staged.count:
+            return "paused"
+    return "done"
+
+
+def staged_of(plan, order):
+    if "stages" not in plan:
+        return None
+    return NamedStaged(plan, order) if isinstance(plan["stages"], list) else Staged(plan, order)
+
+
 def stage_lines(plan: dict, staged: Staged, most: int, fewest: int) -> list[str]:
     spec = plan["stages"]
+    if isinstance(spec, list):
+        return ["stages: named; each stage retries invalid cells once; gates use valid primary outcomes",
+                *(f"  stage {row['name']}: {sum(cell['stage'] == i for cell in staged.order)} cells, {row['gate']['type']}, "
+                  f"cumulative model cap ${row.get('cap_usd', plan['budget']['cap_usd']):.2f}"
+                  for i, row in enumerate(spec)),
+                f"  trials: most {most}, first stage {fewest}"]
     futility = spec.get("futility")
     rule = f"delta {futility['delta']}, beta_f {futility['beta_f']}" if futility else "off"
     fractions = ", ".join(str(value) for value in spec["fractions"])
@@ -1484,11 +1916,14 @@ def print_staged_dry_run(plan: dict, staged: Staged, scripted: list[list[str] | 
 def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, retry_invalid: bool = False,
         harbor: Path = HARBOR, jobs_dir: Path | None = None, wrapper: Path = WRAPPER,
         sources=None, base_env: dict[str, str] | None = None, namer=None, sleep=None, clock=None,
-        smoke: int | None = None, history_jobs: Path | None = None) -> list[dict]:
+        smoke: int | None = None, history_jobs: Path | None = None, stop_after_stage: str | None = None) -> list[dict]:
     if smoke is not None and (isinstance(smoke, bool) or not isinstance(smoke, int) or smoke < 1):
         raise SystemExit("refused: --smoke takes a whole number of instances >= 1")
     plan_path = plan_path.resolve()
     plan = load_plan(plan_path, smoke=smoke is not None)
+    if stop_after_stage is not None and (smoke is not None or not isinstance(plan.get("stages"), list)
+                                         or stop_after_stage not in [row["name"] for row in plan["stages"]]):
+        raise SystemExit("refused: --stop-after-stage must name a stage in a named staged wave")
     repo = repo_of(plan_path)
     assert_prereg(plan, repo)
     scripted = scripted_of(plan, repo, need_tasks=not dry_run)
@@ -1503,7 +1938,7 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
         fetch = sources.catalog if smoke is None else refuse_catalog
         zdr = PRICING.zdr_lines(models, repo / ".flotilla-local" / "cache", sources.zdr)
         if "stages" in wave:
-            staged = Staged(wave, order)
+            staged = staged_of(wave, order)
             most, fewest = staged.planned(True), staged.planned(False)
             forecasts = []
             for cells in (most, fewest):
@@ -1529,7 +1964,7 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
     run_dir.mkdir(parents=True, exist_ok=True)
     jobs_dir = jobs_dir or (repo / ".flotilla-local" / "jobs")
     jobs_dir.mkdir(parents=True, exist_ok=True)
-    staged = Staged(wave, order) if "stages" in wave else None
+    staged = staged_of(wave, order)
     outcomes = Outcomes(wave, repo, jobs_dir, paths) if staged else None
     digest = hashlib.sha256(plan_path.read_bytes()).hexdigest()
     state_path = run_dir / "state.json"
@@ -1559,13 +1994,21 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
     env = harbor_env(base, models, keep_modal=smoke is None and models != [None])
     with ThreadPoolExecutor(max_workers=wave["make_jobs"]["concurrency"]) as pool:
         def launch_cells(pending: list[dict], starts: dict | None = None) -> str:
-            return schedule(wave, pending, state, events, pool=pool, jobs_dir=jobs_dir, run_dir=run_dir,
+            current = wave
+            if isinstance(staged, NamedStaged):
+                spec = staged.specs[pending[0]["stage"]]
+                cap = spec.get("cap_usd", wave["budget"]["cap_usd"])
+                current = {**wave, "budget": {**wave["budget"], "cap_usd": cap}}
+            return schedule(current, pending, state, events, pool=pool, jobs_dir=jobs_dir, run_dir=run_dir,
                             harbor=harbor, wrapper=wrapper, env=env, repo=repo, sources=sources,
                             namer=namer or secrets.token_hex, sleep=sleep or time.sleep,
                             clock=clock or time.monotonic, starts=starts)
 
         if staged is None:
             reason = launch_cells(pending_of(order, state["finished"], retry_invalid))
+        elif isinstance(staged, NamedStaged):
+            reason = run_named_stages(staged, state, launch_cells, outcomes, run_dir=run_dir, digest=digest,
+                                      stop_after_stage=stop_after_stage)
         else:
             reason = run_stages(staged, state, launch_cells, outcomes, run_dir=run_dir, digest=digest)
     events.append({"kind": "stop", "reason": reason, "spent": state["spent_usd"]})
@@ -1588,6 +2031,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--docker-wrapper", type=Path, default=WRAPPER)
     parser.add_argument("--history-jobs", type=Path,
                         help="finished Harbor jobs the dry-run forecast reads (default <repo>/.flotilla-local/jobs)")
+    parser.add_argument("--stop-after-stage", metavar="NAME", help="pause after completing this named stage; "
+                        "resume with the same run directory and a later stage name")
     parser.add_argument("--smoke", nargs="?", const=1, type=int, metavar="N",
                         help="free smoke: first N instances per task set (default 1), local docker, cap $0; only "
                         "the oracle agent with no model or OpenRouter :free models; ignores the plan's stages; "
@@ -1595,7 +2040,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     events = run(args.plan, run_dir=args.run_dir, dry_run=args.dry_run, retry_invalid=args.retry_invalid,
                  harbor=args.harbor, jobs_dir=args.jobs_dir, wrapper=args.docker_wrapper, smoke=args.smoke,
-                 history_jobs=args.history_jobs)
+                 history_jobs=args.history_jobs, stop_after_stage=args.stop_after_stage)
     reason = events[-1].get("reason") if events else None
     if reason == "charged":
         return EXIT_SMOKE_CHARGED

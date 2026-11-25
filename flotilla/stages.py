@@ -305,3 +305,20 @@ class SequentialTest:
                 if max(b, c) <= bound:
                     return Disposition("nonbinding_futility", 1.0, 0, look + 1, n)
         return Disposition("continue", self._sequential(best_raw), direction, len(states), n)
+
+    def effect_disposition(self, history, minimum: int) -> Disposition:
+        """Directional descriptive screen: efficacy may end it early, but futility cannot prove no effect."""
+        if not _is_int(minimum) or not 1 <= minimum <= self.look_sizes[-1]:
+            raise ValueError("refused: minimum control-only successes must fit the planned pairs")
+        states = self._validated(history)
+        best = 1.0
+        for look, (b, c, n) in enumerate(states):
+            best = min(best, mcnemar_p(b, c))
+            p = self._sequential(best)
+            direction = (b > c) - (b < c)
+            if b >= minimum and direction > 0 and self._crosses(mcnemar_p(b, c)):
+                return Disposition("pass", p, direction, look + 1, n)
+            if look == len(self.look_sizes) - 1:
+                status = "pass" if b >= minimum else "no-effect" if n == self.look_sizes[-1] else "incomplete"
+                return Disposition(status, p, direction, look + 1, n)
+        return Disposition("continue", self._sequential(best), 0, len(states), states[-1][2] if states else 0)
