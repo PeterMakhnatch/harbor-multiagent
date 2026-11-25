@@ -45,7 +45,8 @@ At least 2 control-only successes in any pair are required for that model-level 
 Early positive efficacy can stop with this threshold met; statistical futility cannot establish no effect.
 If the threshold is not met, report no-effect only with 12 valid pairs; otherwise report incomplete.
 Stage C: on fresh matched instances for each passing group, compare team to team-fullrecord when present, otherwise solo.
-Include hint, solo-seam and team-implicit when present. Freeze n at the largest eligible positive card alternative, at most 100.
+Include hint, solo-seam, team-implicit and team-implicit-all when present. Freeze n at the largest eligible positive
+card alternative, at most 100.
 Use fixed-sample exact McNemar on full success. A capped sample can have less than 80% power.
 Conditional selection of the smallest compatible card effect, first signal level, or inclusion of other A-passing
 models at that level requires a separately pre-registered headline plan. The runner does not resize the headline.
@@ -127,7 +128,8 @@ def compatible_power(rows: list[dict], signals: dict[tuple[str, str], tuple[int,
 def stage_design(arms: list[str], pairs: list[tuple[str, str]], level: str, card: dict) -> tuple[list, list[dict]]:
     controls = [arm for arm in ("solo", "team-fullrecord") if arm in arms]
     primary = controls[-1]
-    headline = [primary, "team", *(arm for arm in ("hint", "solo-seam", "team-implicit") if arm in arms)]
+    headline = [primary, "team", *(arm for arm in ("hint", "solo-seam", "team-implicit", "team-implicit-all")
+                                   if arm in arms)]
     rows = power_rows(card, level, pairs)
     n = max((min(HEADLINE_CAP, row["planned_n"] or HEADLINE_CAP) for row in rows), default=HEADLINE_CAP)
     if not pairs:

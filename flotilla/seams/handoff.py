@@ -46,7 +46,7 @@ NEGATIVE = re.compile(r"\b(?:cleared|ok|good|ruled\s+out|not|excluded|fine|passe
 POSITIVE = re.compile(r"\b(?:suspects?|possible|candidates?|remaining|bad)\b", re.IGNORECASE)
 LOT_RUN = re.compile(r"\bL\d{2}\b(?:[\s,/+]+\d{2}\b)*", re.IGNORECASE)
 OMITTED_PREFIX = re.compile(r"L prefixes omitted[^:]*:\s*(\d{2}(?:[\s,]+\d{2}\b)*)", re.IGNORECASE)
-PREFIX_DECLARED = re.compile(r"\bL[- ]?prefix", re.IGNORECASE)
+PREFIX_DECLARED = re.compile(r"\bL[- ]?(?:prefix|ids?\b)", re.IGNORECASE)
 BARE_RUN = re.compile(r"(?<![A-Za-z\d])\d{2}(?:[\s,]+\d{2}(?!\d))+")
 POINTER = re.compile(r"\bbad(?:\s+lot)?\s*(?:(?:is\s+)?(?:in|one of)\s+|=\s*)B\d{2}\b", re.IGNORECASE)
 

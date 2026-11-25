@@ -442,4 +442,6 @@ def test_handoff_reads_bare_lot_numbers_under_a_declared_prefix():
     assert FAMILY.read_lots(note, lots) == ({"L00", "L08", "L15", "L22"}, [])
     note = "Open refs R74=B72 R75=B56. Candidates (L prefix): 01 04 06. No ticket."
     assert FAMILY.read_lots(note, lots) == ({"L01", "L04", "L06"}, [])
+    note = "Open refs R76=B79 R10=B10. Candidate L IDs: 13,15,29. No ticket."
+    assert FAMILY.read_lots(note, lots) == ({"L13", "L15", "L29"}, [])
     assert FAMILY.read_lots("Open refs R74=B72 R75=B56. 01 04 06 are done.", lots)[0] is None
