@@ -237,11 +237,16 @@ def test_diagnostic_policies(level):
             for path in paths:
                 task = json.loads((path / "environment" / "task.json").read_text())
                 arm = task["condition"]
+                params = task["params"]
+                choices = [params["prebuilt"].get(g["name"], g["saved"]) for g in params["groups"]]
+                focal = sum(tuple(c) == FAMILY.CONVENTIONS[0] for c in choices) / len(choices)
+                assert SIM.simulate_built(path, "focal", 0)["reward"] == focal
                 if arm == "team":
                     assert SIM.simulate_built(path, "alternate", 0)["reward"] == 1
                     if i == 0:
                         desk_nops = dict.fromkeys(task["seats"][1:], "nop")
                         assert SIM.simulate_built(path, desk_nops, 0)["reward"] == 0
+                        assert SIM.simulate_built(path, {"p1": "nop"}, 0)["reward"] == 0
                 else:
                     asked = SIM.simulate_built(path, "ask", 0)
                     assert asked["reward"] == 1
