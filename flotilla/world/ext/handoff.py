@@ -49,9 +49,11 @@ class Desk:
         return {"batch": batch, "lots": self.batches[batch]["lots"]}
 
     def desk(self):
+        # A settled batch leaves every desk view, the settling shift's own plan included: what a writer sees
+        # after it settles is what a later shift will see of that batch (nothing).
         return {"shift": self.shift, "shifts": self.params["shifts"], "lots": self.params["lots"],
                 "plan": [self.public_batch(b) | {"state": state} for b, state in self.state.items()
-                         if self.batches[b]["shift"] == self.shift],
+                         if self.batches[b]["shift"] == self.shift and state != "settled"],
                 "open": [self.public_batch(b) for b, state in self.state.items()
                          if state == "dispatched" and self.batches[b]["shift"] < self.shift], "ticket": self.ticket}
 

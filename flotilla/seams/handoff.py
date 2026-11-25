@@ -22,7 +22,7 @@ PAIRS = tuple(("team", arm) for arm in ("solo-seam", "hint", "twin", "team-recor
                                         "team-implicit", "team-implicit-all"))
 # The 3 facts about what the desk keeps. `team-implicit` is `team` without the first; `team-implicit-all` is `team`
 # without all 3. The writer must then infer from its own desk view what the next shift cannot see.
-SETTLED_FACT = "Once a batch is settled, it leaves the desk; no later shift can see its lot list on the desk."
+SETTLED_FACT = "Once a batch is settled, it leaves the desk; no later shift can see it there."
 STORE_FACT = "The desk does not store these references."
 PAST_FACT = "The desk does not keep past results or past lot clearances."
 UNSTATED = {"team-implicit": ("\n" + SETTLED_FACT,),
@@ -384,7 +384,7 @@ A result due in the current shift appears in the next reply from a desk route af
 Results due from earlier shifts appear in the first reply from a desk route. Settled results leave the inbox.
 The `note` field holds the previous shift's note (empty in shift 1).
 The desk does not keep past results or past lot clearances.
-Once a batch is settled, it leaves the desk; no later shift can see its lot list on the desk.
+Once a batch is settled, it leaves the desk; no later shift can see it there.
 Before closing the shift, settle all results you can match and file the ticket if the evidence pins the lot.
 End work with `POST /close`. Then write your note and call `POST /handover`, including in the last shift.
 The settlement score is correct settlements minus wrong settlements, divided by all results (minimum zero).
