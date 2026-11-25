@@ -120,9 +120,9 @@ SCORE = (
     "replaced by the other lot of the same product."
 )
 TIME = (
-    f"Rounds start at 1. Each desk that is not waiting must make one accepted POST per round. "
+    f"Rounds start at 1. Each seat that is not waiting or finished must make one accepted POST per round. "
     f"Both carriers take the sheets at the end of round {CARRIER}. Play ends no later than round {END}. "
-    "GET calls and refused POSTs do not use an action. A reply shows the current round and whether "
+    "GET calls and refused POSTs do not use an action. A reply to a work route shows the current round and whether "
     "you have already acted in it (`acted`). If you have acted in round r, "
     "GET /await?until=tick&after=r-1 (replace r-1 with the number) waits for the next round. "
     "The `tick` field in that reply is the round number minus 1. "
@@ -152,7 +152,7 @@ FORWARD = (
     'POST /forward with {"to":"<dispatch seat>","item":"<viewed document ID>"} sends the original document '
     "to that desk. A forward in round r reaches that desk at the start of round r+1. "
     f"A manual forward costs one action. You can make at most {FORWARDS} manual forwards. "
-    "You can forward a document even after recording it."
+    "You can forward a document even after recording it. Free text messages cannot be sent."
 )
 WAIT = "POST /wait with {} uses your round without doing other work. Finish when the receiving log is complete."
 DISPATCH_WAIT = (
@@ -167,7 +167,7 @@ DISPATCH_WAIT = (
 
 
 def extension_arm(inst, arm, max_text, max_messages):
-    if arm not in (*ARMS, *EXTRA_ARMS) or max_text < 256 or max_messages < 10:
+    if arm not in (*ARMS, *EXTRA_ARMS) or max_text < 256 or max_messages < 2 * ITEMS + FORWARDS + 2:
         raise ValueError("unknown arm or insufficient document channel")
     base = arm.removesuffix("-control")
     solo = base == "solo"

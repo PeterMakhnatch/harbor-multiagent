@@ -215,23 +215,31 @@ def score(task, events):
     records = []
     carrier = None
     board_read = False
+    item_receipts = set()
+    recorded_without_receipt = False
+    wrong_routes = 0
     received_ids = set()
     for event in events:
         kind, seat, data = event["kind"], event["seat"], event["data"]
         round_no = int(event["t"]) + 1
         if kind == "delivered" and seat == "p1":
+            item_receipts.update(data["ids"])
             if hit in data["ids"] and seen is None:
                 seen = round_no
             if seen is not None and "board" in data["ids"] and round_no < family.CARRIER:
                 board_read = True
-        elif kind == "forward_document" and data["item"] == hit and data["to"] == receiver and seen is not None:
-            sent.append((data["message"], round_no))
+        elif kind == "forward_document" and data["item"] == hit and seen is not None:
+            if data["to"] == receiver:
+                sent.append((data["message"], round_no))
+            elif not data["automatic"]:
+                wrong_routes += 1
         elif kind == "deliver" and seat == receiver:
             received_ids.update(data["ids"])
             if carrier is None and round_no <= family.CARRIER:
                 reached.extend(round_no for msg, _ in sent if msg in data["ids"])
         elif kind == "record_item":
             records.append(data)
+            recorded_without_receipt |= data["item"] not in item_receipts
         elif kind == "sheet_change":
             if data["notice"] == hit and carrier is None and (len(task["seats"]) == 1 and seen is not None
                                                                 or any(msg in received_ids for msg, _ in sent)):
@@ -239,7 +247,7 @@ def score(task, events):
         elif kind == "carrier":
             carrier = data
     expected = [family.record_entry(item, params["docket"]) for item in params["batch"]]
-    own_ok = records == expected
+    own_ok = records == expected and not recorded_without_receipt
     banned = {item["lot"] for item in params["batch"] if item["kind"] == "quarantine"}
     sheets = {desk: [row | {"lot": next(lot for lot in params["stock"][desk][row["order"]] if lot not in banned)}
                      if row["lot"] in banned else row for row in rows] for desk, rows in params["boards"].items()}
@@ -249,12 +257,16 @@ def score(task, events):
                and (solo or carrier["dispatch_acted"] == list(family.DESKS)))
     told = bool(reached) if affected and not solo and seen is not None else None
     return {"reward": float(own_ok and ship_ok), "own_ok": own_ok, "ship_ok": ship_ok,
-            "hit_seen_round": seen, "board_read_after_hit": board_read, "told_in_time": told,
-            "forwarded_hit_round": sent[0][1] if sent else None, "told_late": bool(sent) and not reached,
+            "hit_seen_round": seen, "board_received": "board" in item_receipts,
+            "board_read_after_hit": board_read, "told_in_time": told,
+            "forwarded_hit_round": sent[0][1] if sent else None,
+            "told_late": any(round_no >= family.CARRIER for _, round_no in sent),
+            "timely_send_not_delivered": any(round_no < family.CARRIER for _, round_no in sent) and not reached,
+            "wrong_routes": wrong_routes,
             "receiver_applied": bool(changes), "n_forwards": sum(e["kind"] == "forward_document" and not
                                                                  e["data"]["automatic"] for e in events),
             "forward_refused": sum(e["kind"] == "forward_refused" for e in events),
             "foreign_edit": sum(e["kind"] == "foreign_edit" for e in events),
             "receiving_incomplete": len(records) != len(expected), "carrier_missing": carrier is None,
             "desk_omissions": [e["seat"] for e in events if e["kind"] == "desk_omission"],
-            "rounds_used": max((int(e["t"]) + 1 for e in events), default=0)}
+            "rounds_used": max((int(e["t"]) + 1 for e in events if e["kind"] == "desk_action"), default=0)}
