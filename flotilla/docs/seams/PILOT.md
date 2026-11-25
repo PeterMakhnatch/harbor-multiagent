@@ -136,8 +136,10 @@ rehearsal of those folders with the `oracle` agent on local Docker is `flotilla/
 
 ## 9. Before any paid stage
 
-1. Rebuild the tasks with a private seed and run `flotilla/qa.py`.
-2. Run the plan's oracle stage on Docker ($0) and compare with the simulator.
+1. Use the frozen task folders named by the plan. Run `flotilla/qa.py` on those folders. If they are missing
+   or changed, create a new plan with a new private seed. Register the new digest before any trial.
+2. Run the matching oracle plan on local Docker ($0). Check the retained task digests and scores with
+   `flotilla/oracle_parity.py`. A receipt from an earlier plan does not verify the new plan.
 3. The plan records its protocol text and the commit of `flotilla/pilot_plan.py` that holds it; the runner
    refuses a plan whose text differs. To change the protocol, change that text, commit, and make a new plan.
 4. Set the cap of the stage. Check the key's limit. Check the zero-data-retention warning of the dry run.
