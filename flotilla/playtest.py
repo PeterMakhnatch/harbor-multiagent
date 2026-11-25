@@ -24,9 +24,12 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs
 
 import qa
 
+SEAT_SCRIPTS = Path(__file__).resolve().parent / "playtest_seats"
+SEAT_PATH = "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 PREFACE = ("You are working in a sandbox directory.\n"
            "Work only inside it; use shell commands.\n"
            "Stop when you are done.\n")
@@ -48,22 +51,47 @@ sys.path.insert(0, sys.argv[1])
 import world
 requests = Path(sys.argv[3])
 requests.touch()
+responses = requests.with_name("responses.jsonl")
+responses.touch()
 request_lock = threading.Lock()
 request_seq = 0
 origin = time.monotonic()
+Path(sys.argv[2]).with_name("clock").write_text(str(origin))
 
 class RecordedWorld(world.World):
+    request_id = None
+
     def _handle(self, method):
         global request_seq
+        self.request_id = None
+        self.wait_expired = False
+        self.arrived = time.monotonic()
         seat = self._caller()
         if seat in world.SEATS:
             with request_lock:
                 request_seq += 1
+                self.request_id = request_seq
                 with requests.open("a") as log:
                     log.write(json.dumps({"seq": request_seq, "seat": seat, "method": method,
                                           "path": self.path.split("?", 1)[0],
+                                          "query": self.path.partition("?")[2],
                                           "t": round(time.monotonic() - origin, 3)}) + "\\n")
         return super()._handle(method)
+
+    def _reply(self, status, body, *args, **kwargs):
+        path = self.path.split("?", 1)[0]
+        self.wait_expired = (status == 200 and isinstance(body, dict)
+                             and ((path == "/await" and body.get("reason") == "timeout")
+                                  or (path == "/wait" and time.monotonic() - self.arrived >= world.WAIT_SECONDS)))
+        return super()._reply(status, body, *args, **kwargs)
+
+    def send_response(self, code, message=None):
+        if self.request_id is not None:
+            with request_lock, responses.open("a") as log:
+                log.write(json.dumps({"seq": self.request_id, "status": code,
+                                      "wait_expired": self.wait_expired,
+                                      "t": round(time.monotonic() - origin, 3)}) + "\\n")
+        return super().send_response(code, message)
 
 world.World = RecordedWorld
 server = world.serve('127.0.0.1', 0)
@@ -94,11 +122,14 @@ class SeatRun:
     argv: list[str]
     after: tuple[str, ...]
     mapping: dict[str, str]
+    harness: str
+    model: str | None
     process: subprocess.Popen | None = None
     started: float | None = None
     ended: float | None = None
     exit_code: int | None = None
     timed_out: bool = False
+    stopped_after_freeze: bool = False
     error: str | None = None
 
     def start(self, now: float) -> None:
@@ -124,9 +155,12 @@ class SeatRun:
         first_submit = next((r["seq"] for r in requests if r["method"] == "POST"
                              and r["path"] in ("/submit", "/commit")), None)
         return {"mode": self.mode, "command": self.command, "exit_code": self.exit_code,
+                "harness": self.harness, "model": self.model,
                 "seconds": None if self.started is None else self.ended - self.started,
                 "started_sec": self.started, "ended_sec": self.ended, "timed_out": self.timed_out,
+                "stopped_after_freeze": self.stopped_after_freeze,
                 "error": self.error, "start_after": list(self.after), "workdir": str(self.workdir),
+                "http_4xx": sum(400 <= (r.get("status") or 0) < 500 for r in requests),
                 "mapping": self.mapping, "world_calls": len(requests),
                 "first_read": first_read, "first_submit": first_submit,
                 "read_before_submit": None if first_read is None or first_submit is None else first_read < first_submit}
@@ -147,16 +181,16 @@ def host_env() -> dict[str, str]:
 def seat_env(task: qa.Task, seat: str, root: Path, pass_env: tuple[str, ...]) -> dict[str, str]:
     tmp = root / "tmp"
     tmp.mkdir(mode=0o700)
-    names = ("PATH", "HOME", *pass_env)
+    names = ("HOME", "USER", *pass_env)
     return ({name: os.environ[name] for name in names if name in os.environ}
-            | {"PATH": os.environ.get("PATH", os.defpath), "HOME": str(Path.home())}
+            | {"PATH": SEAT_PATH, "HOME": str(Path.home())}
             | task.env(seat) | {"TMPDIR": str(tmp)})
 
 
-def sandbox_command(argv: list[str], profile: Path, root: Path) -> list[str]:
+def sandbox_command(argv: list[str], profile: Path, root: Path, scripts: Path = SEAT_SCRIPTS) -> list[str]:
     return ["/usr/bin/sandbox-exec", "-f", str(profile), "-D", f"SEATROOT={root}",
             "-D", f"HOSTHOME={Path.home().resolve()}", "-D", f"HOSTTMP={Path(tempfile.gettempdir()).resolve()}",
-            "-D", f"SEATSCRIPTS={Path(__file__).resolve().parent / 'playtest_seats'}", *argv]
+            "-D", f"SEATSCRIPTS={scripts.resolve()}", *argv]
 
 
 def sandbox_profile(path: Path | None) -> Path | None:
@@ -224,7 +258,7 @@ def host_preface(mapping: dict[str, str]) -> bytes:
 
 def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
                  output: Path, after: tuple[str, ...], token: str, url: str,
-                 pass_env: tuple[str, ...], profile: Path | None) -> SeatRun:
+                 pass_env: tuple[str, ...], profile: Path | None, scripts: Path, model: str | None) -> SeatRun:
     workdir = root / "work"
     workdir.mkdir()
     copy_seat_files(task, seat, workdir)
@@ -240,14 +274,16 @@ def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
     if mode == "external":
         values = {"instruction": str(prompt), "seat": seat, "workdir": str(workdir), "log": str(native_log)}
         command = PLACEHOLDER.sub(lambda m: shlex.quote(values[m[1]]), template)
-        argv = ["/bin/bash", "-c", command]
+        harness = harness_name(template)
+        argv = ["/usr/bin/env", "/bin/bash", "-c", command]
         if profile is not None:
-            argv = sandbox_command(argv, profile, root)
+            argv = sandbox_command(argv, profile, root, scripts)
             env["PLAYTEST_SANDBOX"] = str(profile)
     else:
         argv = policy_command(task, seat, mode, root)
         command = shlex.join(argv)
-    return SeatRun(seat, mode, root, output, workdir, env, command, argv, after, mapping)
+        harness = Path(argv[-1]).name
+    return SeatRun(seat, mode, root, output, workdir, env, command, argv, after, mapping, harness, model)
 
 
 @contextlib.contextmanager
@@ -280,25 +316,119 @@ def world_server(task: qa.Task, out: Path, root: Path, tokens: dict[str, str], t
             stop_process(process)
 
 
-def run_seats(seats: list[SeatRun], timeout: float, max_parallel: int) -> bool:
+def read_delta(stream) -> list[dict]:
+    rows = []
+    while True:
+        offset = stream.tell()
+        line = stream.readline()
+        if not line.endswith("\n"):
+            stream.seek(offset)
+            return rows
+        rows.append(json.loads(line))
+
+
+def is_wait(request: dict) -> bool:
+    if request["method"] != "GET":
+        return False
+    query = parse_qs(request["query"])
+    if request["path"] == "/await":
+        until, after = query.get("until", ["active"]), query.get("after", ["0"])
+        return (len(until) == 1 and until[0] in ("active", "message", "tick")
+                and len(after) == 1 and after[0].isdigit() and len(after[0]) <= 12)
+    return request["path"] == "/wait" and query.get("round", [""])[0].isdigit()
+
+
+class WaitWatch:
+    def __init__(self, requests, responses, events, clock: float):
+        self.requests, self.responses, self.events = requests, responses, events
+        self.clock = clock
+        self.latest = {}
+        self.finished = {}
+        self.since = {}
+        self.progress = time.monotonic()
+        self.frozen_at = None
+
+    def update(self) -> None:
+        requests = read_delta(self.requests)
+        for response in read_delta(self.responses):
+            self.finished[response["seq"]] = response
+        for request in requests:
+            seat = request["seat"]
+            previous = self.latest.get(seat)
+            finish = self.finished.get(previous["seq"]) if previous else None
+            continuous = (previous is not None and is_wait(previous)
+                          and (finish is None or (finish["wait_expired"] and request["t"] - finish["t"] <= 1)))
+            if not continuous or not is_wait(request):
+                self.since[seat] = self.clock + request["t"]
+            self.latest[seat] = request
+        for event in read_delta(self.events):
+            if event["kind"] == "freeze" and self.frozen_at is None:
+                self.frozen_at = time.monotonic()
+            if event["kind"] not in {"await", "wait", "whoami", "health", "state", "bad_token", "invalid_http",
+                                      "invalid", "denied", "probe", "late", "inactive", "look", "repeat"}:
+                self.progress = time.monotonic()
+
+    def stalled(self, running: list[SeatRun], ended_at: float, stall_sec: float) -> bool:
+        now = time.monotonic()
+        if not running or now - max(ended_at, self.progress) < stall_sec:
+            return False
+        for seat in running:
+            request = self.latest.get(seat.seat)
+            if request is None or not is_wait(request) or now - self.since[seat.seat] < stall_sec:
+                return False
+            finish = self.finished.get(request["seq"])
+            if finish is not None and (not finish["wait_expired"] or now - self.clock - finish["t"] > 1):
+                return False
+        return True
+
+
+def run_seats(seats: list[SeatRun], timeout: float, max_parallel: int, watch: WaitWatch,
+              seat_timeout: float | None, stall_sec: float, grace_sec: float) -> tuple[bool, str | None]:
     origin = time.monotonic()
     pending = list(seats)
     running: list[SeatRun] = []
     ended: set[str] = set()
+    last_exit = None
+    ended_at = origin
+    skipped_after_freeze = False
     try:
         while pending or running:
             now = time.monotonic() - origin
             for seat in running[:]:
-                if seat.process.poll() is not None:
-                    seat.finish(now)
+                expired = seat_timeout is not None and now - seat.started >= seat_timeout
+                if seat.process.poll() is not None or expired:
+                    seat.finish(now, timeout=expired and seat.process.poll() is None)
                     running.remove(seat)
                     ended.add(seat.seat)
+                    last_exit, ended_at = seat.seat, time.monotonic()
             if not pending and not running:
-                return False
+                return False, "world frozen before seats started" if skipped_after_freeze else None
             if now >= timeout:
                 for seat in running + pending:
                     seat.finish(now, timeout=True)
-                return True
+                return True, "total timeout"
+            watch.update()
+            if watch.frozen_at is not None:
+                for seat in pending:
+                    seat.stopped_after_freeze = True
+                    seat.finish(now)
+                skipped_after_freeze |= bool(pending)
+                pending.clear()
+                if not running:
+                    return False, "world frozen before seats started" if skipped_after_freeze else None
+                if time.monotonic() - watch.frozen_at >= grace_sec:
+                    for seat in running:
+                        seat.stopped_after_freeze = seat.process.poll() is None
+                        seat.finish(now)
+                    return False, "world frozen; grace expired"
+                time.sleep(min(0.02, max(0, timeout - now)))
+                continue
+            if last_exit is not None and watch.stalled(running, ended_at, stall_sec):
+                reason = f"seat {last_exit} exited; others wait"
+                for seat in running + pending:
+                    seat.error = reason
+                    seat.finish(now)
+                return False, reason
             external = sum(seat.mode == "external" for seat in running)
             for seat in pending[:]:
                 if time.monotonic() - origin >= timeout:
@@ -309,11 +439,12 @@ def run_seats(seats: list[SeatRun], timeout: float, max_parallel: int) -> bool:
                 seat.start(time.monotonic() - origin)
                 if seat.process is None:
                     ended.add(seat.seat)
+                    last_exit, ended_at = seat.seat, time.monotonic()
                 else:
                     running.append(seat)
                     external += seat.mode == "external"
             time.sleep(min(0.02, max(0, timeout - (time.monotonic() - origin))))
-        return False
+        return False, None
     finally:
         for seat in running:
             if seat.process is not None:
@@ -326,20 +457,42 @@ def verify(task: qa.Task, out: Path, url: str, env: dict[str, str], timeout: flo
         process = subprocess.Popen([sys.executable, "-B", "-c", VERIFY, str(task.env_dir), url, str(verifier)],
                                    cwd=out, env=env, stdin=subprocess.DEVNULL, stdout=log,
                                    stderr=subprocess.STDOUT, start_new_session=True)
+        failure = None
         try:
             if process.wait(timeout=timeout):
-                raise RuntimeError(f"verifier failed; see {out / 'verifier.log'}")
+                failure = f"verifier failed; see {out / 'verifier.log'}"
+        except subprocess.TimeoutExpired:
+            failure = f"verifier timed out after {timeout:g} s"
         finally:
             stop_process(process)
-    score = json.loads((verifier / "score.json").read_text())
-    reward_file = verifier / "reward.json"
-    if not reward_file.exists() and (score.get("error") or score.get("invalid")):
-        return None, score
-    return json.loads(reward_file.read_text())["reward"], score
+    try:
+        score = json.loads((verifier / "score.json").read_text())
+        reason = score.get("invalid") or score.get("error") or failure
+        if reason:
+            return None, score | {"error": reason}
+        return json.loads((verifier / "reward.json").read_text())["reward"], score
+    except (OSError, ValueError, KeyError) as exc:
+        return None, {"error": failure or f"verifier output unavailable: {exc}"}
 
 
 def read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def read_requests(out: Path) -> list[dict]:
+    statuses = {r["seq"]: r["status"] for r in read_jsonl(out / "responses.jsonl")}
+    path = out / "requests.jsonl"
+    requests = [r | {"status": statuses.get(r["seq"])} for r in read_jsonl(path)]
+    path.write_text("".join(json.dumps(r) + "\n" for r in requests))
+    (out / "responses.jsonl").unlink()
+    return requests
+
+
+def world_causes(out: Path) -> dict:
+    events = read_jsonl(out / "artifacts" / "logs" / "world" / "events.jsonl")
+    freeze = next((e for e in events if e["kind"] == "freeze"), None)
+    return {"freeze_reason": (freeze["data"].get("reason", "admin freeze") if freeze else None),
+            "budget_events": [e for e in events if e["kind"] == "call_budget"]}
 
 
 def log_strings(text: str) -> list[str]:
@@ -431,7 +584,8 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
     world = out / "artifacts" / "logs" / "world"
     events = read_jsonl(world / "events.jsonl")
     messages = {m["id"]: m for m in read_jsonl(world / "messages.jsonl")}
-    state = json.loads((out / "verifier" / "world-state.json").read_text())
+    state_file = out / "verifier" / "world-state.json"
+    state = json.loads(state_file.read_text()) if state_file.is_file() else {}
     submissions = iter(state.get("submissions", []))
     by_seat = {seat: [] for seat in result["seats"]}
     clock = "tick" if result["score"].get("mode") == "extension" else "t (seconds)"
@@ -450,14 +604,19 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
                 kind = "scripted send"
         by_seat[seat].append(f"- #{event['seq']} {clock}={event['t']} {kind}: `{json.dumps(data, ensure_ascii=True)}`")
     lines = ["# Local playtest", "", f"Reward: {result['reward']}; timed out: {result['timed_out']}",
+             f"Valid: {result['valid']}; invalid reason: {result['invalid_reason']}",
+             f"Stop reason: {result['stop_reason']}",
+             f"Freeze reason: {result['freeze_reason']}; budget events: {json.dumps(result['budget_events'])}",
              (f"Model: {result['model']}; harness: {result['harness']}; "
               f"sandbox profile: {result['sandbox_profile'] or 'none (host processes are not isolated)'}"),
              f"Seat failures: {json.dumps(result['seat_failures']) if result['seat_failures'] else 'none'}",
              "This is a rehearsal, not benchmark evidence.", ""]
     by_request = {seat: [] for seat in result["seats"]}
     for request in requests:
+        target = request["path"] + (f"?{request['query']}" if request["query"] else "")
         by_request[request["seat"]].append(
-            f"- #{request['seq']} t={request['t']:.3f}s {request['method']} {request['path']}")
+            f"- #{request['seq']} t={request['t']:.3f}s {request['method']} {target} "
+            f"-> {request['status'] if request['status'] is not None else 'no response'}")
     for seat, evidence in by_seat.items():
         info = result["seats"][seat]
         paths = [f"- `{path}`" for path in audit[seat]] or ["- No outside paths found."]
@@ -465,7 +624,10 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
         started, ended = (f"{info[key]:.3f}" if info[key] is not None else "not started"
                           for key in ("started_sec", "ended_sec"))
         lines += [f"## {seat} ({info['mode']})", "",
-                  f"Started: {started}; ended: {ended}; exit: {info['exit_code']}", "",
+                  f"Model: {info['model']}; harness: {info['harness']}",
+                  (f"Started: {started}; ended: {ended}; exit: {info['exit_code']}; "
+                   f"world calls: {info['world_calls']}; 4xx: {info['http_4xx']}; "
+                   f"stopped after freeze: {info['stopped_after_freeze']}"), "",
                   *(evidence or ["- No seat events."]), "", "### World requests (arrival order)", "",
                   *(by_request[seat] or ["- No world calls."]), "", "### Shell commands (CLI order)", "",
                   *[f"- `{command}`" for command in commands],
@@ -477,9 +639,37 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
 
 def harness_name(template: str) -> str:
     args = shlex.split(template)
-    if Path(args[0]).name in ("bash", "sh", "zsh", "python", "python3", "python3.12") and len(args) > 1:
-        return Path(args[1]).name
+    for arg in args:
+        if Path(arg).suffix in (".sh", ".py", ".zsh", ".bash"):
+            return Path(arg).name
     return Path(args[0]).name
+
+
+def seat_values(values: str | list[str] | None, seats: set[str], name: str, required: bool = False) -> dict:
+    default = None
+    overrides = {}
+    for value in [values] if isinstance(values, str) else values or []:
+        prefix, equals, rest = value.partition("=")
+        if equals and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", prefix):
+            if prefix not in seats:
+                raise ValueError(f"{name}: unknown or non-external seat {prefix}")
+            if prefix in overrides:
+                raise ValueError(f"{name}: duplicate override for {prefix}")
+            overrides[prefix] = rest
+        else:
+            if default is not None:
+                raise ValueError(f"{name}: duplicate default")
+            default = value
+    resolved = {seat: overrides.get(seat, default) for seat in sorted(seats)}
+    for seat, value in resolved.items():
+        if (required and value is None) or (value is not None and not value.strip()):
+            raise ValueError(f"{name}: missing value for {seat}")
+    return resolved
+
+
+def common_or_by_seat(values: dict) -> str | dict | None:
+    distinct = set(values.values())
+    return next(iter(distinct)) if len(distinct) == 1 else values if distinct else None
 
 
 def seat_failures(info: dict) -> list[str]:
@@ -488,16 +678,18 @@ def seat_failures(info: dict) -> list[str]:
         failures.append("timed out")
     if info["error"]:
         failures.append(info["error"])
-    if info["exit_code"] != 0:
+    if info["exit_code"] != 0 and not (info["stopped_after_freeze"] and info["started_sec"] is not None):
         failures.append(f"exit code {info['exit_code']}")
     if info["mode"] == "external" and info["world_calls"] == 0:
         failures.append("no world calls")
     return failures
 
 
-def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: float | None,
+def playtest(task_dir: Path, templates: str | list[str], selected: set[str] | None, timeout: float | None,
              max_parallel: int, out: Path, *, pass_env: tuple[str, ...] = (),
-             profile: Path | None = None, model_label: str | None = None) -> dict:
+             profile: Path | None = None, model_label: str | list[str] | None = None,
+             seat_timeout: float | None = None, stall_sec: float = 120, grace_sec: float = 20,
+             scripts: Path = SEAT_SCRIPTS) -> dict:
     if qa.yaml is None:
         raise ValueError("PyYAML is required; use uvx --quiet --python 3.12 --with pyyaml python flotilla/playtest.py")
     task = qa.load_task(task_dir.resolve())
@@ -509,12 +701,21 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
     selected = subjects if selected is None else selected
     if selected - subjects:
         raise ValueError(f"unknown or scripted external seat(s): {sorted(selected - subjects)}")
+    commands = seat_values(templates, selected, "--seat-cmd", required=True)
+    models = seat_values(model_label, selected, "--model-label")
     timeout = float(config.get("agent", {}).get("timeout_sec", 900)) if timeout is None else timeout
-    if not math.isfinite(timeout) or timeout <= 0 or max_parallel <= 0 or not template.strip():
-        raise ValueError("timeout and max-parallel must be positive; seat command must not be empty")
+    if not math.isfinite(timeout) or timeout <= 0 or max_parallel <= 0:
+        raise ValueError("timeout and max-parallel must be positive")
+    if any(not math.isfinite(value) or value <= 0 for value in (seat_timeout, stall_sec) if value is not None):
+        raise ValueError("seat-timeout and stall-sec must be positive")
+    if not math.isfinite(grace_sec) or grace_sec < 0:
+        raise ValueError("grace-sec must be non-negative")
     if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) for name in pass_env):
         raise ValueError("--pass-env requires environment variable names")
     profile = sandbox_profile(profile)
+    scripts = scripts.resolve()
+    if not scripts.is_dir():
+        raise ValueError(f"seat scripts directory not found: {scripts}")
     if out.exists() and (not out.is_dir() or any(out.iterdir())):
         raise ValueError(f"output must be a new or empty directory: {out}")
     out = out.resolve()
@@ -529,18 +730,28 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
                     seat_root = Path(stack.enter_context(tempfile.TemporaryDirectory(
                         prefix=".playtest-seat-", dir=Path.home()))).resolve()
                     mode = "external" if seat in selected else "careful" if seat in subjects else "scripted"
-                    seats.append(prepare_seat(task, seat, mode, seat_root, template, out / "seats" / seat,
-                                              after[seat], tokens[seat], url, pass_env, profile))
-                timed_out = run_seats(seats, timeout, max_parallel)
+                    seats.append(prepare_seat(task, seat, mode, seat_root, commands.get(seat, ""), out / "seats" / seat,
+                                              after[seat], tokens[seat], url, pass_env, profile, scripts,
+                                              models.get(seat)))
+                requests_stream = stack.enter_context((out / "requests.jsonl").open())
+                responses_stream = stack.enter_context((out / "responses.jsonl").open())
+                events_stream = stack.enter_context((out / "artifacts/logs/world/events.jsonl").open())
+                watch = WaitWatch(requests_stream, responses_stream, events_stream,
+                                  float((root / "clock").read_text()))
+                timed_out, stop_reason = run_seats(seats, timeout, max_parallel, watch, seat_timeout, stall_sec, grace_sec)
                 reward, score = verify(task, out, url, env, float(config.get("verifier", {}).get("timeout_sec", 120)))
         finally:
             audit = archive_seats(seats)
-        requests = read_jsonl(out / "requests.jsonl")
+        requests = read_requests(out)
         seat_results = {seat.seat: seat.result([r for r in requests if r["seat"] == seat.seat]) for seat in seats}
         failures = {name: errors for name, info in seat_results.items() if (errors := seat_failures(info))}
+        reason = score.get("error") or (None if reward is not None else "verifier returned no reward")
         result = {"task": str(task.path), "reward": reward, "score": score, "timed_out": timed_out,
-                  "sandbox_profile": str(profile) if profile else None, "model": model_label,
-                  "harness": harness_name(template), "seat_failures": failures, "seats": seat_results}
+                  "valid": reason is None, "invalid_reason": reason, **world_causes(out),
+                  "stop_reason": stop_reason,
+                  "sandbox_profile": str(profile) if profile else None, "model": common_or_by_seat(models),
+                  "harness": common_or_by_seat({s.seat: s.harness for s in seats if s.mode == "external"}),
+                  "seat_failures": failures, "seats": seat_results}
         (out / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         timeline(out, result, audit, requests)
         return result
@@ -549,29 +760,45 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, epilog="Trusted host commands only; sandbox is optional.")
     parser.add_argument("--task", type=Path, required=True, help="built task folder")
-    parser.add_argument("--seat-cmd", required=True, help="shell template; {instruction}, {seat}, {workdir}, {log}")
+    parser.add_argument("--seat-cmd", required=True, action="append",
+                        help="default or SEAT=template; repeatable; {instruction}, {seat}, {workdir}, {log}")
     parser.add_argument("--seats", help="comma-separated external seats (default: all non-scripted seats)")
     parser.add_argument("--timeout-sec", type=float, help="total seat play time (default: built task timeout)")
+    parser.add_argument("--seat-timeout", type=float, help="maximum seconds per seat, from its own start")
+    parser.add_argument("--stall-sec", type=float, default=120, help="stop when all live seats wait after an exit")
+    parser.add_argument("--grace-sec", type=float, default=20, help="seconds to allow seats to finish after freeze")
     parser.add_argument("--max-parallel", type=int, default=2, help="maximum concurrent external commands")
     parser.add_argument("--pass-env", action="append", default=[], metavar="NAME",
                         help="host variable to pass to a seat (repeatable; comma-separated names also accepted)")
     parser.add_argument("--sandbox-profile", type=Path, help="macOS sandbox-exec profile for external seats")
-    parser.add_argument("--model-label", help="model name to record in result.json")
+    parser.add_argument("--seat-scripts", type=Path, default=SEAT_SCRIPTS, help="readable seat scripts directory")
+    parser.add_argument("--model-label", action="append", help="default or SEAT=model name; repeatable")
     parser.add_argument("--out", type=Path, required=True, help="new or empty output folder")
     args = parser.parse_args()
     try:
         selected = {seat.strip() for seat in args.seats.split(",")} if args.seats is not None else None
         passed = tuple(name.strip() for group in args.pass_env for name in group.split(","))
         result = playtest(args.task, args.seat_cmd, selected, args.timeout_sec, args.max_parallel, args.out,
-                          pass_env=passed, profile=args.sandbox_profile, model_label=args.model_label)
+                          pass_env=passed, profile=args.sandbox_profile, model_label=args.model_label,
+                          seat_timeout=args.seat_timeout, stall_sec=args.stall_sec, grace_sec=args.grace_sec,
+                          scripts=args.seat_scripts)
     except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         parser.exit(2, f"playtest: {exc}\n")
     print(f"Reward: {result['reward']}; results: {args.out / 'result.json'}")
+    print(f"Freeze reason: {result['freeze_reason']}")
+    print(f"Budget events: {json.dumps(result['budget_events'])}")
     for name, info in result["seats"].items():
-        print(f"{name}: exit={info['exit_code']}, world calls={info['world_calls']}")
+        print(f"{name}: exit={info['exit_code']}, world calls={info['world_calls']}, 4xx={info['http_4xx']}")
+        if info["stopped_after_freeze"]:
+            print(f"{name}: stopped after world froze")
+    if result["stop_reason"]:
+        print(f"playtest: stopped: {result['stop_reason']}", file=sys.stderr)
+    if not result["valid"]:
+        print(f"playtest: invalid: {result['invalid_reason']}", file=sys.stderr)
     if result["seat_failures"]:
         for name, failures in result["seat_failures"].items():
             print(f"playtest: {name}: {', '.join(failures)}", file=sys.stderr)
+    if result["seat_failures"] or not result["valid"]:
         raise SystemExit(1)
 
 

@@ -13,9 +13,10 @@ prompt=$2
 model=$3
 root=$(dirname "$workdir")
 binary=${CLAUDE_BIN:-$(command -v claude)}
-mkdir -p "$root/tmp"
+mkdir -p "$root/tmp" "$root/zdot"
 cd "$workdir"
-export TMPDIR="$root/tmp" CLAUDE_CODE_TMPDIR="$root/tmp" SHELL=/bin/bash
+export TMPDIR="$root/tmp" CLAUDE_CODE_TMPDIR="$root/tmp" SHELL=/bin/zsh ZDOTDIR="$root/zdot"
+export PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
 exec "$binary" -p --model "$model" --safe-mode --setting-sources "" --strict-mcp-config \
   --disable-slash-commands --no-session-persistence --dangerously-skip-permissions \
   --output-format stream-json --verbose < "$prompt"

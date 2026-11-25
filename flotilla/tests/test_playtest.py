@@ -37,8 +37,10 @@ assert Path(workdir).parent.parent == Path.home().resolve()
 assert 'PLAYTEST_SECRET' not in os.environ
 if mode == 'env':
     assert os.environ['PLAYTEST_KEEP'] == 'allowed'
+    assert os.environ['USER'] == 'fake-login'
+    assert os.environ['PATH'] == '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin'
     allowed = {
-        'PATH', 'HOME', 'TMPDIR', 'SEAT', 'SEAT_TOKEN', 'SEAT_BRIEFING', 'WORLD_URL',
+        'PATH', 'HOME', 'USER', 'TMPDIR', 'SEAT', 'SEAT_TOKEN', 'SEAT_BRIEFING', 'WORLD_URL',
         'PWD', 'SHLVL', '_', 'LC_CTYPE', '__CF_USER_TEXT_ENCODING', 'PLAYTEST_KEEP'
     }
     assert not (unexpected := set(os.environ) - allowed), unexpected
@@ -77,6 +79,39 @@ elif mode in ('careful', 'json'):
     runpy.run_path(solution, run_name='__main__')
 elif mode == 'fail':
     sys.exit(7)
+elif mode == 'fault':
+    import urllib.error
+    import urllib.request
+    for path, data in [('/await?until=bad', None), ('/fixture-fault' if seat == 'p1' else '/whoami',
+                                                   b'{}' if seat == 'p1' else None)]:
+        request = urllib.request.Request(os.environ['WORLD_URL'] + path, data=data,
+                                         headers={'Authorization': 'Bearer ' + os.environ['SEAT_TOKEN']})
+        try:
+            urllib.request.urlopen(request).read()
+        except urllib.error.HTTPError:
+            pass
+elif mode == 'stall':
+    import urllib.request
+    if seat == 'p1':
+        sys.exit(7)
+    request = urllib.request.Request(os.environ['WORLD_URL'] + '/await?until=tick&after=0',
+                                     headers={'Authorization': 'Bearer ' + os.environ['SEAT_TOKEN']})
+    while True:
+        urllib.request.urlopen(request).read()
+elif mode == 'budget':
+    import urllib.error
+    import urllib.request
+    paths = ['/whoami'] if seat == 'p1' else ['/await?until=bad'] + ['/board'] * 21
+    for path in paths:
+        request = urllib.request.Request(os.environ['WORLD_URL'] + path,
+                                         headers={'Authorization': 'Bearer ' + os.environ['SEAT_TOKEN']})
+        try:
+            urllib.request.urlopen(request).read()
+        except urllib.error.HTTPError:
+            pass
+elif mode == 'linger':
+    runpy.run_path(solution, run_name='__main__')
+    time.sleep(30)
 """
 
 
@@ -149,6 +184,10 @@ def test_scripted_probe_and_noop(tmp_path, monkeypatch):
     assert good["seats"]["p2"]["mode"] == "external"
     assert all(info["exit_code"] == 0 for info in good["seats"].values())
     assert good["model"] == "fake-model" and good["harness"] == "fake seat.py"
+    assert good["seats"]["p2"]["harness"] == "fake seat.py"
+    assert good["seats"]["p2"]["model"] == "fake-model"
+    assert good["seats"]["p1"]["harness"] == "policy.py"
+    assert good["seats"]["p1"]["model"] is None
     assert good["seat_failures"] == {}
     receiver = good["seats"]["p2"]
     assert receiver["world_calls"] > 0 and receiver["first_read"] < receiver["first_submit"]
@@ -164,6 +203,52 @@ def test_scripted_probe_and_noop(tmp_path, monkeypatch):
     good_log = (good_out / "seats" / "p2" / "seat.log").read_text()
     bad_log = (bad_out / "seats" / "p2" / "seat.log").read_text()
     assert good_log.split("token-sha256 ")[1].splitlines()[0] != bad_log.split("token-sha256 ")[1].splitlines()[0]
+
+
+def test_mixed_seat_commands_and_models(tmp_path):
+    task = build(tmp_path, "talk")
+    second = tmp_path / "other seat.py"
+    second.write_text(FAKE_SEAT)
+    override = (f"p2=/usr/bin/env {shlex.quote(sys.executable)} {shlex.quote(str(second))} "
+                "{instruction} {seat} {workdir} {log} "
+                f"{shlex.quote(str(task / 'solution' / 'policy.py'))} careful")
+    out, result = play(tmp_path, task, extra=("--seat-cmd", override, "--model-label", "default-model",
+                                             "--model-label", "p2=other-model"))
+    _, summary = assert_evidence(task, out, result, 1)
+    assert result["harness"] == {"p1": "fake seat.py", "p2": "other seat.py"}
+    assert result["model"] == {"p1": "default-model", "p2": "other-model"}
+    for seat in ("p1", "p2"):
+        assert result["seats"][seat]["harness"] == result["harness"][seat]
+        assert result["seats"][seat]["model"] == result["model"][seat]
+    assert "Model: other-model; harness: other seat.py" in summary
+    assert str(second) in result["seats"]["p2"]["command"]
+    invalid = play(tmp_path, task, extra=("--model-label", "p9=bad"), name="bad-override", check=False)
+    assert invalid.returncode == 2 and "unknown or non-external seat p9" in invalid.stderr
+
+
+def test_grace_reaps_lingering_seats_without_changing_valid_score(tmp_path):
+    task = build(tmp_path, "talk")
+    out, result = play(tmp_path, task, "linger", extra=("--grace-sec", "0.4"))
+    assert_evidence(task, out, result, 1)
+    assert result["valid"] and not result["timed_out"]
+    assert result["stop_reason"] == "world frozen; grace expired"
+    assert result["seat_failures"] == {}
+    for seat in result["seats"].values():
+        assert seat["stopped_after_freeze"] and not seat["timed_out"]
+        assert seat["exit_code"] < 0 and 0.4 <= seat["seconds"] < 10
+
+
+def test_frozen_world_does_not_launch_pending_seat(tmp_path):
+    task = build(tmp_path, "team")
+    config = task / "task.toml"
+    config.write_text(config.read_text().replace("[agents.p2]\n", '[agents.p2]\nstart_after = ["p1"]\n'))
+    _, result = play(tmp_path, task, "fault", extra=("--grace-sec", "0.4"), expected_exit=1)
+    assert not result["valid"]
+    assert result["invalid_reason"] == "extension_error"
+    assert result["stop_reason"] == "world frozen before seats started"
+    pending = result["seats"]["p2"]
+    assert pending["stopped_after_freeze"] and pending["started_sec"] is None
+    assert pending["world_calls"] == 0 and pending["exit_code"] is None
 
 
 def test_selected_seat_uses_careful_not_built_naive(tmp_path):
@@ -221,6 +306,34 @@ def test_timeout_freezes_and_scores_with_pending_seat(tmp_path):
     assert "No seat events." in summary
 
 
+def test_per_seat_timeout_starts_at_launch(tmp_path):
+    task = build(tmp_path, "talk")
+    config = task / "task.toml"
+    config.write_text(config.read_text().replace("[agents.p2]\n", '[agents.p2]\nstart_after = ["p1"]\n'))
+    _, result = play(tmp_path, task, "wait", extra=("--seat-timeout", "0.5"), expected_exit=1)
+    assert not result["timed_out"]
+    p1, p2 = result["seats"]["p1"], result["seats"]["p2"]
+    for seat in (p1, p2):
+        assert seat["timed_out"] and seat["exit_code"] < 0
+        assert 0.5 <= seat["seconds"] < 2
+    assert p2["started_sec"] >= p1["ended_sec"]
+
+
+def test_stall_stops_waiting_seat_after_exit(tmp_path):
+    task = build(tmp_path, "team")
+    compose = task / "environment" / "docker-compose.yaml"
+    compose.write_text(compose.read_text().replace("    environment:\n",
+                                                  '    environment:\n      FLOTILLA_WAIT_SECONDS: "0.2"\n', 1))
+    completed = play(tmp_path, task, "stall", extra=("--stall-sec", "0.8"), check=False)
+    assert completed.returncode == 1, completed.stdout + completed.stderr
+    result = json.loads((tmp_path / "out" / "result.json").read_text())
+    assert result["stop_reason"] == "seat p1 exited; others wait"
+    assert result["stop_reason"] in completed.stderr
+    assert not result["timed_out"]
+    assert result["seats"]["p2"]["seconds"] < 5
+    assert result["seats"]["p2"]["world_calls"] > 1
+
+
 def test_failed_seat_exit(tmp_path):
     task = build(tmp_path, "talk-trap")
     completed = play(tmp_path, task, "fail", check=False)
@@ -231,6 +344,46 @@ def test_failed_seat_exit(tmp_path):
     assert result["seat_failures"]["p2"] == ["exit code 7", "no world calls"]
     assert result["seats"]["p2"]["first_read"] is None
     assert result["seats"]["p2"]["first_submit"] is None
+
+
+def test_invalid_verifier_preserves_seats_and_reason(tmp_path):
+    task = build(tmp_path, "team")
+    completed = play(tmp_path, task, "fault", check=False)
+    assert completed.returncode == 1, completed.stdout + completed.stderr
+    out = tmp_path / "out"
+    result = json.loads((out / "result.json").read_text())
+    assert result["valid"] is False and result["reward"] is None
+    assert result["invalid_reason"] == "extension_error"
+    assert "invalid: extension_error" in completed.stderr
+    assert result["freeze_reason"] == "extension ended play"
+    assert result["budget_events"] == []
+    assert set(result["seats"]) == {"p1", "p2"}
+    seat = result["seats"]["p1"]
+    assert seat["exit_code"] == 0 and seat["seconds"] > 0
+    assert seat["world_calls"] == 2 and seat["http_4xx"] == 1
+    assert "invalid reason: extension_error" in (out / "summary.md").read_text()
+
+
+def test_budget_freeze_and_http_causes_in_results(tmp_path):
+    task = build(tmp_path, "team")
+    completed = play(tmp_path, task, "budget", check=False)
+    assert completed.returncode == 1
+    out = tmp_path / "out"
+    result = json.loads((out / "result.json").read_text())
+    assert result["invalid_reason"] == "fixture budget exhausted"
+    assert result["freeze_reason"] == "extension ended play"
+    assert [(e["seat"], e["data"]) for e in result["budget_events"]] == [("p2", {"limit": 20})]
+    assert result["seats"]["p2"]["http_4xx"] == 2
+    assert "Freeze reason: extension ended play" in completed.stdout
+    assert "Budget events:" in completed.stdout and '"limit": 20' in completed.stdout
+    assert "p2: exit=0, world calls=22, 4xx=2" in completed.stdout
+    requests = [json.loads(line) for line in (out / "requests.jsonl").read_text().splitlines()]
+    errors = [r for r in requests if r["seat"] == "p2" and r["status"] >= 400]
+    assert [(r["path"], r["query"], r["status"]) for r in errors] == [
+        ("/await", "until=bad", 400), ("/board", "", 409)]
+    summary = (out / "summary.md").read_text()
+    assert "GET /await?until=bad -> 400" in summary
+    assert "GET /board -> 409" in summary
 
 
 def test_summary_lists_commands_requests_and_scripted_sends(tmp_path):
@@ -279,6 +432,8 @@ def test_reject_scripted_external_and_cyclic_dependencies(tmp_path):
 def test_minimal_env_and_pass_env(tmp_path, monkeypatch):
     monkeypatch.setenv("PLAYTEST_SECRET", "not allowed")
     monkeypatch.setenv("PLAYTEST_KEEP", "allowed")
+    monkeypatch.setenv("USER", "fake-login")
+    monkeypatch.setenv("PATH", f"{Path.home()}/.local/bin:/usr/bin:/bin")
     task = build(tmp_path, "talk-trap")
     out, result = play(tmp_path, task, "env", extra=("--pass-env", "PLAYTEST_KEEP"))
     assert_evidence(task, out, result, 1)
@@ -293,8 +448,41 @@ def test_sandbox_command_and_skip(tmp_path, monkeypatch, capsys):
     argv = runner.sandbox_command(["/bin/bash", "-c", "echo hello"], profile, root)
     assert argv[:5] == ["/usr/bin/sandbox-exec", "-f", str(profile), "-D", f"SEATROOT={root}"]
     assert argv[-3:] == ["/bin/bash", "-c", "echo hello"]
+    assert f"SEATSCRIPTS={FLOTILLA / 'playtest_seats'}" in argv
+    assert f"SEATSCRIPTS={tmp_path.resolve()}" in runner.sandbox_command(["true"], profile, root, tmp_path)
     monkeypatch.setattr(sys, "platform", "linux")
     assert runner.sandbox_profile(profile) is None
     assert "skipped" in capsys.readouterr().err
     monkeypatch.setattr(sys, "platform", "darwin")
     assert runner.sandbox_profile(profile) == profile.resolve()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS sandbox-exec profile")
+def test_claude_fake_cli_in_custom_scripts_directory(tmp_path, monkeypatch):
+    scripts = tmp_path / "seat scripts"
+    scripts.mkdir()
+    shipped = FLOTILLA / "playtest_seats"
+    wrapper = scripts / "claude.sh"
+    wrapper.write_bytes((shipped / "claude.sh").read_bytes())
+    fake = scripts / "fake-claude"
+    fake.write_text("""#!/bin/bash
+set -eu
+[[ "$USER" == fake-login ]]
+[[ "$SHELL" == /bin/zsh && -d "$ZDOTDIR" && "$ZDOTDIR" == "${PWD%/work}/zdot" ]]
+[[ "$PATH" == /opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin ]]
+/usr/bin/curl -fsS -H "Authorization: Bearer $SEAT_TOKEN" "$WORLD_URL/whoami"
+echo fake-claude-ok
+""")
+    fake.chmod(0o700)
+    monkeypatch.setenv("CLAUDE_BIN", str(fake))
+    monkeypatch.setenv("USER", "fake-login")
+    task = build(tmp_path, "solo")
+    completed = subprocess.run([sys.executable, str(FLOTILLA / "playtest.py"), "--task", str(task),
+                                "--seat-cmd", f"/bin/bash {shlex.quote(str(wrapper))} {{workdir}} {{instruction}} fake",
+                                "--seat-scripts", str(scripts), "--sandbox-profile", str(shipped / "seat.sb"),
+                                "--pass-env", "CLAUDE_BIN", "--out", str(tmp_path / "out")],
+                               capture_output=True, text=True, timeout=20, check=False)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    result = json.loads((tmp_path / "out" / "result.json").read_text())
+    assert result["seats"]["p1"]["world_calls"] == 1
+    assert "fake-claude-ok" in (tmp_path / "out" / "seats" / "p1" / "seat.log").read_text()
