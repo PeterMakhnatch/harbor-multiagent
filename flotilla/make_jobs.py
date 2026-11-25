@@ -90,10 +90,12 @@ def main() -> None:
               file=sys.stderr)
         sys.exit(2)
     args.out.mkdir(parents=True, exist_ok=True)
+    same_count = {size: sum(len(roster) == size for roster in groups) for size in {len(r) for r in groups}}
     for seats, tasks in sorted(groups.items()):
         participant_rows = participants(seats, args.agent, args.model, args.max_turns, args.seat_agent)
+        suffix = f"{len(seats)}seat" if same_count[len(seats)] == 1 else f"{len(seats)}seat-{'-'.join(seats)}"
         config = {
-            "job_name": f"{args.name}-{len(seats)}seat",
+            "job_name": f"{args.name}-{suffix}",
             "jobs_dir": args.jobs_dir,
             "n_attempts": args.attempts,
             "timeout_multiplier": 1.0,
@@ -104,7 +106,7 @@ def main() -> None:
             "participants": participant_rows,
             "tasks": [{"path": task} for task in tasks],
         }
-        out = args.out / f"{args.name}-{len(seats)}seat.json"
+        out = args.out / f"{args.name}-{suffix}.json"
         out.write_text(json.dumps(config, indent=2) + "\n")
         print(f"{out}  ({len(tasks)} tasks, seats {','.join(seats)})")
 

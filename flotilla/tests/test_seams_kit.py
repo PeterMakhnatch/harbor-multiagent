@@ -49,6 +49,29 @@ def test_fixture_sweep(tmp_path):
                 "reward"] == 1
 
 
+def test_extended_fixture_protocols(tmp_path):
+    arms = ("talk-trap", "hint", "team", "staged")
+    for difficulty in ("canary", "standard", "heavy"):
+        count = BUILD.default_seats(BUILD.load_family("kit_fixture"), difficulty)
+        paths = BUILD.build("kit_fixture", [0], count, difficulty, SEED, arms, tmp_path / difficulty)
+        assert not [f for f in QA.check(paths)[0] if f.level == "FAIL"]
+        for path in paths:
+            for seed in range(8):
+                result = SIM.simulate_built(path, "careful", seed)
+                assert result["reward"] == result["score"]["reward"] == 1
+                assert result["invalid"] is None
+                events = result["events"]
+                if QA.load_task(path).condition == "team":
+                    assert len([e for e in events if e["kind"] == "ready"]) == count
+                    assert len([e for e in events if e["kind"] == "send" and e["seat"] == "board"]) == 3
+                    assert any(e["kind"] == "deliver" and e["data"].get("via") == "push" for e in events)
+                if QA.load_task(path).condition == "staged":
+                    assert any(e["kind"] == "delivered" and e["data"]["ids"] == ["note-1"] for e in events)
+    paths = BUILD.build("kit_fixture", [0], None, "heavy", SEED, ("team",), tmp_path / "auto")
+    assert not [f for f in QA.check(paths)[0] if f.level == "FAIL"]
+    assert len(QA.load_task(paths[0]).seats) == 3
+
+
 def test_rf1v_read_first_reliance_sweep(tmp_path):
     for policy in ("naive", "careful"):
         paths = BUILD.build("probe", [0], 4, "easy", SEED, ("talk-quiet", "talk-false"), tmp_path / policy,
@@ -76,6 +99,8 @@ def test_rf1v_read_first_reliance_sweep(tmp_path):
 def test_rehearsal_over_http_with_built_policy_and_verifier(tmp_path, start_world):
     cases = [(path, 1) for path in BUILD.build(
         "kit_fixture", [0], 2, "easy", SEED, ("solo", "talk", "talk-control", "talk-trap"), tmp_path / "fixture")]
+    cases += [(path, 1) for path in BUILD.build(
+        "kit_fixture", [0], 3, "heavy", SEED, ("team", "hint", "staged"), tmp_path / "extra")]
     for name in ("careful", "naive"):
         for path in BUILD.build("probe", [0], 4, "easy", SEED, ("talk-quiet", "talk-false"), tmp_path / name,
                                 variant="verify-readfirst", read_first_subject=True, policy=name):
@@ -91,6 +116,8 @@ def test_rehearsal_over_http_with_built_policy_and_verifier(tmp_path, start_worl
                 env = os.environ | task.env(seat) | {"WORLD_URL": world.url, "SEAT_TOKEN": world.tokens[seat]}
                 processes.append(subprocess.Popen([sys.executable, str(path / "solution" / "policy.py")],
                                                   cwd=task.env_dir / "player", env=env))
+                if task.condition == "staged" and seat == "p1":
+                    assert processes[-1].wait(timeout=30) == 0
             for process in processes:
                 assert process.wait(timeout=30) == 0
         finally:

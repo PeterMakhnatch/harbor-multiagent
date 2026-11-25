@@ -357,6 +357,14 @@ if AUDIT is not None:
     STATE["audit_attempts"] = dict.fromkeys(SEATS, 0)
 _SEQ = [0]
 EVENT_SINK: Callable[[dict[str, Any]], None] | None = None
+EXTENSION_RESERVED = frozenset({
+    "start", "extension_start", "freeze", "play_timeout", "tick", "seat_transition",
+    "send", "message_route", "deliver", "delivered", "extension_call", "extension_error",
+    "await", "call_budget", "simulation_stalled", "health", "whoami", "state",
+    "bad_token", "invalid_http", "probe", "invalid", "denied", "late", "inactive",
+    "submit", "gated", "audit", "open", "close", "season-over", "look", "wait",
+    "request", "pass", "early", "repeat",
+})
 EXTENSION: Any = None
 EXTENSION_ROUTES: dict[str, tuple[str, ...]] = {}
 
@@ -375,6 +383,30 @@ class ExtensionHost:
         self.scripted = set(task.get("scripted_seats", ()))
         self.seed = task.get("seed", 0)
         self.pending: list[tuple[dict[str, Any], int | None]] = []
+        cap = task.get("max_calls", 1000)
+        self.max_calls = {seat: cap if type(cap) is int else cap.get(seat, 1000) for seat in seats}
+        if any(type(value) is not int or value < 1 for value in self.max_calls.values()):
+            raise ValueError("invalid extension call cap")
+        self.budget_notified: set[str] = set()
+
+    def admit(self, seat: str) -> bool:
+        if self.status[seat] != "active" or STATE["frozen"]:
+            return True
+        if self.attempts[seat] < self.max_calls[seat]:
+            self.attempts[seat] += 1
+            return True
+        if seat not in self.budget_notified:
+            self.budget_notified.add(seat)
+            record("call_budget", seat, {"limit": self.max_calls[seat]})
+            hook = getattr(EXTENSION, "on_budget", None)
+            if hook:
+                hook(seat)
+        return False
+
+    def fail(self, seat: str, path: str, exc: Exception) -> None:
+        record("extension_error", seat, {"path": path, "error": type(exc).__name__})
+        STATE["extension_failed"] = True
+        self.freeze()
 
     def message(self, sender: str, to: str, text: str) -> dict[str, Any]:
         index = STATE["sent"].get(sender, 0)
@@ -404,6 +436,13 @@ class ExtensionHost:
         self.sent(message, delay)
 
     def record(self, kind: str, seat: str | None, data: dict[str, Any] | None = None) -> None:
+        if kind in EXTENSION_RESERVED or not isinstance(kind, str) or not kind:
+            raise ValueError("reserved or invalid extension event kind")
+        if seat is not None and seat not in self.status and seat not in self.senders:
+            raise ValueError("unknown extension event actor")
+        if data is not None and not isinstance(data, dict):
+            raise TypeError("event data must be an object")
+        json.dumps(data, allow_nan=False)
         record(kind, seat, data)
 
     def advance(self) -> int:
@@ -411,6 +450,9 @@ class ExtensionHost:
             raise ValueError("play has ended")
         self.tick += 1
         record("tick", None, {"tick": self.tick})
+        hook = getattr(EXTENSION, "on_tick", None)
+        if hook:
+            hook(self.tick)
         return self.tick
 
     def activate(self, seat: str) -> None:
@@ -452,6 +494,16 @@ class ExtensionHost:
 HOST: ExtensionHost | None = None
 
 
+def load_source(path: Path, name: str) -> Any:
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise ValueError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_extension() -> None:
     global EXTENSION, HOST, MESSAGING, PUSH, PUSH_SEATS
     if not TASK_JSON_PATH.is_file():
@@ -464,14 +516,11 @@ def load_extension() -> None:
         raise ValueError("invalid extension name")
     if GAME is not None or AUDIT is not None or SCHEDULED or REPLIES or INBOX or SUBMIT_GATE:
         raise ValueError("extensions cannot combine with legacy game or probe hooks")
-    path = Path(__file__).with_name("ext") / f"{name}.py"
-    spec = importlib.util.spec_from_file_location("world_extension", path)
-    if spec is None or spec.loader is None:
-        raise ValueError(f"cannot load extension {name}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
+    root = TASK_JSON_PATH.parent if (TASK_JSON_PATH.parent / "family.py").is_file() else Path(__file__).parent
     HOST = ExtensionHost(SEATS, task.get("initial_active", SEATS), task)
+    if (root / "family.py").is_file():
+        HOST.family = load_source(root / "family.py", "family")
+    module = load_source(root / "ext" / f"{name}.py", "world_extension")
     messaging = task.get("messaging")
     if type(messaging) is not bool:
         raise ValueError("extension messaging must be boolean")
@@ -562,6 +611,10 @@ def expire() -> None:
     """Freeze the world PLAY_SECONDS after the first seat call, so that a seat process that outlives play
     cannot change the result before the verifier freezes it (review of fork PR #18, S1). Callers hold LOCK."""
     if HOST is not None:
+        first = STATE.get("first_wall")
+        if PLAY_SECONDS and not STATE["frozen"] and first is not None and time.monotonic() >= first + PLAY_SECONDS:
+            record("play_timeout", None, {"after_s": PLAY_SECONDS})
+            HOST.freeze()
         return
     first = STATE["first_call"]
     if PLAY_SECONDS and not STATE["frozen"] and first is not None and now() >= first + PLAY_SECONDS:
@@ -867,7 +920,15 @@ class World(BaseHTTPRequestHandler):
         pushed = self._pushed(body)
         if pushed:
             body = dict(body) | {"new_messages": pushed}  # type: ignore[call-overload]
-        written = self._write(status, json.dumps(body).encode(), "application/json", headers)
+        if HOST is not None and (pushed or receipt):
+            previous = self.connection.gettimeout()
+            try:
+                self.connection.settimeout(REPLY_WRITE_SECONDS)
+                written = self._write(status, json.dumps(body).encode(), "application/json", headers)
+            finally:
+                self.connection.settimeout(previous)
+        else:
+            written = self._write(status, json.dumps(body).encode(), "application/json", headers)
         if written and (pushed or receipt):
             with LOCK:
                 if pushed:
@@ -1002,9 +1063,21 @@ class World(BaseHTTPRequestHandler):
             self.push_seat = seat if PUSH and seat in PUSH_SEATS else None
             with LOCK:
                 STATE["first_call"] = now() if STATE["first_call"] is None else STATE["first_call"]
+                if HOST is not None:
+                    STATE.setdefault("first_wall", time.monotonic())
                 expire()
                 if SCHEDULED:
                     _post_scheduled(seat)  # version 14: the first request of a seat under test adds every post
+                if HOST is not None:
+                    try:
+                        admitted = HOST.admit(seat)
+                    except Exception as exc:  # noqa: BLE001 - contain family-code failures
+                        HOST.fail(seat, path, exc)
+                        self._reply(500, {"error": "world failed"})
+                        return
+                    if not admitted:
+                        self._reply(429, {"error": "request limit reached"})
+                        return
         if GAME is not None and seat != "admin":
             with LOCK:
                 game = STATE["game"]
@@ -1035,6 +1108,8 @@ class World(BaseHTTPRequestHandler):
                     view = whoami(seat)
                     if HOST is not None:
                         view |= {"active": HOST.status[seat], "tick": HOST.tick, "frozen": STATE["frozen"]}
+                        self._reply(200, view)
+                        return
                 self._reply(200, view)
             elif path == "/messages":
                 self._get_messages(seat)
@@ -1072,6 +1147,8 @@ class World(BaseHTTPRequestHandler):
             self._audit(seat, body)
         else:  # /admin/freeze
             with LOCK:
+                if HOST is not None:
+                    expire()
                 STATE["frozen"] = True
                 record("freeze", "admin")
             self._reply(200, {"frozen": True})
@@ -1082,21 +1159,33 @@ class World(BaseHTTPRequestHandler):
             self._invalid(seat, method, path, 400, reason, "send a JSON object")
             return
         with LOCK:
+            expire()
             if STATE["frozen"] or HOST.status[seat] != "active":
                 record("late" if STATE["frozen"] else "inactive", seat, {"path": path})
                 self._reply(409, {"error": "play has ended" if STATE["frozen"] else "seat is not active"})
                 return
-            HOST.attempts[seat] += 1
             receipt = None
-            if HOST.attempts[seat] > 1000:
-                status, reply = 429, {"error": "request limit reached"}
-            else:
+            try:
                 result = EXTENSION.handle(seat, method, path, body, parse_qs(urlsplit(self.path).query))
+                if not isinstance(result, tuple) or len(result) not in (2, 3):
+                    raise ValueError("invalid extension result")
                 status, reply = result[:2]
-                if len(result) == 3 and result[2]:
-                    receipt = (seat, path, result[2])
+                if type(status) is not int or not 200 <= status < 500 or not isinstance(reply, dict):
+                    raise ValueError("invalid extension reply")
+                if "new_messages" in reply:
+                    raise ValueError("reserved reply field")
+                json.dumps(reply, allow_nan=False)
+                if len(result) == 3:
+                    ids = result[2]
+                    if not isinstance(ids, list) or any(not isinstance(item, str) or not item for item in ids):
+                        raise ValueError("invalid delivery ids")
+                    if ids:
+                        receipt = (seat, path, ids.copy())
+            except Exception as exc:  # noqa: BLE001 - contain family-code failures
+                HOST.fail(seat, path, exc)
+                status, reply, receipt = 500, {"error": "world failed"}, None
             record("extension_call", seat, {"method": method, "path": path, "status": status})
-        self._reply(status, reply, receipt=receipt)
+            self._reply(status, reply, receipt=receipt)
 
 
     def _audit(self, seat: str, body: dict[str, Any]) -> None:
@@ -1170,6 +1259,8 @@ class World(BaseHTTPRequestHandler):
                           f"messages are limited to {MAX_TEXT} characters")
             return
         with LOCK:
+            if HOST is not None:
+                expire()
             if STATE["frozen"] or (HOST is not None and HOST.status[seat] != "active"):
                 record("late" if STATE["frozen"] else "inactive", seat, {"path": "/messages", "chars": len(text)})
                 self._reply(409, {"error": "play has ended; the world is frozen" if STATE["frozen"] else "seat is not active"})
@@ -1187,12 +1278,26 @@ class World(BaseHTTPRequestHandler):
                 self._reply(429, {"error": f"limit of {MAX_MESSAGES_PER_SEAT} messages per seat reached"})
                 return
             if HOST is not None:
-                message = HOST.message(seat, to, text)
-                STATE["sent"][seat] += 1
-                HOST.publish(message)
-                hook = getattr(EXTENSION, "on_message", None)
-                if hook:
-                    hook(message.copy())
+                try:
+                    message = HOST.message(seat, to, text)
+                    allow = getattr(EXTENSION, "allow_message", None)
+                    refusal = allow(message.copy()) if allow else None
+                    if refusal is not None:
+                        status, error = refusal
+                        if type(status) is not int or not 400 <= status < 500 or not isinstance(error, str):
+                            raise ValueError("invalid send refusal")
+                        record("denied", seat, {"path": "/messages", "reason": error})
+                        self._reply(status, {"error": error})
+                        return
+                    STATE["sent"][seat] += 1
+                    HOST.publish(message)
+                    hook = getattr(EXTENSION, "on_message", None)
+                    if hook:
+                        hook(message.copy())
+                except Exception as exc:  # noqa: BLE001 - contain family-code failures
+                    HOST.fail(seat, "/messages", exc)
+                    self._reply(500, {"error": "world failed"})
+                    return
                 self._reply(201, message)
                 return
             STATE["sent"][seat] = STATE["sent"].get(seat, 0) + 1
@@ -1211,6 +1316,8 @@ class World(BaseHTTPRequestHandler):
         if self._deny_messaging(seat):
             return
         with LOCK:
+            if HOST is not None:
+                expire()
             if HOST is not None and (STATE["frozen"] or HOST.status[seat] != "active"):
                 record("late" if STATE["frozen"] else "inactive", seat, {"path": "/messages"})
                 self._reply(409, {"error": "play has ended" if STATE["frozen"] else "seat is not active"})
@@ -1218,6 +1325,9 @@ class World(BaseHTTPRequestHandler):
             visible = [
                 m for m in STATE["messages"] if visible_to(m, seat)
             ]
+            if HOST is not None:
+                self._deliver_reply(200, {"messages": visible}, seat)
+                return
         self._deliver_reply(200, {"messages": visible}, seat)
 
     def _claim_submit(self, seat: str) -> bool:
