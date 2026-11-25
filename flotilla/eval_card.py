@@ -569,6 +569,14 @@ def load_stats(runs: list[dict], sizes: dict) -> list[dict]:
     return rows
 
 
+def kit_commit() -> str:
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
+                                       stderr=subprocess.DEVNULL).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+
+
 def build_card(args: argparse.Namespace) -> dict:
     kit = Kit(args)
     arms = tuple(args.arms) if args.arms else kit.arms()
@@ -584,7 +592,7 @@ def build_card(args: argparse.Namespace) -> dict:
     supported = tuple(policy for policy in args.policies if kit.supports(policy))
     identity = {"family": args.family, "variant": kit.variant, "title": kit.module.TITLE,
                 "seam": getattr(kit.module, "SEAM", "not declared"), "arms": arms, "levels": levels,
-                "kit_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+                "kit_commit": kit_commit(),
                 "instances": args.instances, "schedule_seeds": args.schedule_seeds, "seed": args.seed,
                 "policies": supported, "unavailable_policies": [p for p in args.policies if p not in supported],
                 "twins": twins, "trap_controls": pairs, "known_arms": known_arms}
