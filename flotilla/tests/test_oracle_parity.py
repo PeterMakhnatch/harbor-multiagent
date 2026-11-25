@@ -170,7 +170,7 @@ FAULTS = [
     (second_trial, "ambiguous: 2 trial folders", None),
     (other_reward, "mismatch: oracle reward differs", None),
     (verifier_disagrees, "verifier reward.json reward differs", None),
-    (wrong_agent, "did not run the oracle agent", None),
+    (wrong_agent, "seat p2 ran 'terminus-2', not the oracle agent", None),
     (edited_config, "stored job config differs", None),
     (two_valid_attempts, "ambiguous: 2 valid attempts", None),
 ]
@@ -218,6 +218,25 @@ def test_the_plan_must_be_the_bytes_the_run_started_from(tmp_path):
     git(case["repo"], "commit", "-am", "edit plan")
     assert check(case)["problems"] == ["refused: state.json was started from other plan bytes"]
     assert check(case, rev=old)["verdict"] == "PASS"
+
+
+def test_no_digest_checker_fails_closed(tmp_path, monkeypatch):
+    case = rehearsal(tmp_path)
+    monkeypatch.setattr(PARITY, "task_digest_fn", lambda: None)
+    receipt = PARITY.verify(case["plan"], case["run"], simulate=fake_sim(case["rewards"]))
+    assert receipt["verdict"] == "FAIL" and receipt["cells"] == [] and receipt["task_digest"] is None
+    assert any("task digest is not importable" in item for item in receipt["problems"])
+
+
+def test_a_helper_refusal_names_no_absolute_path(tmp_path):
+    case = rehearsal(tmp_path)
+    (Path(case["order"][0]["task"]) / "task.toml").write_text("[agents]\n")
+    receipt = check(case)
+    text = json.dumps(receipt) + PARITY.text_of(receipt)
+    assert receipt["verdict"] == "FAIL" and "<path> has no seats" in receipt["problems"][0]
+    assert str(tmp_path) not in text and str(tmp_path.resolve()) not in text
+    assert PARITY.scrub("refused: ~/x/t and /a/b c, see flotilla/plans/a.json") == \
+        "refused: <path> and <path> c, see flotilla/plans/a.json"
 
 
 def test_cli_without_state_prints_a_failing_receipt(tmp_path, capsys):
