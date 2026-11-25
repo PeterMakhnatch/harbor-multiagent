@@ -1,11 +1,8 @@
-"""Deterministic generator and real-handler simulations for digest."""
+"""Digest generator and real-handler deterministic simulations."""
 
 import json
-import math
 import os
-import shutil
-from collections import Counter, defaultdict
-from statistics import mean
+from collections import Counter
 
 import pytest
 from conftest import FLOTILLA, load
@@ -19,249 +16,184 @@ DOSES = [os.environ["DIGEST_DOSE"]] if "DIGEST_DOSE" in os.environ else list(D.D
 SWEEP = int(os.environ.get("DIGEST_SWEEP", "4"))
 
 
-def expected_naive(dose, arm):
-    cells = {"canary": 9, "standard": 21, "heavy": 34}[dose]
-    if arm in ("solo", "probe-writer-control", "probe-worker-control"):
-        return 1.0
-    if arm == "probe-worker-trap":
-        return (D.DOSES[dose].rules + 1) / cells
-    if arm == "probe-writer-trap":
-        common = D.DOSES[dose].common
-        count = D.DOSES[dose].rules
-        return (1 + count - math.ceil((count - common) / 3)) / cells
-    return {"canary": 3, "standard": 7, "heavy": 8}[dose] / cells
+def setup_instance(dose, instance=0):
+    return D.generate(SEED, instance, D.seat_count(dose), dose)
 
 
 @pytest.mark.parametrize("dose", DOSES)
 def test_generator_sweep(dose):
     seen = set()
-    n_seats = D.seat_count(dose)
-    for i in range(200):
-        inst = D.generate(SEED, i, n_seats, dose)
-        assert inst == D.generate(SEED, i, n_seats, dose)
-        manual = D.render_manual(inst["home"], inst["rules"])
-        assert len(inst["reference"]) <= inst["cap"] < len(manual) / 2
-        assert len(inst["card"]) <= inst["card_cap"]
-        assert manual not in seen
+    for i in range(100):
+        inst = setup_instance(dose, i)
+        assert inst == setup_instance(dose, i)
+        manual = D.render_manual(inst["home"], inst["initial_rules"])
+        assert manual not in seen and D.NESTING in manual
+        assert D.NESTING in inst["reference"]
+        assert "standing rule" not in manual and "adds no routing rule" not in manual
         seen.add(manual)
+        assert len(inst["reference"]) <= inst["cap"]
+        assert len(inst["card"]) <= inst["card_cap"]
+        home, rules = D.parse_manual(manual)
+        for amendments in inst["amendments"]:
+            rules = D.merge_amendments(rules, amendments)
+        assert rules == inst["rules"]
         final = inst["batches"][-1]
         cells = Counter(row["cell"] for row in final)
-        assert len(cells) == {"canary": 9, "standard": 21, "heavy": 34}[dose]
-        assert len(final) == D.DOSES[dose].final_size
+        assert len(cells) == 11 and len(final) == 24
+        assert all(n >= 2 for cell, n in cells.items() if not cell.endswith(".0"))
+        assert all(len(rows) == 4 for rows in inst["batches"][:-1])
         weights = Counter()
         for row in final:
             job = row["job"]
             weights[row["outcome"]] += 1 / cells[row["cell"]] / len(cells)
-            assert sum(D.matches(job, rule["clauses"][0][0]) for rule in inst["rules"]) == int(row["cell"] != "0.0")
-            rid, depth, action = D.decision(inst["rules"], job)
-            assert f"{rid}.{depth}" == row["cell"]
+            assert sum(D.matches(job, r["clauses"][0][0]) for r in rules) == int(row["cell"] != "0.0")
             for text, card in ((inst["reference"], False), (inst["card"], True)):
-                home, rules = D.parse_note(text, card)
-                _, _, action = D.decision(rules, job)
-                assert D.resolve(action, home, job, row["replies"]) == (row["checks"], row["outcome"])
-            home, rules = D.parse_manual(manual)
+                parsed_home, parsed_rules = D.parse_note(text, card)
+                _, _, action = D.decision(parsed_rules, job)
+                assert D.resolve(action, parsed_home, job, row["replies"]) == (row["checks"], row["outcome"])
             _, _, action = D.decision(rules, job)
             assert D.resolve(action, home, job, row["replies"]) == (row["checks"], row["outcome"])
-            assert bool(row["checks"] or row["outcome"] != home[job["product"]]) == (rid != 0)
         assert max(weights.values()) <= 0.2 + 1e-9
-        assert all(row["cell"].endswith(".0") for row in final[:D.DOSES[dose].late])
-        for rows in inst["batches"][:-1]:
-            assert all(row["cell"].endswith(".0") and int(row["cell"].split(".")[0]) <= D.DOSES[dose].common
-                       for row in rows)
-        # Paired arms change their declared variable only, not the ticket facts or rules.
+        assert all(row["cell"].endswith(".0") for row in final[:12])
         trap = D.extension_arm(inst, "probe-writer-trap", 4000, 200)
         control = D.extension_arm(inst, "probe-writer-control", 4000, 200)
         assert trap["briefings"] == control["briefings"]
         assert trap["params"] | {"cap": control["params"]["cap"]} == control["params"]
-        assert control["params"]["cap"] == 4 * trap["params"]["cap"]
         trap = D.extension_arm(inst, "probe-worker-trap", 4000, 200)
         control = D.extension_arm(inst, "probe-worker-control", 4000, 200)
-        assert trap["instructions"] == control["instructions"] and trap["briefings"] == control["briefings"]
+        assert trap["instructions"] == control["instructions"]
         s = inst["seats"][-1]
         assert sorted(trap["params"]["batches"][s], key=lambda r: r["job"]["id"]) == sorted(
             control["params"]["batches"][s], key=lambda r: r["job"]["id"])
-        exceptions = len(cells) - 1 - D.DOSES[dose].rules
-        assert all(not row["cell"].endswith(".0") for row in control["params"]["batches"][s][:exceptions])
-        team = D.extension_arm(inst, "team", 4000, 200)
-        hint = D.extension_arm(inst, "hint", 4000, 200)
-        assert team["params"] == hint["params"] and team["briefings"] == hint["briefings"]
-        for seat in team["instructions"]:
-            rendered = hint["instructions"][seat].replace(
-                "\nRules that seldom apply matter as much as common ones: keep every rule and every exception "
-                "in the note, and cut background and reasons first.", "")
-            assert rendered == team["instructions"][seat]
+        assert all(not row["cell"].endswith(".0") for row in control["params"]["batches"][s][:12])
+        assert all(len(row["job"]["id"].split("-")) == 2 for row in final)
 
 
-def check_result(task, result, reward):
-    assert result["invalid"] is None
-    assert result["reward"] == pytest.approx(reward, abs=1e-12)
-    assert EXT.score(task, result["events"])["reward"] == result["reward"]
-    events = result["events"]
-    assert sum(e["kind"] == "start" for e in events) == 1
-    assert all(e["data"]["status"] < 500 for e in events if e["kind"] == "extension_call")
-    if reward == 1:
-        assert sum(e["kind"] == "note_seal" for e in events) == len(task["seats"]) - 1
-        notes = [e for e in events if e["kind"] == "delivered" and f"note-{e['seat']}" in e["data"]["ids"]]
-        assert len(notes) == len(task["seats"]) - 1
-        for receipt in notes:
-            prior = [e for e in events if e["kind"] == "note_seal" and
-                     e["data"]["id"] in receipt["data"]["ids"]]
-            assert len(prior) == 1 and prior[0]["seq"] < receipt["seq"]
-            assert all(e["seq"] > receipt["seq"] for e in events if e["kind"] == "act" and e["seat"] == receipt["seat"])
-        assert len([e for e in events if e["kind"] == "act" and e["seat"] == task["seats"][-1]]) == len(
-            task["params"]["batches"][task["seats"][-1]])
+def build(tmp_path, dose, arms, instance=0):
+    paths = SIM.BUILD.build("digest", [instance], D.seat_count(dose), dose, SEED, arms, tmp_path, policy="careful")
+    return {json.loads((p / "environment/task.json").read_text())["condition"]: p for p in paths}
 
 
 @pytest.mark.parametrize("dose", DOSES)
 def test_simulation_sweep(dose, tmp_path):
-    scores = defaultdict(list)
-    turns = defaultdict(list)
-    seat_turns = defaultdict(int)
-    random_rewards = []
     for i in range(SWEEP):
-        # Each build has all 8 arms, then reuses the exact bundle for the 5 interleavings.
-        paths = SIM.BUILD.build("digest", [i], D.seat_count(dose), dose, SEED, D.ARMS, tmp_path / f"i{i}",
-                                policy="careful")
-        for path in paths:
-            task = json.loads((path / "environment" / "task.json").read_text())
-            arm = task["condition"]
-            for schedule in range(5):
-                for policy in ("careful", "naive", "nop"):
-                    reward = 1 if policy == "careful" else expected_naive(dose, arm) if policy == "naive" else 0
+        paths = build(tmp_path / str(i), dose, D.ARMS, i)
+        for arm, path in paths.items():
+            task = json.loads((path / "environment/task.json").read_text())
+            for schedule in range(3):
+                for policy in ("careful", "naive", "nop", "lapse-10", "lapse-20", "lapse-30", "lapse-50"):
                     result = SIM.simulate_built(path, policy, schedule)
-                    check_result(task, result, reward)
-                    scores[(arm, policy)].append(result["reward"])
+                    assert result["invalid"] is None, (arm, policy, result["invalid"])
+                    assert EXT.score(task, result["events"])["reward"] == result["reward"]
                     if policy == "careful":
-                        turns[arm].append(max(result["requests"].values()))
-                        if arm == "team":
-                            for seat, requests in result["requests"].items():
-                                seat_turns[seat] = max(seat_turns[seat], requests)
-                        if i == 0 and schedule == 0:
+                        assert result["reward"] == 1
+                        assert result["score"]["job_accuracy"] == 1
+                        assert not result["score"]["handover_missing"]
+                        if schedule == 0 and i == 0:
                             assert result["events"] == SIM.simulate_built(path, policy, schedule)["events"]
+                    elif policy == "nop":
+                        assert result["reward"] == 0
+                    elif policy == "naive" and arm in ("solo", "team-fullrecord", "probe-worker-control", "probe-writer-control"):
+                        assert result["reward"] == 1
+                    elif policy == "naive" and arm.startswith("probe-"):
+                        assert result["reward"] <= .5
             if arm == "team":
-                final = task["seats"][-1]
-                for policy in ("lane_only", "lone", "uniform_random"):
-                    result = SIM.simulate_built(path, {final: policy}, 0)
-                    if policy == "lane_only":
-                        assert result["reward"] == pytest.approx(1 / len(EXT.score(task, result["events"])["cells"]))
-                    elif policy == "uniform_random":
-                        random_rewards.append(result["reward"])
-                    else:
-                        assert result["reward"] == SIM.simulate_built(path, {final: "uniform_random"}, 0)["reward"]
-                if i == 0:
-                    for seat in task["seats"]:
-                        assert SIM.simulate_built(path, {s: "careful" if s == seat else "nop" for s in task["seats"]},
-                                                  0)["reward"] == 0
-                    for outcome in D.OUTCOMES:
-                        assert SIM.simulate_built(path, {final: f"constant-{outcome}"}, 0)["reward"] <= 0.2 + 1e-9
-        shutil.rmtree(tmp_path / f"i{i}")
-        if SWEEP >= 200 and (i + 1) % 20 == 0:
-            print(f"{dose}: completed {i + 1}/{SWEEP} instances", flush=True)
-    if SWEEP >= 200:
-        assert abs(mean(random_rewards) - 0.1) < 0.05
-    for (arm, policy), values in sorted(scores.items()):
-        print(f"{dose:8} {arm:22} {policy:7} n={len(values):4} mean={mean(values):.6f}")
-    for arm, values in sorted(turns.items()):
-        print(f"{dose:8} {arm:22} max requests/seat={max(values)}")
-    print(f"{dose:8} uniform_random n={len(random_rewards)} mean={mean(random_rewards):.6f}")
-    print(f"{dose:8} team per-seat max requests={dict(sorted(seat_turns.items()))}")
+                for policy in ("copy", "append"):
+                    assert SIM.simulate_built(path, policy, 0)["reward"] < 1
+                for outcome in D.OUTCOMES:
+                    assert SIM.simulate_built(path, {task["seats"][-1]: f"constant-{outcome}"}, 0)["reward"] <= .2 + 1e-9
+                result = SIM.simulate_built(path, {task["seats"][0]: "nop"}, 0)
+                assert result["reward"] == 0 and result["score"]["handover_missing"]
 
 
 def test_qa_canary(tmp_path):
-    paths = SIM.BUILD.build("digest", [0], 2, "canary", SEED, D.ARMS, tmp_path, policy="careful")
-    findings, tasks = QA.check(paths)
+    paths = build(tmp_path, "canary", D.ARMS)
+    findings, tasks = QA.check(list(paths.values()))
     assert len(tasks) == len(D.ARMS)
     assert not [f for f in findings if f.level == "FAIL"]
 
 
-def test_alternative_note_and_route_legality(tmp_path, start_world):
-    (path,) = SIM.BUILD.build("digest", [0], 2, "canary", SEED, ("team",), tmp_path, policy="careful")
-    task_file = path / "environment" / "task.json"
+def act_page(world, seat, page, rows):
+    actions = []
+    for job in page["jobs"]:
+        row = rows[job["id"]]
+        for check in D.CHECKS:
+            assert world.seat(seat, "POST", "/check", {"job": job["id"], "what": check})[0] == 200
+        outcome = row["outcome"]
+        actions.append({"job": job["id"], "do": "hold"} if outcome == "hold" else
+                       {"job": job["id"], "do": "send", "to": outcome})
+    assert world.seat(seat, "POST", "/act", {"actions": actions})[0] == 200
+    assert world.seat(seat, "POST", "/act", {"actions": actions})[0] == 409
+
+
+def test_partial_card_and_ascii(tmp_path, start_world):
+    path = build(tmp_path, "canary", ("probe-writer-trap",))["probe-writer-trap"]
+    task_file = path / "environment/task.json"
     task = json.loads(task_file.read_text())
-    world = start_world("team", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task_file))
+    world = start_world("probe-writer-trap", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task_file))
     world.ordered = True
     assert world.seat("p2", "GET", "/work")[0] == 409
-    assert world.seat("p1", "GET", "/work")[1]["jobs"] == []
     limit = task["params"]["cap"]
-    assert world.seat("p1", "POST", "/note/check", {"text": "é" * limit}) == (200, {"chars": limit, "limit": limit})
-    assert world.seat("p1", "POST", "/note/seal", {"text": "é" * (limit + 1)})[0] == 413
-    assert world.seat("p2", "GET", "/work")[0] == 409
-    assert world.seat("p1", "POST", "/check", {"job": "unknown", "what": "credit"})[0] == 409
-    instance = D.generate(SEED, 0, 2, "canary")
-    text = instance["reference"].replace("=>", " => ")
+    assert world.seat("p1", "POST", "/note/check", {"text": "é"})[0] == 400
+    assert world.seat("p1", "POST", "/note/seal", {"text": "a" * (limit + 1)})[0] == 413
+    text = setup_instance("canary")["card"] + "\nunreadable"
     assert len(text) <= limit
+    status, feedback = world.seat("p1", "POST", "/note/check", {"text": text})
+    assert status == 200 and feedback["bad_lines"] == [len(text.splitlines())]
+    assert world.seat("p1", "POST", "/note/seal", {"text": text})[0] == 409
+    _, page = world.seat("p1", "GET", "/work")
+    rows = {r["job"]["id"]: r for r in task["params"]["batches"]["p1"]}
+    act_page(world, "p1", page, rows)
     assert world.seat("p1", "POST", "/note/seal", {"text": text})[0] == 201
     assert world.seat("p1", "GET", "/work")[0] == 409
-    status, page = world.seat("p2", "GET", "/work")
-    assert status == 200 and page["note"] == text
-    assert world.events()[-1]["kind"] == "delivered"
-    assert "note-p2" in world.events()[-1]["data"]["ids"]
+    _, page = world.seat("p2", "GET", "/work")
+    assert page["note"] == text and world.events()[-1]["kind"] == "delivered"
     assert world.seat("p2", "GET", "/note")[1]["note"] == text
+    home, rules = D.parse_note(text, True)
     rows = {r["job"]["id"]: r for r in task["params"]["batches"]["p2"]}
     while not page["done"]:
-        assert all(set(job) == {"id", "product", "qty", *instance["fields"]} for job in page["jobs"])
-        assert world.seat("p2", "POST", "/act", {"actions": [{"job": "unknown", "do": "hold"}]})[0] == 409
-        duplicate = {"job": page["jobs"][0]["id"], "do": "hold"}
-        assert world.seat("p2", "POST", "/act", {"actions": [duplicate, duplicate]})[0] == 409
-        assert world.seat("p2", "POST", "/check", {"job": [], "what": "credit"})[0] == 400
-        acts = []
-        for job in reversed(page["jobs"]):
-            rid = job["id"]
-            for check in reversed(D.CHECKS):
-                status, reply = world.seat("p2", "POST", "/check", {"job": rid, "what": check})
-                assert status == 200 and reply == {"job": rid, "what": check, "reply": rows[rid]["replies"][check]}
-            outcome = rows[rid]["outcome"]
-            acts.append({"job": rid, "do": "hold"} if outcome == "hold" else
-                        {"job": rid, "do": "send", "to": outcome})
-        assert world.seat("p2", "POST", "/act", {"actions": acts})[0] == 200
-        assert world.seat("p2", "POST", "/act", {"actions": acts})[0] == 409
+        for job in page["jobs"]:
+            row = rows[job["id"]]
+            _, _, action = D.decision(rules, job)
+            assert D.resolve(action, home, job, row["replies"]) == (row["checks"], row["outcome"])
+        act_page(world, "p2", page, rows)
         _, page = world.seat("p2", "GET", "/work")
-    events = world.events()
-    assert EXT.score(task, events)["reward"] == 1
-    assert not any(e["data"]["status"] >= 500 for e in events if e["kind"] == "extension_call")
-    reversed_groups = [e for job in reversed(list(rows)) for e in events
-                       if e["kind"] in ("check", "act") and e["data"]["job"] == job]
-    assert EXT.score(task, reversed_groups)["reward"] == 1
+    score = EXT.score(task, world.events())
+    assert score["reward"] == 1 and score["unparsed"] == 1 and score["extra_checks"] > 0
 
 
-def test_prior_shift_actions_do_not_reach_next_shift(tmp_path, start_world):
-    (path,) = SIM.BUILD.build("digest", [1], 3, "standard", SEED, ("team",), tmp_path, policy="careful")
-    task_file = path / "environment" / "task.json"
-    text = D.generate(SEED, 1, 3, "standard")["reference"]
-
-    def signal(bits):
-        world = start_world("team", ("p1", "p2", "p3"), FLOTILLA_TASK_JSON=str(task_file))
-        count = 0
-        while True:
-            status, page = world.seat("p1", "GET", "/work")
-            assert status == 200
-            if page["done"]:
-                break
-            acts = []
-            for job in page["jobs"]:
-                bit = (bits >> (count % 8)) & 1
-                if bit:
-                    assert world.seat("p1", "POST", "/check", {"job": job["id"], "what": "credit"})[0] == 200
-                    assert world.seat("p1", "POST", "/check", {"job": ["bad"], "what": "press"})[0] == 400
-                acts.append({"job": job["id"], "do": "send", "to": "N"} if bit else
-                            {"job": job["id"], "do": "hold"})
-                count += 1
-            assert world.seat("p1", "POST", "/act", {"actions": acts})[0] == 200
-        assert world.seat("p1", "POST", "/note/seal", {"text": text})[0] == 201
-        return [world.seat("p2", "GET", route) for route in ("/whoami", "/work", "/note")]
-
-    baseline = signal(0)
-    for bit in range(8):
-        assert signal(1 << bit) == baseline
+def test_fullrecord_access(tmp_path, start_world):
+    paths = build(tmp_path, "canary", ("team", "team-fullrecord"))
+    for arm, path in paths.items():
+        task_file = path / "environment/task.json"
+        task = json.loads(task_file.read_text())
+        world = start_world(arm, tuple(task["seats"]), FLOTILLA_TASK_JSON=str(task_file))
+        for seat in task["seats"][:-1]:
+            _, page = world.seat(seat, "GET", "/work")
+            if seat != "p1":
+                assert ("record" in page) == (arm == "team-fullrecord")
+                assert page["note"] == ""
+                if arm == "team-fullrecord":
+                    assert page["record"]["manual"] == task["params"]["manual"]
+            rows = {r["job"]["id"]: r for r in task["params"]["batches"][seat]}
+            act_page(world, seat, page, rows)
+            assert world.seat(seat, "POST", "/note/seal", {"text": ""})[0] == 201
+        _, page = world.seat(task["seats"][-1], "GET", "/work")
+        if arm == "team-fullrecord":
+            assert len(page["record"]["history"]) == len(task["seats"]) - 1
+            assert page["record"]["history"][-1]["amendment"]
+        else:
+            assert "record" not in page
 
 
-def test_stalled_shift_is_invalid(tmp_path, start_world):
-    (path,) = SIM.BUILD.build("digest", [0], 2, "canary", SEED, ("team",), tmp_path, policy="careful")
+def test_play_deadline_is_invalid(tmp_path, start_world):
+    path = build(tmp_path, "canary", ("team",))["team"]
     env = path / "environment"
     task_file = env / "task.json"
-    world = start_world("team", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task_file),
+    task = json.loads(task_file.read_text())
+    world = start_world("team", tuple(task["seats"]), FLOTILLA_TASK_JSON=str(task_file),
                         FLOTILLA_WAIT_SECONDS="1", FLOTILLA_PLAY_SECONDS="0.1")
     world.ordered = True
     status, reply = world.seat("p2", "GET", "/await?until=active")
     assert status == 200 and reply["reason"] == "frozen"
-    assert SIM.SCORE.extension_score(json.loads(task_file.read_text()), world.events(), env) == {"invalid": "play_timeout"}
+    assert SIM.SCORE.extension_score(task, world.events(), env) == {"invalid": "play_timeout"}

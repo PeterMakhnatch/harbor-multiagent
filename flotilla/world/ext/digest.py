@@ -20,6 +20,7 @@ class Digest:
         self.pages = {s: [] for s in self.seats}
         self.actions = {s: set() for s in self.seats}
         self.notes = {}
+        self.history = []
         self.work_seen = set()
 
     def done(self, seat):
@@ -31,7 +32,10 @@ class Digest:
         text = self.notes[seat]
         note_id = f"note-{seat}"
         self.host.record("note_read", seat, {"chars": len(text), "id": note_id})
-        return {"note": text}, [note_id]
+        reply = {"note": text}
+        if self.params["fullrecord"]:
+            reply["record"] = {"manual": self.params["manual"], "history": list(self.history)}
+        return reply, [note_id]
 
     def work(self, seat):
         page = [j for j in self.order[seat] if j not in self.actions[seat]][:5]
@@ -90,22 +94,32 @@ class Digest:
         if not isinstance(text, str):
             return 400, {"error": "send a text string"}
         cap = self.params["cap"]
-        size = {"chars": len(text), "limit": cap}
+        if any(c != "\n" and not " " <= c <= "~" for c in text):
+            return 400, {"error": "use printable ASCII and newlines only"}
+        size = {"bytes": len(text), "limit": cap}
+        if self.params["card"]:
+            _, _, errors = self.host.family.card_parts(text)
+            size["parse"] = "unparsed" if errors else "ok"
+            size["bad_lines"] = errors
         if measure:
             self.host.record("note_check", seat, size)
             return 200, size
-        if len(text) > cap:
+        if cap is not None and len(text) > cap:
             return 413, size
         if not self.done(seat):
             return 409, {"error": "finish your jobs before sealing"}
+        self.handover(seat, text, size)
+        return 201, size
+
+    def handover(self, seat, text, size):
         next_seat = self.seats[self.seats.index(seat) + 1]
         self.notes[next_seat] = text
+        self.history.append({"note": text, "amendment": self.params["amendments"].get(seat, "")})
         forwarded = seat in self.notes and self.notes[seat] == text
         self.host.record("note_seal", seat, size | {"copy_forward": forwarded, "id": f"note-{next_seat}", "text": text})
         self.host.advance()
         self.host.retire(seat)
         self.host.activate(next_seat)
-        return 201, size
 
     def handle(self, seat, method, path, body, query):
         if path == "/work":
@@ -128,26 +142,25 @@ def create(task, host):
 
 def score(task, events):
     checks, moves = {}, {}
-    read_before, note_sizes, copies = set(), [], 0
+    note_sizes, copies = [], 0
     for event in events:
         seat, kind, data = event["seat"], event["kind"], event["data"]
         if kind == "check":
             checks.setdefault((seat, data["job"]), set()).add(data["what"])
         elif kind == "act":
             key = (seat, data["job"])
-            moves.setdefault(key, (data["outcome"], frozenset(checks.get(key, ())), seat in read_before))
-        elif kind == "delivered" and f"note-{seat}" in data["ids"]:
-            read_before.add(seat)
+            moves.setdefault(key, (data["outcome"], frozenset(checks.get(key, ()))))
         elif kind == "note_seal":
-            note_sizes.append(data["chars"] / data["limit"])
+            if data["limit"] is not None:
+                note_sizes.append(data["bytes"] / data["limit"])
             copies += data["copy_forward"]
     accuracy, totals, correct = {}, Counter(), Counter()
-    omissions = exception_reads = 0
+    omissions = extras = 0
     final = task["seats"][-1]
     for seat, rows in task["params"]["batches"].items():
         good = 0
         for row in rows:
-            move, before, read = moves.get((seat, row["job"]["id"]), (None, (), False))
+            move, before = moves.get((seat, row["job"]["id"]), (None, ()))
             missing = set(row["checks"]) - set(before)
             ok = move == row["outcome"] and not missing
             good += ok
@@ -155,7 +168,7 @@ def score(task, events):
                 totals[row["cell"]] += 1
                 correct[row["cell"]] += ok
                 omissions += bool(missing)
-                exception_reads += read and not row["cell"].endswith(".0")
+                extras += len(set(before) - set(row["checks"]))
         accuracy[seat] = good / len(rows) if rows else None
     cells = {cell: correct[cell] / total for cell, total in totals.items()}
     depths = {depth: sum(v for c, v in cells.items() if c.endswith(f".{depth}")) /
@@ -163,7 +176,10 @@ def score(task, events):
               if any(c.endswith(f".{depth}") for c in cells)}
     rules = {rid: all(v == 1 for c, v in cells.items() if c.startswith(f"{rid}."))
              for rid in sorted({c.split(".")[0] for c in cells} - {"0"})}
+    sealed = {e["seat"] for e in events if e["kind"] == "note_seal"}
+    missing = [s for s in task["seats"][:-1] if s not in sealed]
     return {"reward": sum(cells.values()) / len(cells), "exact": all(v == 1 for v in cells.values()),
             "cells": cells, "depth_accuracy": depths, "rule_survival": rules, "check_omissions": omissions,
-            "exception_jobs_with_note_read": exception_reads, "notes_fraction": note_sizes,
-            "copy_forward": copies, "shift_accuracy": accuracy}
+            "extra_checks": extras, "notes_fraction": note_sizes, "handover_missing": missing,
+            "unparsed": sum(bool(e["data"].get("bad_lines")) for e in events if e["kind"] == "note_seal"),
+            "copy_forward": copies, "shift_accuracy": accuracy, "job_accuracy": accuracy[final]}

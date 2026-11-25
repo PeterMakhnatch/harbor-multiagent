@@ -1,12 +1,12 @@
-"""Scripted desk workers. Every decision uses the manual or the received note, not an answer key."""
+"""Scripted workers use only the manual, amendments and delivered notes."""
 
 import hashlib
-import math
 
 
 def supports(name, variant):
-    return (name in ("careful", "naive", "naive_reader", "lone", "lane_only", "hold_all", "uniform_random") or
-            name.startswith("constant-"))
+    return (name in ("careful", "naive", "naive_reader", "lone", "lane_only", "hold_all", "uniform_random",
+                     "blind", "random", "copy", "append", "lapse-10", "lapse-20", "lapse-30", "lapse-50")
+            or name.startswith("constant-"))
 
 
 def wait_for_shift(client):
@@ -14,36 +14,44 @@ def wait_for_shift(client):
     return status == 200 and not me["frozen"] and me["active"] == "active"
 
 
-def decode(family, own, text):
+def decode(family, own, reply, name):
+    text = reply.get("note", "")
     if "manual" in own:
-        return family.parse_manual(own["manual"])
-    try:
-        return family.parse_note(text, own.get("format") == "card")
-    except (ValueError, IndexError, KeyError, AttributeError, TypeError):
-        return {}, []
-
-
-def decision(family, job, rules, home):
-    try:
-        rid, _, action = family.decision(rules, job)
-    except (ValueError, AttributeError, TypeError):
-        return 0, "hold"
-    if action == "home" and job["product"] not in home:
-        action = "hold"
-    return rid, action
+        home, rules = family.parse_manual(own["manual"])
+    elif "record" in reply:
+        record = reply["record"]
+        home, rules = family.parse_manual(record["manual"])
+        for entry in record["history"]:
+            _, amendments = family.parse_manual(entry["amendment"])
+            rules = family.merge_amendments(rules, amendments)
+    else:
+        try:
+            home, rules = family.parse_note(text, own.get("format") == "card")
+        except (ValueError, IndexError, KeyError, AttributeError, TypeError):
+            home, rules = {}, []
+    if "amendment" in own and name not in ("copy", "append", "naive") or (
+            "amendment" in own and own.get("fullrecord")):
+        _, amendments = family.parse_manual(own["amendment"])
+        rules = family.merge_amendments(rules, amendments)
+    return home, rules
 
 
 def solve_job(family, client, job, home, rules, name):
-    rid, action = decision(family, job, rules, home)
+    try:
+        _, _, action = family.decision(rules, job)
+    except (ValueError, AttributeError, TypeError):
+        action = "hold"
+    if name == "lane_only":
+        action = home.get(job["product"], "hold")
     replies = {}
-    checks = tuple(family.CHECKS) if name in ("lone", "uniform_random") or name.startswith("constant-") else ()
-    if checks:
-        for check in checks:
+    guessing = name in ("lone", "uniform_random", "blind", "random")
+    if guessing or name.startswith("constant-"):
+        for check in family.CHECKS:
             status, result = yield from client.post("/check", {"job": job["id"], "what": check})
             if status != 200:
                 raise RuntimeError("check not accepted")
             replies[check] = result["reply"]
-    if name in ("lone", "uniform_random"):
+    if guessing:
         number = int.from_bytes(hashlib.sha256(job["id"].encode()).digest()[:8], "big")
         outcome = family.OUTCOMES[number % len(family.OUTCOMES)]
     elif name.startswith("constant-"):
@@ -51,8 +59,6 @@ def solve_job(family, client, job, home, rules, name):
     elif name == "hold_all":
         outcome = "hold"
     else:
-        if name == "lane_only":
-            action = home.get(job["product"], "hold")
         if action.startswith("check:"):
             check = action.split()[0][6:]
             status, result = yield from client.post("/check", {"job": job["id"], "what": check})
@@ -67,31 +73,39 @@ def solve_job(family, client, job, home, rules, name):
     move = {"job": job["id"], "do": "hold" if outcome == "hold" else "send"}
     if outcome != "hold":
         move["to"] = outcome
-    return rid, move
+    return move
 
 
 def main_only(rules):
     return [r | {"clauses": r["clauses"][:1]} for r in rules]
 
 
-def note_to_send(family, own, home, rules, exercised, text, cap, name):
-    if name == "lone":
+def note_to_send(family, own, home, rules, text, cap, name):
+    if name in ("lone", "blind", "random", "uniform_random"):
         return ""
     card = own.get("format") == "card"
     render = family.card_text if card else family.note_text
-    full = render(home, rules)
-    if name != "naive":
-        return text if own["role"] == "relay" else full
-    # With room, a writer can retain every clause without condensing the card's layout.
-    if card:
-        spacious = "\n".join(line.replace("=>", "        =>        ") for line in full.splitlines())
+    if own["role"] == "relay" and not own.get("fullrecord"):
+        if name == "copy":
+            return text
+        if name == "naive":
+            return render(home, rules[1:])
+        if name == "append":
+            _, amendments = family.parse_manual(own["amendment"])
+            addition = "\n".join(family.note_text({}, amendments).splitlines()[2:])
+            combined = text + "\n" + addition
+            return combined if len(combined) <= cap else text
+    if card and (name == "naive" or own.lapse_percent is not None):
+        full = render(home, rules)
+        spacious = full.replace("=>", "                    =>                    ")
         if len(spacious) <= cap:
             return spacious
-    elif own["role"] == "planner" and len(own["manual"]) <= cap:
-        return full
-    unused = [r["id"] for r in rules if r["id"] not in exercised]
-    remove = set(unused[len(unused) - math.ceil(len(unused) / 3):])
-    return render(home, main_only([r for r in rules if r["id"] not in remove]))
+        if name == "naive":
+            return render(home, main_only(rules))
+    if own.lapse_percent is not None:
+        home = {p: lane for p, lane in home.items() if not own.lapse(own.lapse_percent, ["home", p])}
+        rules = [r for r in rules if not own.lapse(own.lapse_percent, ["keep-rule", r["id"]])]
+    return render(home, rules)
 
 
 def play(name, client, own, family):
@@ -100,25 +114,24 @@ def play(name, client, own, family):
     text = ""
     home, rules = {}, []
     count = 0
-    exercised = set()
-    for _ in range(100):
+    for page in range(100):
         status, reply = yield from client.get("/work")
         if status != 200:
             return
-        if count == 0:
+        if page == 0:
             text = reply.get("note", "")
-            home, rules = decode(family, own, text) if name != "lone" else ({}, [])
+            home, rules = decode(family, own, reply, name) if name != "lone" else ({}, [])
         if reply["done"]:
             break
         actions = []
         for job in reply["jobs"]:
-            cutoff = {12: 8, 40: 20, 60: 35}.get(own["jobs"], own["jobs"])
-            forget = (name in ("naive", "naive_reader") and own["role"] == "worker" and "manual" not in own
-                      and count >= cutoff and own.get("format") != "card")
-            active_rules = main_only(rules) if forget else rules
-            rid, move = yield from solve_job(family, client, job, home, active_rules, name)
-            exercised.add(rid)
-            actions.append(move)
+            active_rules = rules
+            if own["role"] == "worker" and "manual" not in own and not own.get("fullrecord") and not own.get("format"):
+                if count >= 12 and name in ("naive", "naive_reader"):
+                    active_rules = main_only(rules)
+                elif count >= 12 and own.lapse_percent is not None and own.lapse(own.lapse_percent, ["read", job["id"]]):
+                    active_rules = main_only(rules)
+            actions.append((yield from solve_job(family, client, job, home, active_rules, name)))
             count += 1
         status, _ = yield from client.post("/act", {"actions": actions})
         if status != 200:
@@ -130,8 +143,8 @@ def play(name, client, own, family):
     status, measure = yield from client.post("/note/check", {"text": ""})
     if status != 200:
         return
-    output = note_to_send(family, own, home, rules, exercised, text, measure["limit"], name)
-    if len(output) > measure["limit"]:
+    output = note_to_send(family, own, home, rules, text, measure["limit"], name)
+    if measure["limit"] is not None and len(output) > measure["limit"]:
         raise RuntimeError("policy note exceeds cap")
     status, _ = yield from client.post("/note/seal", {"text": output})
     if status != 201:

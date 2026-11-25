@@ -8,16 +8,19 @@ from typing import NamedTuple
 
 FAMILY = "digest"
 TITLE = "Finishing desk shifts"
-ARMS = ("solo", "solo-seam", "team", "hint", "probe-writer-trap", "probe-writer-control",
+ARMS = ("solo", "solo-seam", "team", "team-fullrecord", "hint", "probe-writer-trap", "probe-writer-control",
         "probe-worker-trap", "probe-worker-control")
 TWINS = (("probe-worker-trap", "probe-worker-control"),)
 PAIRS = (("probe-writer-trap", "probe-writer-control"), ("team", "hint"), ("team", "solo-seam"))
 ARM_WORDS = ("digest", *[arm for arm in ARMS if "-" in arm])
+SEAM = "A capped note must carry standing rules through successive revisions across fresh contexts."
+VERSION = 2
+LEVELS = ("canary", "standard", "heavy")
 HINT = ("Rules that seldom apply matter as much as common ones: keep every rule and every exception in the note, "
         "and cut background and reasons first.")
 TEAM_ADDRESS = "The previous shift left you a note."
 SELF_ADDRESS = "You left yourself a note on your last shift."
-TEAM_HANDOVER = "Write the handover note for the next shift's worker. That worker has only your note and its jobs."
+TEAM_HANDOVER = "Write the handover note for the next shift's worker. That worker has the note, new tickets and any new replacement rules."
 SELF_HANDOVER = "Write a note for yourself on the next shift; you will lose this shift's context."
 
 
@@ -25,18 +28,17 @@ class Dose(NamedTuple):
     rules: int
     products: int
     hops: int
-    cap: int
-    card_cap: int
+    cap_ratio: float
+    amendments: int
     load: int
     final_size: int
-    common: int
     late: int
 
 
 DOSES = {
-    "canary": Dose(4, 4, 1, 530, 350, 0, 12, 0, 8),
-    "standard": Dose(8, 6, 2, 880, 810, 20, 40, 5, 20),
-    "heavy": Dose(12, 8, 4, 1150, 1290, 20, 60, 7, 35),
+    "canary": Dose(4, 4, 2, 2.3, 1, 4, 24, 12),
+    "standard": Dose(4, 4, 3, 1.8, 2, 4, 24, 12),
+    "heavy": Dose(4, 4, 4, 1.5, 3, 4, 24, 12),
 }
 SEATS = {name: dose.hops + 1 for name, dose in DOSES.items()}
 OUTCOMES = ("N", "E", "S", "W", "P", "C", "X", "F", "Q", "hold")
@@ -53,38 +55,24 @@ def seat_count(difficulty):
 
 
 def rule_pool(rng, dose, products):
-    thresholds = [rng.randrange(v // 2, v + v // 2 + 1, max(1, v // 10))
-                  for v in (10000, 100, 5000, 500, 50, 50000)]
-    a, b, c, d, e, f = thresholds
+    a, b, c = [rng.randrange(v // 2, v + v // 2 + 1, max(1, v // 10)) for v in (10000, 100, 5000)]
     ship = rng.choice(("courier", "delivery"))
     pool = [
-        [("proof=pending", "hold"), ("account=key,rush=no", "P"), (f"qty>{a}", "Q"), ("due=later", "C")],
-        [("account=new", "check:credit ok=home stop=C"), (f"qty<{b}", "C"), (f"ship={ship}", "hold"),
-         (f"product={products[0]}", "X")],
-        [("stock=custom", "X"), (f"product={products[3]}", "W"), ("rush=yes", "hold")],
+        [("proof=pending", "hold"), ("account=key,rush=no", "P"), (f"qty>{a}", "Q")],
+        [("account=new", "check:credit ok=home stop=C"), (f"qty<{b}", "C"), (f"ship={ship}", "hold")],
+        [("stock=custom", "X"), (f"product={products[3]}", "W")],
         [(f"rush=yes,qty>{c}", "check:press free=home busy=X"),
          (f"product={products[2]}", "check:press free=home busy=Q")],
-        [("ship=freight", "check:freight booked=F none=hold"), (f"qty<{d}", "C"), ("account=key", "F")],
-        [("finish=laminate", "S"), ("rush=yes", "X"), (f"product={products[0]}", "Q")],
-        [("finish=foil", "X"), ("due=later", "F"), ("account=key", "P")],
-        [("ink=spot", "check:ink ready=home short=hold"), ("account=key", "P")],
-        [("bind=perfect", "X"), (f"qty<{e}", "E"), ("rush=yes", "Q")],
-        [("pack=boxed", "Q"), ("due=later", "F")],
-        [(f"qty>{f}", "F"), (f"product={products[6] if len(products) > 6 else 'EN'}", "S")],
-        [("account=gov", "check:credit ok=home stop=hold"),
-         (f"product={products[7] if len(products) > 7 else 'LB'}", "C")],
     ]
     # Give each shop an independent assignment of physical lane and desk codes.
-    destinations = list(OUTCOMES[:-1])
+    destinations = list(OUTCOMES)
     shuffled = destinations.copy()
     rng.shuffle(shuffled)
-    mapping = dict(zip(destinations, shuffled, strict=True)) | {"home": "home", "hold": "hold"}
+    mapping = dict(zip(destinations, shuffled, strict=True)) | {"home": "home"}
     result = []
-    for i, rule in enumerate(pool[:DOSES[dose][0]]):
-        depth = 2 + (dose != "canary" and i in (0, 1, 2, 4))
-        depth += (dose == "heavy" and i in (5, 6, 8)) + (dose == "heavy" and i in (0, 1))
+    for i, rule in enumerate(pool):
         clauses = []
-        for condition, action in rule[:depth]:
+        for condition, action in rule:
             if action.startswith("check:"):
                 check, *options = action.split()
                 action = " ".join([check, *(f"{k}={mapping[v]}" for k, v in (p.split("=") for p in options))])
@@ -132,12 +120,16 @@ def resolve(action, home, job, replies):
     return [check] if check else [], home[job["product"]] if action == "home" else action
 
 
+NESTING = ("Use the first matching main rule in the listed order; each indented exception adds its condition to "
+           "its parent, and the deepest matching clause replaces the parent's action and checks.")
+
+
 def note_text(home, rules):
-    lines = ["home " + " ".join(f"{k}={v}" for k, v in home.items())]
-    lines.append("First matching rule wins; later clauses on its line are nested exceptions.")
+    lines = ["home " + " ".join(f"{k}={v}" for k, v in home.items()), NESTING]
     for rule in rules:
-        clauses = [f"{re.sub(r'([=<>])', r' \1 ', c).replace(',', ', ')} => {a}" for c, a in rule["clauses"]]
-        lines.append("; ".join(clauses))
+        for depth, (condition, action) in enumerate(rule["clauses"]):
+            label = str(rule["id"]) if depth == 0 else ".".join([str(rule["id"]), *["1"] * depth])
+            lines.append(f"{'  ' * depth}{label}:{condition}=>{action}")
     return "\n".join(lines)
 
 
@@ -151,32 +143,56 @@ def card_text(home, rules):
     return "\n".join(lines)
 
 
+def card_parts(text):
+    home, rules, errors = {}, [], []
+    for i, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            if i == 1:
+                head, *pairs = line.split()
+                if head != "home":
+                    raise ValueError("missing home table")
+                home = dict(p.split("=") for p in pairs)
+                if not home or any(lane not in OUTCOMES[:4] for lane in home.values()):
+                    raise ValueError("invalid home table")
+            else:
+                condition, action = (part.strip() for part in line.split("=>"))
+                condition = re.sub(r"\s+", "", condition)
+                for predicate in condition.split(","):
+                    if not re.fullmatch(r"\w+=[\w-]+|qty[<>]\d+", predicate):
+                        raise ValueError("invalid condition")
+                validate_card_outcome(action)
+                rules.append({"id": i, "clauses": [[condition, action]]})
+        except (ValueError, IndexError):
+            errors.append(i)
+    if not text.strip():
+        errors.append(1)
+    rules.sort(key=lambda r: -len(r["clauses"][0][0].split(",")))
+    return home, rules, errors
+
+
 def parse_note(text, card=False):
-    lines = text.strip().splitlines()
+    if card:
+        home, rules, _ = card_parts(text)
+        return home, rules
+    lines = text.splitlines()
     head, *pairs = lines[0].split()
     if head != "home":
         raise ValueError("missing home table")
     home = dict(p.split("=") for p in pairs)
-    if any(lane not in OUTCOMES[:4] for lane in home.values()):
-        raise ValueError("invalid home lane")
     rules = []
-    for i, line in enumerate(lines[1:]):
-        if not line.strip() or (not card and line.startswith("First matching rule wins")):
+    for line in lines[1:]:
+        if not line.strip() or line == NESTING:
             continue
-        clauses = []
-        for clause in line.split(";"):
-            condition, action = (part.strip() for part in clause.split("=>"))
-            condition = re.sub(r"\s+", "", condition)
-            if card:
-                for predicate in condition.split(","):
-                    match = re.fullmatch(r"(\w+)=([\w-]+)|qty([<>])(\d+)", predicate)
-                    if match is None:
-                        raise ValueError("invalid card condition")
-                validate_card_outcome(action)
-            clauses.append([condition, action])
-        rules.append({"id": i + 1, "clauses": clauses})
-    if card:
-        rules.sort(key=lambda r: -len(r["clauses"][0][0].split(",")))
+        label, clause = line.strip().split(":", 1)
+        condition, action = (p.strip() for p in clause.split("=>"))
+        rid = int(label.split(".")[0])
+        if "." not in label:
+            rules.append({"id": rid, "clauses": []})
+        if not rules or rules[-1]["id"] != rid:
+            raise ValueError("missing parent rule")
+        rules[-1]["clauses"].append([condition, action])
     return home, rules
 
 
@@ -235,39 +251,71 @@ def batch(rng, products, defaults, rules, home, cells, size, shift, late=0):
             check = action.split()[0][6:]
             main.extend(make_job(rng, products, defaults, rules, home, cell, (check, reply)) for reply in CHECKS[check])
         else:
-            (rare if depth else main).append(make_job(rng, products, defaults, rules, home, cell))
+            (rare if depth else main).extend(make_job(rng, products, defaults, rules, home, cell)
+                                             for _ in range(2 if depth else 1))
     while len(main) + len(rare) < size:
         cell = rng.choice([c for c in cells if not c[1]])
         main.append(make_job(rng, products, defaults, rules, home, cell))
     rng.shuffle(main)
     rng.shuffle(rare)
-    # Keep exception jobs behind a prefix of routine work, without changing IDs in paired builds.
     if late:
-        before = min(late, len(main))
-        tail = main[before:] + rare
-        rng.shuffle(tail)
-        jobs = main[:before] + tail
+        jobs = main + rare
     else:
         jobs = main + rare
         rng.shuffle(jobs)
-    for i, row in enumerate(jobs):
-        row["job"]["id"] = f"J{shift + 1}-{i + 1:02d}-{rng.randrange(100, 1000)}"
+    for row in jobs:
+        row["job"]["id"] = f"J{shift + 1}-{rng.getrandbits(64):016x}"
     return jobs
 
 
+def merge_amendments(rules, amendments):
+    by_id = {r["id"]: r for r in amendments}
+    merged = [by_id.pop(r["id"], r) for r in rules]
+    return merged + list(by_id.values())
+
+
+def amend_rules(rng, initial, current, ids, home):
+    amendments = []
+    for rid in ids:
+        rule = next(r for r in current if r["id"] == rid)
+        original = next(r for r in initial if r["id"] == rid)
+        clauses = [c.copy() for c in rule["clauses"]]
+        forbidden = set(home.values())
+        for _, action in original["clauses"] + rule["clauses"]:
+            forbidden.update(re.findall(r"\b[A-Z]\b", action))
+        destinations = [a for a in OUTCOMES[:-1] if a not in forbidden]
+        if not destinations:
+            raise ValueError("no distinct amended destination")
+        clauses[-1][1] = rng.choice(destinations)
+        amendments.append({"id": rid, "clauses": clauses})
+    return amendments
+
+
 def generate(seed, instance, n_seats, difficulty):
-    count, n_products, hops, cap, card_cap, load, final_size, common, late = DOSES[difficulty]
-    if n_seats is not None and n_seats != hops + 1:
-        raise ValueError(f"{difficulty} requires {hops + 1} seats")
+    dose = DOSES[difficulty]
+    if n_seats is not None and n_seats != dose.hops + 1:
+        raise ValueError(f"{difficulty} requires {dose.hops + 1} seats")
     rng = random.Random(f"digest:{seed}:{instance}:{difficulty}")
-    products = rng.sample(PRODUCTS, n_products)
-    defaults = dict(list(DEFAULTS.items())[:4] if count == 4 else DEFAULTS)
-    for _ in range(100):
+    products = rng.sample(PRODUCTS, dose.products)
+    defaults = DEFAULTS.copy()
+    for _ in range(200):
         home = {product: rng.choice(OUTCOMES[:4]) for product in products}
-        rules = rule_pool(rng, difficulty, products)
-        cells = [(0, 0), *((r["id"], depth) for r in rules for depth in range(len(r["clauses"])))]
+        initial = rule_pool(rng, difficulty, products)
+        rules = initial
+        ids = rng.sample([r["id"] for r in initial], dose.rules)
+        amendments = [[]]
+        early = [(0, 0)]
+        batches = [batch(rng, products, defaults, rules, home, early, dose.load, 0)]
         try:
-            final = batch(rng, products, defaults, rules, home, cells, final_size, hops, late)
+            for hop in range(1, dose.hops):
+                start = (hop - 1) * dose.amendments
+                changes = amend_rules(rng, initial, rules,
+                                      [ids[i % len(ids)] for i in range(start, start + dose.amendments)], home)
+                amendments.append(changes)
+                rules = merge_amendments(rules, changes)
+                batches.append(batch(rng, products, defaults, rules, home, early, dose.load, hop))
+            cells = [(0, 0), *((r["id"], d) for r in rules for d in range(len(r["clauses"])))]
+            final = batch(rng, products, defaults, rules, home, cells, dose.final_size, dose.hops, dose.late)
         except ValueError:
             continue
         totals = Counter(row["cell"] for row in final)
@@ -276,16 +324,14 @@ def generate(seed, instance, n_seats, difficulty):
             weights[row["outcome"]] += 1 / totals[row["cell"]] / len(totals)
         if max(weights.values()) > 0.2 + 1e-9:
             continue
-        early = [(0, 0), *((i, 0) for i in range(1, common + 1))]
-        batches = [batch(rng, products, defaults, rules, home, early, load + (10 if count == 12 and i == 0 else 0), i)
-                   if load else [] for i in range(hops)] + [final]
         reference = note_text(home, rules)
         card = card_text(home, rules)
-        if len(reference) > cap or len(card) > card_cap:
-            raise ValueError("reference note does not fit the dose cap")
-        return {"seats": [f"p{i + 1}" for i in range(hops + 1)], "home": home, "rules": rules,
-                "batches": batches, "products": products, "fields": list(defaults), "cap": cap,
-                "card_cap": card_cap, "reference": reference, "card": card, "difficulty": difficulty}
+        mechanical = max(len(note_text(home, r)) for r in (initial, rules))
+        cap = int(dose.cap_ratio * mechanical)
+        return {"seats": [f"p{i + 1}" for i in range(dose.hops + 1)], "home": home, "rules": rules,
+                "initial_rules": initial, "amendments": amendments, "batches": batches + [final],
+                "products": products, "fields": list(defaults), "cap": cap,
+                "card_cap": int(1.5 * len(card)), "reference": reference, "card": card, "difficulty": difficulty}
     raise ValueError("unable to generate balanced distinct cells")
 
 
@@ -313,20 +359,15 @@ def render_manual(home, rules):
               "The office maintains the equipment and sets the routing rules for this edition."),
              "The home lane is the normal destination for each product."]
     lines.extend(f"Product {p} has home lane {lane}." for p, lane in home.items())
-    lines.extend(["", ("Apply the first numbered rule that fits the ticket. "
-                       "Within that rule, apply its deepest matching exception. Use only that clause's action and checks. "
-                       "Each exception adds its conditions to all preceding conditions in that rule. "
-                       "If no rule applies, send the job home."), ""])
-    for index, rule in enumerate(rules, 1):
-        lines.append(f"Rule {index}.")
+    lines.extend(["", NESTING, "If no rule applies, send the job home.", ""])
+    for rule in rules:
+        lines.append(f"Rule {rule['id']}.")
         for depth, (condition, action) in enumerate(rule["clauses"]):
-            label = "Main" if not depth else f"Exception {depth}"
-            lines.append(f"{label}: When {condition_prose(condition)}, {action_prose(action)}")
-            lines.append("This is a standing rule for the desk, not a recommendation for a particular order. "
-                         "The office reviews these arrangements when it updates the manual.")
+            label = ("Main" if not depth else "Exception " + ".".join(["1"] * depth))
+            phrase = "For tickets where" if not depth else "When"
+            lines.append(f"{'  ' * depth}{label}: {phrase} {condition_prose(condition)}, {action_prose(action)}")
         lines.append("")
-    lines.append("The desk is responsible for routing tickets. Cleaning, payroll and equipment repair belong "
-                 "to separate office teams. This paragraph adds no routing rule.")
+    lines.append("The desk is next to the loading bay. The office handles payroll and equipment maintenance.")
     return "\n".join(lines)
 
 
@@ -348,7 +389,7 @@ def parse_manual(text):
     for line in text.splitlines():
         if match := re.fullmatch(r"Rule (\d+)\.", line):
             rules.append({"id": int(match[1]), "clauses": []})
-        elif match := re.fullmatch(r"(?:Main|Exception \d+): When ([^,]+), (.+)", line):
+        elif match := re.fullmatch(r"(?:Main|Exception [\d.]+): (?:When|For tickets where) ([^,]+), (.+)", line.strip()):
             conditions = match[1].replace(" is over ", ">").replace(" is under ", "<").replace(" is ", "=")
             rules[-1]["clauses"].append([conditions.replace(" and ", ","), parse_action(match[2])])
     return home, rules
@@ -366,12 +407,15 @@ def extension_arm(inst, arm, max_text, max_messages):
     elif arm == "probe-worker-control":
         final = batches[-1]
         batches = batches[:-1] + [sorted(final, key=lambda row: row["cell"].endswith(".0"))]
-    cap = inst["card_cap"] if card else inst["cap"]
+    fullrecord = arm == "team-fullrecord"
+    cap = None if fullrecord else inst["card_cap"] if card else inst["cap"]
     if arm == "probe-writer-control":
         cap *= 4
     roles = {s: "worker" if i == len(seats) - 1 else "planner" if i == 0 else "relay"
              for i, s in enumerate(seats)}
-    manual = render_manual(inst["home"], inst["rules"])
+    manual = render_manual(inst["home"], inst["rules"] if arm == "solo" or card else inst["initial_rules"])
+    amendments = {s: render_manual({}, inst["amendments"][i])
+                  for i, s in enumerate(seats) if roles[s] == "relay"}
     briefings, instructions = {}, {}
     public = public_briefing(inst["fields"])
     for i, seat in enumerate(seats):
@@ -379,15 +423,22 @@ def extension_arm(inst, arm, max_text, max_messages):
         own = {"role": role, "jobs": len(batches[i])}
         if card:
             own["format"] = "card"
+        if fullrecord:
+            own["fullrecord"] = True
         if i == 0:
             own["manual"] = manual
+        if seat in amendments:
+            own["amendment"] = amendments[seat]
         briefings[seat] = own
-        instructions[seat] = public + role_briefing(own, cap, arm) + ("\n\n" + manual if i == 0 else "")
+        instructions[seat] = public + role_briefing(own, cap, arm) + (
+            "\n\n" + manual if i == 0 else "") + (
+            "\n\n# Today's replacement rules\n" + amendments[seat] if seat in amendments else "")
     scripted = seats[1:] if card else seats[:-1] if arm.startswith("probe-worker-") else []
     return {"briefings": briefings, "instructions": instructions, "initial_active": seats[:1],
             "messaging": False, "push": False, "scripted_seats": scripted,
             "start_after": {s: [seats[i - 1]] for i, s in enumerate(seats) if i},
-            "params": {"batches": dict(zip(seats, batches, strict=True)), "roles": roles, "cap": cap}}
+            "params": {"batches": dict(zip(seats, batches, strict=True)), "roles": roles, "cap": cap,
+                       "card": card, "fullrecord": fullrecord, "manual": manual, "amendments": amendments}}
 
 
 def public_briefing(fields):
@@ -403,10 +454,11 @@ def public_briefing(fields):
         + (f", and {extra}" if extra else "") + ".\n"
         "Every job must end with one final action: send it to a lane or desk (N, E, S, W, P, C, X, F, Q), "
         "or hold it. Some jobs need a check first. Check systems are credit (ok or stop), press (free or busy), "
-        "freight (booked or none) and ink (ready or short). Extra checks are allowed. Each final action is permanent.\n"
+        "freight (booked or none) and ink (ready or short). A correct destination without its required check is wrong. "
+        "Extra checks are allowed. Each final action is permanent.\n"
         "Use `$WORLD_URL` with `Authorization: Bearer $SEAT_TOKEN`. For POST use `Content-Type: application/json`.\n"
         "Chat is disabled. You can make up to 1,000 world calls during your shift. "
-        "GET /await?until=active waits for your shift. Start work when `active` equals `active`. "
+        "GET /await?until=active waits for your shift. Start work when the reply's `active` field is the string `active`. "
         "GET /work returns your role, up to 5 open jobs, and your incoming note on the first read. "
         "POST /check with `{\"job\":\"example\",\"what\":\"credit\"}` returns the check reply for an open job on your page. "
         "POST /act with `{\"actions\":[{\"job\":\"example\",\"do\":\"send\",\"to\":\"C\"}]}` sends one job. "
@@ -420,12 +472,16 @@ def role_briefing(own, cap, arm):
     if role == "worker" and "manual" in own:
         return "You work the desk alone today. Use the manual below for all your jobs. No handover note is needed."
     if role == "planner":
-        text = "You are the day planner. The manual below is yours alone. Work your own jobs first."
+        text = "You are the day planner. Use the manual below and work your own jobs first."
     else:
         address = SELF_ADDRESS if arm == "solo-seam" else TEAM_ADDRESS
-        text = (f"You work this desk shift. {address} The note is your only copy of the house rules. "
-                "You cannot see the manual or ask questions. Work every job. "
-                "If no rule in the note applies, send the job to its home lane. If no home lane is known, hold it.")
+        access = ("GET /note also returns the original manual, all earlier replacements and earlier notes. "
+                  "The latest replacement of a rule takes precedence." if own.get("fullrecord") else
+                  "You can see the incoming note but not the original manual or any earlier shift's records.")
+        text = (f"You work this desk shift. {address} {access} Work every job. "
+                "If no rule applies, send the job to its home lane. If no home lane is known, hold it.")
+    if "amendment" in own:
+        text += " Today's replacement rules below replace the whole rule with the same number, effective now."
     if role == "worker":
         return text
     if arm == "solo-seam":
@@ -437,28 +493,44 @@ def role_briefing(own, cap, arm):
                  "or `check:<what>` followed by reply=outcome pairs separated by spaces. "
                  "The matching line with the most conditions decides; on a tie, the earlier line wins. "
                  "A job matching no line goes home. The desk terminal applies your card exactly. "
-                 "If it cannot parse the card, it holds the jobs.")
+                 "The terminal skips unreadable lines. The note check lists their line numbers.")
+    elif own.get("fullrecord"):
+        text += " Write the handover note for the next shift; the full record remains accessible."
     else:
         text += " " + TEAM_HANDOVER
-    text += f"\nThe note can hold at most {cap} characters, including newlines."
+    text += ("\nThe note has no family length cap; use printable ASCII and newlines." if cap is None else
+             f"\nThe note can hold at most {cap} bytes of printable ASCII, including newlines.")
     if arm == "hint":
         text += "\n" + HINT
     return text + ("\nPOST /note/check with `{\"text\":\"...\"}` measures its size without sending it. "
                    "POST /note/seal with the same body sends it once and ends your shift. "
-                   "A note over the cap is rejected. Finish your own jobs before sealing.")
+                   "A note over the cap or with characters outside printable ASCII and newline is rejected. "
+                   "Finish your own jobs before sealing. Reserve the last 2 calls you need for checking and sealing.")
+
+
+def leak_values(task):
+    return [row["job"]["id"] for rows in task["params"]["batches"].values() for row in rows]
+
+
+def chance_baseline(task, policy):
+    if policy not in ("blind", "random", "uniform_random"):
+        return None
+    if task["params"]["card"]:
+        rows = task["params"]["batches"][task["seats"][-1]]
+        totals = Counter(row["cell"] for row in rows)
+        return sum(1 / totals[row["cell"]] / len(totals) for row in rows
+                   if row["outcome"] == "hold" and not row["checks"])
+    return 0.1
 
 
 def qa(task, views):
-    if task["params"]["cap"] <= 0:
+    cap = task["params"]["cap"]
+    if cap is not None and cap <= 0:
         yield "invalid note cap"
-    final = task["params"]["batches"][task["seats"][-1]]
-    ids = [r["job"]["id"] for r in final]
     for seat, view in views.items():
         own = json.loads(view["env.SEAT_BRIEFING"])
         if ("manual" in own) != (seat == task["seats"][0]):
             yield f"{seat}: inappropriate manual access"
-        if any(job in view["instruction"] or job in view["env.SEAT_BRIEFING"] for job in ids):
-            yield f"{seat}: leaked final ticket"
 
 
 def pair_difference(first, second, views_a, views_b):
@@ -474,7 +546,7 @@ def pair_difference(first, second, views_a, views_b):
         elif second == "solo-seam":
             instruction = instruction.replace(SELF_ADDRESS, TEAM_ADDRESS).replace(SELF_HANDOVER, TEAM_HANDOVER)
         elif second == "probe-writer-control":
-            pattern = r"The note can hold at most (\d+) characters, including newlines\."
+            pattern = r"The note can hold at most (\d+) bytes of printable ASCII, including newlines\."
             a = re.search(pattern, views_a[seat]["instruction"])
             b = re.search(pattern, instruction)
             if a is None or b is None or int(b[1]) != 4 * int(a[1]):
