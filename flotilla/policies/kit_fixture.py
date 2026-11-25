@@ -2,10 +2,23 @@
 
 
 def supports(name, variant):
-    return name in ("careful", "naive", "sender")
+    return name in ("careful", "naive", "sender", "exhaust", "stall", "fault", "wait-message")
 
 
 def play(name, client, own, family):
+    if name == "exhaust":
+        for _ in range(21):
+            _, me = yield from client.get("/whoami")
+            if me.get("frozen"):
+                return
+        return
+    if name == "stall":
+        for _ in range(100_000):
+            yield from client.sleep(0)
+        return
+    if name == "fault":
+        yield from client.post("/fixture-fault", {"kind": "raise"})
+        return
     role = own["role"]
     if role == "all":
         yield from client.post("/commit", {"total": own["left"] + own["right"]})
@@ -29,7 +42,8 @@ def play(name, client, own, family):
         _, reply = yield from client.post("/ready", {})
         messages = reply.get("new_messages", [])
         if reply["tick"] == 0:
-            _, reply = yield from client.get("/await?until=tick&after=0")
+            route = "/await?until=message" if name == "wait-message" else "/await?until=tick&after=0"
+            _, reply = yield from client.get(route)
             messages += reply.get("new_messages", [])
         left = next((family.decode(m["text"]) for m in messages if m["from"] == "p1"), 0)
         yield from client.post("/commit", {"total": own["right"] + left})

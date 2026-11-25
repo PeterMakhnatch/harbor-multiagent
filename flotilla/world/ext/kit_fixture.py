@@ -7,7 +7,7 @@ import family
 
 class Fixture:
     routes: ClassVar = {"/board": ("GET",), "/handoff": ("POST",), "/advance": ("POST",),
-                        "/commit": ("POST",), "/ready": ("POST",)}
+                        "/commit": ("POST",), "/ready": ("POST",), "/fixture-fault": ("POST",)}
 
     def __init__(self, task, host):
         self.host = host
@@ -41,6 +41,15 @@ class Fixture:
         return self.params["delay"] if message["text"].startswith("handoff ") else None
 
     def handle(self, seat, method, path, body, query):
+        if path == "/fixture-fault":
+            kind = body.get("kind")
+            if kind == "status":
+                return "200", {}
+            if kind == "list":
+                return 200, []
+            if kind == "nan":
+                return 200, {"value": float("nan")}
+            raise RuntimeError("fixture failure")
         if path == "/board":
             reply = {"tick": self.host.tick, "handed_off": self.handed_off}
             if self.protocol == "staged" and seat == "p2" and self.handed_off:

@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 
+import pytest
 from conftest import FLOTILLA, load
 
 SIM = load(FLOTILLA / "sim.py")
@@ -70,6 +71,86 @@ def test_extended_fixture_protocols(tmp_path):
     paths = BUILD.build("kit_fixture", [0], None, "heavy", SEED, ("team",), tmp_path / "auto")
     assert not [f for f in QA.check(paths)[0] if f.level == "FAIL"]
     assert len(QA.load_task(paths[0]).seats) == 3
+
+
+def test_extension_faults_and_waits_in_sim(tmp_path, monkeypatch):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("team",), tmp_path)
+    for seed in range(8):
+        result = SIM.simulate_built(path, {"p2": "wait-message"}, seed)
+        assert result["reward"] == 1
+    result = SIM.simulate_built(path, {"p1": "nop", "p2": "exhaust"}, 0)
+    assert result["reward"] is None and result["invalid"] == "fixture budget exhausted"
+    assert result["requests"]["p2"] == 21
+    assert sum(e["kind"] == "call_budget" for e in result["events"]) == 1
+    result = SIM.simulate_built(path, {"p1": "nop", "p2": "fault"}, 0)
+    assert result["reward"] is None and result["invalid"] == "extension_error"
+    monkeypatch.setattr(SIM, "MAX_STEPS", 30)
+    result = SIM.simulate_built(path, {"p1": "nop", "p2": "stall"}, 0)
+    assert result["stalled"] and result["reward"] is None
+    result = SIM.simulate("kit_fixture", "talk", 0, {"p1": "nop"}, SEED, 0)
+    assert result["reward"] == 0
+    assert any(e["kind"] == "await" and e["data"]["reason"] == "timeout" for e in result["events"])
+
+
+def test_extension_validation_and_pairs(tmp_path):
+    family = BUILD.load_family("kit_fixture")
+    inst = family.generate(SEED, 0, 2, "canary")
+    arm = family.extension_arm(inst, "staged", 4000, 200)
+    for fields in ({"unknown_key": 1}, {"messaging": 1}, {"initial_active": ["missing"]},
+                   {"max_calls": 0}, {"start_after": {"p1": ["p2"], "p2": ["p1"]}}):
+        with pytest.raises(ValueError):
+            BUILD.validate_arm(arm | fields, inst["seats"], "staged")
+    paths = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("talk-trap", "hint"), tmp_path)
+    assert not [f for f in QA.check(paths)[0] if f.level == "FAIL"]
+    instruction = paths[1] / "instructions" / "p2.md"
+    instruction.write_text(instruction.read_text().replace("Your part is", "Your other part is"))
+    assert any(f.rule == "twin-mismatch" for f in QA.check(paths)[0])
+
+
+def test_extension_fail_closed_over_http(tmp_path, start_world):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("team",), tmp_path / "tasks")
+    task = QA.load_task(path)
+    for fault in ("raise", "status", "list", "nan", "delay"):
+        world = start_world("team", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+        world.ordered = True
+        if fault == "delay":
+            world.module.EXTENSION.message_delay = lambda message, recipient: -1
+            status, _ = world.seat("p1", "POST", "/messages", {"to": "p2", "text": "handoff 123"})
+        else:
+            status, _ = world.seat("p1", "POST", "/fixture-fault", {"kind": fault})
+        assert status == 500 and world.seat("p1", "GET", "/whoami")[1]["frozen"]
+        assert SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir) == {"invalid": "extension_error"}
+    world = start_world("team", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+    world.ordered = True
+    assert world.seat("p2", "POST", "/messages", {"to": "p1", "text": "not allowed"})[0] == 403
+    for _ in range(19):
+        assert world.seat("p2", "GET", "/whoami")[0] == 200
+    assert sum(e["kind"] == "call_budget" for e in world.events()) == 1
+    verifier = load(task.env_dir / "score.py")
+    verifier.WORLD, verifier.WORLD_DIR = world.url, task.env_dir
+    verifier.VERIFIER, verifier.EVENTS = path / "verified", world.logs / "events.jsonl"
+    with pytest.raises(RuntimeError, match="fixture budget exhausted"):
+        verifier.main()
+    assert not (verifier.VERIFIER / "reward.json").exists()
+    assert json.loads((verifier.VERIFIER / "score.json").read_text())["error"] == "fixture budget exhausted"
+
+
+def test_extension_play_clock_and_note_cap_over_http(tmp_path, start_world):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("staged",), tmp_path)
+    task = QA.load_task(path)
+    world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"),
+                        FLOTILLA_WAIT_SECONDS="0.05", FLOTILLA_PLAY_SECONDS="10")
+    world.ordered = True
+    assert world.seat("p2", "GET", "/await?until=active")[1]["reason"] == "timeout"
+    assert world.seat("p1", "POST", "/handoff", {"note": "1" * 13})[0] == 413
+    assert world.seat("p1", "POST", "/handoff", {"note": "123"})[0] == 200
+    assert world.seat("p1", "POST", "/handoff", {"note": "456"})[0] == 409
+    assert world.seat("p2", "GET", "/board")[1]["note"] == "123"
+    assert world.events()[-1]["kind"] == "delivered"
+    world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"),
+                        FLOTILLA_WAIT_SECONDS="1", FLOTILLA_PLAY_SECONDS="0.1")
+    assert world.seat("p2", "GET", "/await?until=active")[1]["reason"] == "frozen"
+    assert any(e["kind"] == "play_timeout" for e in world.events())
 
 
 def test_rf1v_read_first_reliance_sweep(tmp_path):

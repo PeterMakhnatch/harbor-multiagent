@@ -208,7 +208,10 @@ def select_policies(settings: dict[str, Any], scripted: list[str], policies: str
 
 def score(task: dict, state: dict, events: list[dict], family: Any, env: Path) -> dict:
     if task.get("mode") == "extension":
-        return SCORE.extension_score(task, events, env)
+        try:
+            return SCORE.extension_score(task, events, env)
+        except Exception as exc:  # noqa: BLE001 - scorer failures are invalid in both runtimes
+            return {"invalid": f"extension verification failed: {type(exc).__name__}: {exc}"[:500]}
     else:
         submissions = state["submissions"]
         if probe := task.get("probe"):

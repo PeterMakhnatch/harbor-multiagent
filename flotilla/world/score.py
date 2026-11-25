@@ -107,6 +107,8 @@ def extension_score(task: dict[str, Any], events: list[dict[str, Any]], root: Pa
         if not isinstance(result["invalid"], str) or not result["invalid"] or "reward" in result:
             raise ValueError("invalid score must have a reason and no reward")
         return result
+    if type(result.get("reward")) not in (int, float):
+        raise ValueError("extension reward must be numeric")
     reward = float(result["reward"])
     if not 0 <= reward <= 1:
         raise ValueError(f"extension scorer returned {reward}, outside [0, 1]")
@@ -132,6 +134,8 @@ def score_extension_task(task: dict[str, Any]) -> None:
     }
     if error is None:
         (VERIFIER / "reward.json").write_text(json.dumps({"reward": result["reward"]}) + "\n")
+    else:
+        (VERIFIER / "reward.json").unlink(missing_ok=True)
     (VERIFIER / "score.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     (VERIFIER / "world-state.json").write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
     print(json.dumps(summary, sort_keys=True))

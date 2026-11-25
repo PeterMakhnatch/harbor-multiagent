@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import json
 import re
 import sys
@@ -93,7 +94,9 @@ def main() -> None:
     same_count = {size: sum(len(roster) == size for roster in groups) for size in {len(r) for r in groups}}
     for seats, tasks in sorted(groups.items()):
         participant_rows = participants(seats, args.agent, args.model, args.max_turns, args.seat_agent)
-        suffix = f"{len(seats)}seat" if same_count[len(seats)] == 1 else f"{len(seats)}seat-{'-'.join(seats)}"
+        suffix = f"{len(seats)}seat"
+        if same_count[len(seats)] > 1:
+            suffix += "-" + hashlib.sha256(json.dumps(seats).encode()).hexdigest()[:12]
         config = {
             "job_name": f"{args.name}-{suffix}",
             "jobs_dir": args.jobs_dir,

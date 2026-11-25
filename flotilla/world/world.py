@@ -395,13 +395,18 @@ class ExtensionHost:
         if self.attempts[seat] < self.max_calls[seat]:
             self.attempts[seat] += 1
             return True
+        self.notify_budget(seat)
+        return False
+
+    def notify_budget(self, seat: str) -> None:
+        if STATE["frozen"] or self.status[seat] != "active" or self.attempts[seat] < self.max_calls[seat]:
+            return
         if seat not in self.budget_notified:
             self.budget_notified.add(seat)
             record("call_budget", seat, {"limit": self.max_calls[seat]})
             hook = getattr(EXTENSION, "on_budget", None)
             if hook:
                 hook(seat)
-        return False
 
     def fail(self, seat: str, path: str, exc: Exception) -> None:
         record("extension_error", seat, {"path": path, "error": type(exc).__name__})
@@ -884,6 +889,7 @@ def _no_constants(name: str) -> Any:
 class World(BaseHTTPRequestHandler):
     push_seat: str | None = None  # version 17: the seat under test whose replies carry its unread messages
     delivering = False  # a reply that shows messages itself is being written
+    budget_seat: str | None = None
 
     def version_string(self) -> str:
         """The Server header of every reply, error pages of the server library included."""
@@ -920,7 +926,7 @@ class World(BaseHTTPRequestHandler):
         pushed = self._pushed(body)
         if pushed:
             body = dict(body) | {"new_messages": pushed}  # type: ignore[call-overload]
-        if HOST is not None and (pushed or receipt):
+        if HOST is not None:
             previous = self.connection.gettimeout()
             try:
                 self.connection.settimeout(REPLY_WRITE_SECONDS)
@@ -936,6 +942,17 @@ class World(BaseHTTPRequestHandler):
                 if receipt:
                     seat, path, ids = receipt
                     record("delivered", seat, {"ids": ids, "path": path})
+        if not self.delivering:
+            self._finish_budget()
+
+    def _finish_budget(self) -> None:
+        if self.budget_seat is not None:
+            with LOCK:
+                try:
+                    HOST.notify_budget(self.budget_seat)
+                except Exception as exc:  # noqa: BLE001 - the reply was written; invalidate the trial
+                    HOST.fail(self.budget_seat, self.path.split("?", 1)[0], exc)
+            self.budget_seat = None
 
     def _write(self, status: int, data: bytes, content_type: str, headers: dict[str, str] | None = None) -> bool:
         """Send a reply; True when its body was written (a HEAD reply has the headers only)."""
@@ -982,6 +999,7 @@ class World(BaseHTTPRequestHandler):
         if self.command != "HEAD":  # a HEAD reply shows no messages
             with LOCK:
                 _deliver(seat, ids, via)
+        self._finish_budget()
 
     def _caller(self) -> str | None:
         """The seat (or "admin") behind the bearer token; None for a missing or unknown token."""
@@ -1038,6 +1056,7 @@ class World(BaseHTTPRequestHandler):
 
     def _handle(self, method: str) -> None:
         self.push_seat, self.delivering = None, False  # a connection serves several requests
+        self.budget_seat = None
         if SCHEDULED and SCHEDULE_KEY == "at_s":
             with LOCK:
                 _post_scheduled(None)
@@ -1078,6 +1097,8 @@ class World(BaseHTTPRequestHandler):
                     if not admitted:
                         self._reply(429, {"error": "request limit reached"})
                         return
+                    if HOST.status[seat] == "active" and not STATE["frozen"] and HOST.attempts[seat] == HOST.max_calls[seat]:
+                        self.budget_seat = seat
         if GAME is not None and seat != "admin":
             with LOCK:
                 game = STATE["game"]

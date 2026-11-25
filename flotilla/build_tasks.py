@@ -707,6 +707,11 @@ def build(family_name: str, instances: list[int], n_seats: int | None, difficult
         if policy_file:
             inst = family.with_policy(inst, i, seed, difficulty)
         team_seats = list(inst["seats"]) if game or extension else sorted(inst["private"])
+        if extension and (not team_seats or any(not isinstance(seat, str)
+                or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", seat)
+                or seat.casefold() in ("all", "admin") for seat in team_seats)
+                or len({seat.casefold() for seat in team_seats}) != len(team_seats)):
+            raise ValueError("invalid extension generator seat names")
         if extension and n_seats is not None and len(team_seats) != n_seats:
             raise ValueError("extension generator must return the requested number of seats")
         scripted_seats = tuple(inst.get("scripted_seats", ())) if scripted or probe else ()
