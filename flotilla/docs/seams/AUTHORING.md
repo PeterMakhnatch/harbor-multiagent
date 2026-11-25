@@ -112,6 +112,15 @@ does it lose reward and why; do the family's measures see that loss; what breaks
 23. Freeze the tool and the tasks for a session (`git archive` to a scratch folder) and record the commit.
 24. A family that 2 frontier assistants pass in every live trial at `standard` and `heavy` is at the ceiling
     for that class. Keep it as a canary, or move the load to where the logs showed slips. Do not add a trick.
+25. The implicit twin. A frontier assistant carries what it is told to carry. What it can miss is what the
+    other seat will not have. So when a family is at the ceiling, add a twin arm that leaves out one stated
+    fact about the other seat's view, and change nothing else. The fact must stay within the team's reach:
+    the seat can see it in its own view, or one seat is told it and has to pass it on. The pair `team` /
+    `team-implicit` measures the cost of that inference; `hint` minus `team` measures the habit. First case,
+    `handoff`: without the sentence "Once a batch is settled, it leaves the desk; no later shift can see its
+    lot list on the desk", Claude Opus 5.5 lost the ticket in 8 of 9 live playtests on 3 instances; with it,
+    it lost 0 of 6 on the same instances. GPT-6.2 Sol lost 0 in both arms. These are playtests, not an
+    experiment.
 
 ## What the first reviews found (2026-11-25)
 
