@@ -1,7 +1,6 @@
 """Freight policies that differ only in consumption of the dispatch mail."""
 
 import hashlib
-import itertools
 import re
 
 OUTAGE = re.compile(r"^(.+?) is out of service from round (\d+) to the end of the day\.")
@@ -51,6 +50,12 @@ def select(name, shipment, lane, r, outages):
 
 
 def wait_next(client, idle_waits):
+    status, reply = yield from client.get("/await?until=active")
+    if status != 200 or reply.get("frozen") or reply.get("duty_stalled"):
+        return None
+    if reply.get("round_ready") or reply["tick"] > 0:
+        status, view = yield from client.get("/view")
+        return view if status == 200 else None
     for _ in range(idle_waits):
         status, reply = yield from client.get("/await?until=tick&after=0")
         if status != 200 or reply.get("frozen") or reply.get("duty_stalled"):
@@ -63,13 +68,10 @@ def wait_next(client, idle_waits):
 
 def blind_plan(own, view):
     carriers = sorted({lane["primary"] for lane in own["lanes"]})
-    k = own["max_outages"]
-    combinations = list(itertools.combinations(carriers, k))
-    starts = list(itertools.product(range(2, len(view["rounds"]) + 1), repeat=k))
+    starts = len(view["rounds"]) - 1
     ids = "|".join(id_ for batch in view["rounds"].values() for id_ in batch)
     draw = int.from_bytes(hashlib.sha256(ids.encode()).digest(), "big")
-    return dict(zip(combinations[draw % len(combinations)], starts[draw // len(combinations) % len(starts)],
-                    strict=True))
+    return {carriers[draw % len(carriers)]: 2 + draw // len(carriers) % starts}
 
 
 def consume_shipment(name, shipment, outages, own):

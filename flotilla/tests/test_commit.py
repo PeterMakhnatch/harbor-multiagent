@@ -53,6 +53,12 @@ def test_commit_layouts(dose):
             if arm != "solo":
                 assert all(o["text"] not in setting["instructions"]["p1"] for o in inst["outages"])
                 assert all(o["text"] not in json.dumps(setting["briefings"]["p1"]) for o in inst["outages"])
+                assert "max_outages" not in setting["briefings"]["p1"]
+                assert "at most 4 outage notices" in setting["instructions"]["p1"]
+                assert "You do not submit a report." in setting["instructions"]["p1"]
+                assert ("carrier board" if arm == "solo-seam" else "carrier desk") in setting["instructions"]["p1"]
+            assert setting["max_calls"] == FAMILY.MAX_CALLS
+            assert FAMILY.CALL_LIMIT in setting["instructions"]["p1"]
             if arm != "hint":
                 assert FAMILY.HINT not in setting["instructions"]["p1"]
     assert len(layouts) == 128
@@ -113,6 +119,10 @@ def test_commit_scheduler_sweep(tmp_path, dose, arm):
                 scores.append(score)
                 if policy == "careful":
                     assert score["reward"] == 1 and score["closed"] and score["stale_after_delivery"] == 0
+                    assert score["p1_stalled"] == score["p2_stalled"] == 0
+                    opening = [e["kind"] for e in result["events"]
+                               if e["kind"] in ("commit_step", "commit_opening_ack", "tick")]
+                    assert opening[:2] == ["commit_step", "tick" if arm == "solo" else "commit_opening_ack"]
                     if arm not in ("solo", "probe-quiet"):
                         assert score["affected_after_delivery"] == score["affected_total"]
                     for seat, calls in result["requests"].items():
@@ -195,10 +205,15 @@ def test_commit_receipts_and_view_history(tmp_path, start_world, arm, late_repor
             bookings.append({"shipment": shipment["id"], "carrier": lane["backup"] if out else lane["primary"]})
         status, view = world.seat("p1", "POST", "/step", {"round": r, "bookings": bookings})
         assert status == 200
-        if r == 1 and late_report:
+        if r == 1:
             assert view["stepped"] and view["round"] == 1
-            report(world, params)
-            assert world.seat("p1", "GET", "/await?until=tick&after=0")[1]["tick"] == 1
+            assert not view.get("new_messages")
+            status, ack = world.seat("p1", "GET", "/await?until=active")
+            assert status == 200 and ack["tick"] == 0
+            assert ack["round_ready"] is not late_report
+            if late_report:
+                report(world, params)
+                assert world.seat("p1", "GET", "/await?until=tick&after=0")[1]["tick"] == 1
             _, view = world.seat("p1", "GET", "/view")
     score = EXT.score(task, world.events())
     assert score["reward"] == 1 and score["stale_after_delivery"] == 0
@@ -250,6 +265,10 @@ def test_commit_call_budget_records_stall(tmp_path, start_world, seat):
     task_path.write_text(json.dumps(task))
     world = start_world("team", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task_path))
     world.ordered = True
+    for _ in range(FAMILY.IDLE_WAITS - 1):
+        for route in ("/await?until=active", "/whoami", "/health"):
+            assert world.seat(seat, "GET", route)[0] == 200
+    assert world.module.HOST.attempts[seat] == 0
     assert world.seat(seat, "GET", "/view")[0] == 200
     score = EXT.score(task, world.events())
     assert score[f"{seat}_stalled"] == 1 and score["reward"] == 0
@@ -265,7 +284,7 @@ def test_commit_missing_carrier_report(tmp_path, dose):
         assert score["reward"] == 0 and score["p2_stalled"] == 1 and score["p1_stalled"] == 0
         assert score["missing_relay"] == len(task["params"]["outages"])
         assert result["stalled_seats"] == ["p2"]
-        assert result["requests"]["p1"] <= 6 + FAMILY.IDLE_WAITS
+        assert result["requests"]["p1"] <= 7 + FAMILY.IDLE_WAITS
 
 
 @pytest.mark.parametrize("dose", FAMILY.LEVELS)

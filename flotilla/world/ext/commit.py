@@ -21,6 +21,7 @@ class Freight:
         self.primaries = {lane["primary"] for lane in self.params["lanes"]}
         self.carriers = self.primaries | {lane["backup"] for lane in self.params["lanes"]}
         self.report_ready = not self.params["live_report"]
+        self.opening_acknowledged = not self.params["report_barrier"]
         self.stepped = False
         self.bookings = {}
         self.messages = {}
@@ -49,7 +50,8 @@ class Freight:
             return False
         if seat == "p2":
             return not self.report_ready
-        return self.round <= self.rounds and not (self.stepped and not self.report_ready)
+        waiting_for_report = self.stepped and self.opening_acknowledged and not self.report_ready
+        return self.round <= self.rounds and not waiting_for_report
 
     def on_deadline(self, stalled_seats):
         for seat in stalled_seats:
@@ -66,7 +68,14 @@ class Freight:
         return result
 
     def augment_reply(self, seat, method, path):
-        if path != "/await" or not self.pending(seat):
+        if self.ended or path != "/await":
+            return None
+        if seat == "p1" and self.stepped and not self.opening_acknowledged:
+            self.opening_acknowledged = True
+            self.record_action("commit_opening_ack", seat, {"round": self.round})
+            self.advance()
+            return {"round_ready": self.round > 1}
+        if not self.pending(seat):
             return None
         self.idle_waits[seat] += 1
         if self.idle_waits[seat] < self.host.family.IDLE_WAITS:
@@ -123,7 +132,7 @@ class Freight:
         return None
 
     def advance(self):
-        if not self.stepped or not self.report_ready:
+        if not self.stepped or not self.report_ready or not self.opening_acknowledged:
             return
         self.stepped = False
         self.fetched.clear()
@@ -161,7 +170,7 @@ class Freight:
         if self.report_ready or self.round != 1:
             return self.refuse(seat, 409, "report already closed")
         notices = body.get("notices")
-        if set(body) != {"notices"} or not isinstance(notices, list) or len(notices) > len(self.params["outages"]):
+        if set(body) != {"notices"} or not isinstance(notices, list) or len(notices) > len(self.primaries):
             return self.refuse(seat, 400, "invalid notice list")
         seen = set()
         for notice in notices:
