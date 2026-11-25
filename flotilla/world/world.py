@@ -1577,7 +1577,10 @@ class World(BaseHTTPRequestHandler):
         until, after = query.get("until", ["active"]), query.get("after", ["0"])
         if (len(until) != 1 or until[0] not in ("active", "message", "tick")
                 or len(after) != 1 or not after[0].isdigit() or len(after[0]) > 12):
-            self._invalid(seat, "GET", "/await", 400, "bad wait", "use until=active|message|tick and after=N")
+            self._invalid(seat, "GET", "/await", 400, "bad wait",
+                          "write /await?until=tick&after=N: the word tick is literal and N is the tick number of your "
+                          "last reply (the call returns when the tick is greater than N); other forms are "
+                          "/await?until=message and /await?until=active")
             return
         self._await_wait(seat, until[0], int(after[0]), time.monotonic() + WAIT_SECONDS)
 
