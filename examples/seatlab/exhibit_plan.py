@@ -9,9 +9,10 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
-from ..native_study import record_bytes
 from .exhibit_enroll import (
     ARMS,
+    CHECKOUT,
+    DESIGN_SCHEMA,
     LAYOUTS,
     PROFILE,
     RECEIPT_SCHEMA,
@@ -19,6 +20,7 @@ from .exhibit_enroll import (
     digest,
     task_snapshot,
 )
+from .exhibit_harness import fingerprint
 from .exhibit_pairs import (
     DIR_FLAGS,
     FILE_FLAGS,
@@ -32,8 +34,6 @@ from .exhibit_pairs import (
     validate_manifest,
 )
 from .workbench.arm_sources import require_unchanged
-
-SCHEDULE_SCHEMA = "seatlab.exhibit-schedule/v1"
 
 
 def _stamp(info: os.stat_result) -> tuple[int, ...]:
@@ -90,10 +90,11 @@ def _validate_schedule(
             "schedule",
             "manifest_digest",
             "local_task_tree_digest",
+            "host_harness_digest",
             "evidence",
         },
     )
-    require(schedule["schema"] == SCHEDULE_SCHEMA, "invalid schedule schema")
+    require(schedule["schema"] == DESIGN_SCHEMA, "invalid schedule schema")
     require(
         manifest["profile"] == schedule["profile"] == PROFILE
         and manifest["arms"] == schedule["arms"] == list(ARMS),
@@ -213,6 +214,7 @@ def _validate_receipt(
         "manifest_digest": schedule["manifest_digest"],
         "schedule_digest": schedule_digest,
         "local_task_tree_digest": schedule["local_task_tree_digest"],
+        "host_harness_digest": schedule["host_harness_digest"],
         "evidence": schedule["evidence"],
         "operator_authenticated": False,
         "executions": 0,
@@ -220,7 +222,9 @@ def _validate_receipt(
     }
     receipt = object_keys(raw, set(expected))
     require(
-        record_bytes(receipt) == record_bytes(expected), "enrollment receipt differs"
+        json.dumps(receipt, sort_keys=True, allow_nan=False)
+        == json.dumps(expected, sort_keys=True, allow_nan=False),
+        "enrollment receipt differs",
     )
     return receipt
 
@@ -248,6 +252,10 @@ def load_plan(plan: Path) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any
         require(
             schedule["local_task_tree_digest"] == tree_digest,
             "local task tree digest differs",
+        )
+        require(
+            fingerprint(CHECKOUT) == schedule["host_harness_digest"],
+            "host harness has changed since enrollment",
         )
         cases = _case_map(manifest, schedule)
         _validate_execution_order(schedule, cases)

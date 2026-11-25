@@ -92,6 +92,7 @@ def bind(
         "pair": ticket,
         "arm": arm,
         "design": "fixed_prefix_depot",
+        "host_harness_digest": enrollment["host_harness_digest"],
         "enrollment_status": enrollment["status"],
         "schedule_digest": enrollment["schedule_digest"],
         "case_commitment": case["case_commitment"],

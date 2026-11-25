@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Any, override
 
-from examples.seatlab.exhibit_wire import encode_request, render_turn
+from examples.seatlab.exhibit_wire import encode_request, render_turn, request_stamp
 from examples.seatlab.visibility import local_seat
 from harbor.agents.base import BaseAgent
 from harbor.environments.base import BaseEnvironment
@@ -67,8 +67,7 @@ def _check_pin(path: str, identity: tuple[int, int], *, consumed: bool) -> None:
         raise ValueError("Owner socket changed")
 
 
-def _exchange(path: str, identity: tuple[int, int], prompt: str) -> dict[str, Any]:
-    request = encode_request(prompt)
+def _exchange(path: str, identity: tuple[int, int], request: bytes) -> dict[str, Any]:
     local_seat._check_request(request)
     _check_pin(path, identity, consumed=False)
     deadline = time.monotonic() + 86
@@ -237,6 +236,7 @@ class RelayOwner(BaseAgent):
         metadata: dict[str, Any] = {
             "role": self._role,
             "accepted_actions": [],
+            "accepted_requests": [],
             "phase": None,
         }
         context.metadata = metadata
@@ -251,12 +251,12 @@ class RelayOwner(BaseAgent):
             _check_view(view, self._role, phase)
             if view["turn"] != self._role:
                 raise ValueError("Seat turn not ready")
-            action = await asyncio.to_thread(
-                _exchange, path, identity, render_turn(instruction, view, previous)
-            )
+            request = encode_request(render_turn(instruction, view, previous))
+            action = await asyncio.to_thread(_exchange, path, identity, request)
             args = _arguments(action, view, phase)
             accepted = await _seat_command(environment, args, 10)
             _check_view(accepted, self._role, _NEXT[phase])
             metadata["accepted_actions"].append(action)
+            metadata["accepted_requests"].append(request_stamp(request))
             previous = action
         metadata["phase"] = "finished"

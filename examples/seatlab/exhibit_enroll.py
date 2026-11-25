@@ -15,6 +15,7 @@ from typing import Any
 from ..native_study import MAX_TASK_BYTES, _task_file_sha, record_bytes
 from ..seat_checkpoints.materialize import sync_directory
 from ..ship_inflight.materialize import publish
+from .exhibit_harness import fingerprint
 from .exhibit_pairs import SCHEMA, require, validate_manifest
 from .workbench.arm_sources import bounded_tree, require_unchanged
 
@@ -155,12 +156,14 @@ def enroll(
 ) -> dict[str, Any]:
     out = target(out)
     tree_digest, root, stamps = task_snapshot()
+    host_digest = fingerprint(CHECKOUT)
     manifest, design = draw_design(pairs, development_seed)
     manifest_bytes = record_bytes(manifest)
     design.update(
         {
             "manifest_digest": digest(manifest_bytes),
             "local_task_tree_digest": tree_digest,
+            "host_harness_digest": host_digest,
             "evidence": "private design and roster schedule only; not native trial configs or run identity",
         }
     )
@@ -176,6 +179,7 @@ def enroll(
         "layout_first_arm_cell_count": pairs // 4,
         "manifest_digest": digest(manifest_bytes),
         "schedule_digest": digest(design_bytes),
+        "host_harness_digest": host_digest,
         "local_task_tree_digest": tree_digest,
         "evidence": design["evidence"],
         "operator_authenticated": False,

@@ -30,6 +30,7 @@ from .exhibit_pairs import (
 )
 from .exhibit_plan import load_plan
 from .exhibit_prepare import NAME, ROLES, TASK
+from .exhibit_wire import encode_request, render_turn, request_stamp
 from .workbench.arm_sources import inspect_source, require_unchanged
 
 SCHEMA = "seatlab.exhibit-capture/v1"
@@ -81,7 +82,10 @@ def check_config(
 ):
     harbor = native()
     config = harbor.TrialConfig.model_validate(raw)
-    require(config.model_dump(mode="json") == raw, "noncanonical trial config")
+    require(
+        config.model_dump(mode="json", exclude={"agent"}) == raw,
+        "noncanonical trial config",
+    )
     require(
         config.trial_name == trial.name
         and config.trials_dir.is_absolute()
@@ -111,7 +115,7 @@ def check_config(
         fixed_request(harbor, case, arm, socket, config.trials_dir)
     )
     require(
-        raw == expected.model_dump(mode="json"),
+        raw == expected.model_dump(mode="json", exclude={"agent"}),
         "trial config differs from fixed-prefix design",
     )
     return config
@@ -148,7 +152,7 @@ def check_native(
     raw_result, result_bytes = read_record(fd, paths.result_path.name)
     result = TrialResult.model_validate(raw_result)
     require(
-        raw_result.get("config") == raw
+        raw_result.get("config") == config.model_dump(mode="json")
         and result.trial_name == trial.name
         and result.trial_uri == trial.as_uri()
         and result.task_name == identity["name"]
@@ -187,8 +191,13 @@ def check_native(
 
 
 def confirm_prefix(
-    folder: int, raw: dict[str, Any], result, arm: str, commitment: str
-) -> str:
+    folder: int,
+    raw: dict[str, Any],
+    result,
+    arm: str,
+    commitment: str,
+    instruction: str,
+) -> tuple[str, dict[str, Any]]:
     cut, data = read_record(folder, "private-exhibit-cut.json")
     diagnostics = import_module(f"{TASK_MODULE}.diagnostics")
     measured = diagnostics.observation(cut)
@@ -225,6 +234,18 @@ def confirm_prefix(
         metadata.get("role") == "depot" and metadata.get("phase") == "finished",
         "external depot did not finish",
     )
+    engine = import_module(f"{TASK_MODULE}.engine")
+    replay = engine.Session(case, arm)
+    for role, action in zip(("loader", "registrar"), actions[:2], strict=True):
+        replay.apply(role, action)
+    view = json.loads(json.dumps(replay.view("depot"), sort_keys=True))
+    expected_request = request_stamp(
+        encode_request(render_turn(instruction, view, None))
+    )
+    require(
+        metadata.get("accepted_requests") == [expected_request],
+        "depot owner request differs from the registered view",
+    )
     decisions = metadata["accepted_actions"]
     require(
         type(decisions) is list and len(decisions) == 1,
@@ -239,11 +260,11 @@ def confirm_prefix(
         and sorted(decision["ids"]) == actions[2]["ids"],
         "depot declarations differ",
     )
-    return digest(data)
+    return digest(data), expected_request
 
 
 def check_verifier(
-    folder: int, result, arm: str, commitment: str
+    folder: int, result, arm: str, commitment: str, instruction_digest: str
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     raw, data = read_record(folder, "observation.json")
     outcome = validate_observation(raw, folder, "coupling", arm, commitment)
@@ -255,7 +276,15 @@ def check_verifier(
         outcome.status == "complete" or outcome.C is not None,
         "no post-depot observation",
     )
-    private_digest = confirm_prefix(folder, raw, result, arm, commitment)
+    instruction = native().Task(TASK).seat_instruction("depot")
+    require(
+        isinstance(instruction, str)
+        and digest(instruction.encode()) == "sha256:" + instruction_digest,
+        "depot instruction has changed",
+    )
+    private_digest, depot_request = confirm_prefix(
+        folder, raw, result, arm, commitment, instruction
+    )
     files = {"observation.json": data}
     if outcome.status == "complete":
         reward, payload = read_record(folder, "reward.json")
@@ -280,6 +309,7 @@ def check_verifier(
         "stage": raw["handoff"]["stage"],
         "fixed_prefix_verified": True,
         "private_cut_digest": private_digest,
+        "depot_owner_request": depot_request,
     }, files
 
 
@@ -390,7 +420,11 @@ def capture(plan: Path, ticket: str, arm: str, trial: Path) -> dict[str, Any]:
             folder = open_folder(fd, (verifier,))
             try:
                 status, files = check_verifier(
-                    folder, result, arm, pair["case_commitment"]
+                    folder,
+                    result,
+                    arm,
+                    pair["case_commitment"],
+                    source.effective_roles["depot"],
                 )
             finally:
                 os.close(folder)
@@ -405,6 +439,7 @@ def capture(plan: Path, ticket: str, arm: str, trial: Path) -> dict[str, Any]:
             manifest_digest=enrolled["manifest_digest"],
             local_task_tree_digest=enrolled["local_task_tree_digest"],
             native_task_digest=source.native_digest,
+            host_harness_digest=enrolled["host_harness_digest"],
             role_instruction_digests=source.effective_roles,
             artifact_digests=hashes
             | {name: digest(data) for name, data in files.items()},

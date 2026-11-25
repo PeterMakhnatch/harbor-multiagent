@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import os
 import shlex
@@ -102,7 +103,7 @@ def policy(payload: dict[str, Any]) -> dict[str, Any]:
 
 def serve_once(
     listener: socket.socket, select=policy
-) -> tuple[dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     with listener.accept()[0] as conn:
         conn.settimeout(5)
         with conn.makefile("rb") as stream:
@@ -115,7 +116,11 @@ def serve_once(
         action = select(payload)
         conn.sendall((json.dumps({"text": json.dumps(action)}) + "\n").encode())
     listener.close()
-    return payload, action
+    return (
+        payload,
+        action,
+        {"bytes": len(line), "sha256": hashlib.sha256(line).hexdigest()},
+    )
 
 
 @pytest.fixture
@@ -165,10 +170,10 @@ def test_owner_relay_four_distinct_turns(socket_root: Path):
 
         asyncio.run(run_team())
         turns = [future.result(timeout=2) for future in futures]
-    request, registrar, depot, dispatch = [payload for payload, _ in turns]
-    actions = [action for _, action in turns]
-    assert [payload["view"]["phase"] for payload, _ in turns] == list(names)
-    assert [payload["instruction"] for payload, _ in turns] == [
+    request, registrar, depot, dispatch = [turn[0] for turn in turns]
+    actions = [turn[1] for turn in turns]
+    assert [payload["view"]["phase"] for payload, _, _ in turns] == list(names)
+    assert [payload["instruction"] for payload, _, _ in turns] == [
         "Instruction for loader",
         "Instruction for registrar",
         "Instruction for depot",
@@ -189,6 +194,12 @@ def test_owner_relay_four_distinct_turns(socket_root: Path):
         [actions[0], actions[3]],
         [actions[1]],
         [actions[2]],
+    ]
+    stamps = [turn[2] for turn in turns]
+    assert [entry["accepted_requests"] for entry in metadata] == [
+        [stamps[0], stamps[3]],
+        [stamps[1]],
+        [stamps[2]],
     ]
     assert all(entry["phase"] == "finished" for entry in metadata)
     cut = session.snapshot()

@@ -2,21 +2,26 @@ import json
 import sys
 from datetime import UTC, datetime, timedelta
 from importlib import import_module
+from types import SimpleNamespace
+from typing import Any
 from uuid import UUID
 
 import pytest
 
-from examples.native_study import native, record_bytes, task_identity
+from examples.native_study import record_bytes
 from examples.seatlab.exhibit_bind import bind
 from examples.seatlab.exhibit_capture import capture
 from examples.seatlab.exhibit_enroll import TASK, TASK_MODULE, enroll
 from examples.seatlab.exhibit_plan import load_plan
 from harbor.models.agent.context import AgentContext
 from harbor.models.job.lock import TrialLock
+from harbor.models.task.task import Task
 from harbor.models.trial.config import TrialConfig
 from harbor.models.trial.paths import TrialPaths
-from harbor.models.trial.result import AgentInfo, SeatResult, TimingInfo, TrialResult
+from harbor.models.trial.result import AgentInfo, SeatResult, TimingInfo
 from harbor.models.verifier.result import VerifierResult
+from harbor.tasks.client import TaskDownloadResult
+from harbor.trial.seats import SeatsTrial
 
 TICKET = "pair-0001"
 ARM = "bundled"
@@ -49,7 +54,9 @@ def prepared(tmp_path, tmp_path_factory, monkeypatch):
     return plan, config, lock, case
 
 
-def simulate(case, *, turns, wrong_world=False, empty_registrar=False):
+def simulate(
+    case, *, turns, wrong_world=False, empty_registrar=False, empty_depot=False
+):
     make_case = import_module(f"{TASK_MODULE}.cases").make_case
     Session = import_module(f"{TASK_MODULE}.engine").Session
     observe = import_module(f"{TASK_MODULE}.diagnostics").observation
@@ -59,19 +66,33 @@ def simulate(case, *, turns, wrong_world=False, empty_registrar=False):
         layout = "b" if layout == "a" else "a"
     session = Session(make_case(case["seed"], "coupling", layout=layout), ARM)
     depot_actions = []
+    requests = []
     for role in ROLES[:turns]:
         view = session.view(role)
         action = act(view, "portfolio")
         if role == "registrar" and empty_registrar:
             action = {"op": "file", "ids": []}
+        if role == "depot" and empty_depot:
+            action = {"op": "file", "ids": []}
         session.apply(role, action)
         if role == "depot":
+            from examples.seatlab.exhibit_wire import (
+                encode_request,
+                render_turn,
+                request_stamp,
+            )
+
+            instruction = (TASK / "instructions/depot.md").read_text()
+            view_sent = json.loads(json.dumps(view, sort_keys=True))
+            requests.append(
+                request_stamp(encode_request(render_turn(instruction, view_sent, None)))
+            )
             depot_actions.append(action)
     cut = session.snapshot()
-    return cut, observe(cut), depot_actions
+    return cut, observe(cut), depot_actions, requests
 
 
-def synthetic_seats(depot_actions):
+def synthetic_seats(depot_actions, requests):
     timing = TimingInfo(started_at=START, finished_at=END)
     return [
         SeatResult(
@@ -86,6 +107,7 @@ def synthetic_seats(depot_actions):
                 metadata={
                     "role": role,
                     "accepted_actions": depot_actions,
+                    "accepted_requests": requests,
                     "phase": "finished" if depot_actions else "depot",
                 }
             )
@@ -100,21 +122,79 @@ def synthetic_seats(depot_actions):
     ]
 
 
+def write_native_archive(
+    config: TrialConfig,
+    lock: TrialLock,
+    seats: list[SeatResult],
+    observation: dict[str, Any],
+    paths: TrialPaths,
+    started: datetime,
+    finished: datetime,
+) -> None:
+    assert config.task.path is not None
+    assert not config.task.is_git_task()
+    assert config.source_trial is None
+    assert started <= finished
+    primary = next(seat for seat in seats if seat.under_test)
+    assert primary.agent_info is not None
+
+    trial: Any = object.__new__(SeatsTrial)
+    trial.config = config
+    trial.task = Task(config.task.path)
+    trial.paths = paths
+    trial.seats = [SimpleNamespace(result=seat) for seat in seats]
+    trial.agent = SimpleNamespace(to_agent_info=lambda: primary.agent_info)
+    trial._id = UUID(int=0)
+    trial._now = lambda: started
+    trial._task_download_result = TaskDownloadResult(
+        path=trial.task.task_dir, download_time_sec=0.0, cached=False
+    )
+
+    trial._init_result()
+    written_lock = trial._write_trial_lock()
+    assert written_lock.model_dump(mode="json") == lock.model_dump(mode="json")
+    assert TrialLock.model_validate_json(paths.lock_path.read_bytes()).model_dump(
+        mode="json"
+    ) == lock.model_dump(mode="json")
+
+    reward = (
+        {"reward": observation["reward"]}
+        if observation["status"] == "complete"
+        else None
+    )
+    result = trial.result
+    result.finished_at = finished
+    result.verifier = TimingInfo(started_at=started, finished_at=finished)
+    result.verifier_result = VerifierResult(rewards=reward)
+    paths.result_path.write_text(result.model_dump_json(indent=4))
+
+    assert not hasattr(trial, "agent_environment")
+    assert not hasattr(trial.agent, "run")
+    assert result.environment_setup is None
+    assert result.agent_execution is None
+
+
 def materialize(
-    prepared, *, turns=4, wrong_world=False, empty_registrar=False, retain=True
+    prepared,
+    *,
+    turns=4,
+    wrong_world=False,
+    empty_registrar=False,
+    retain=True,
+    unmatched_request=False,
+    empty_depot=False,
 ):
     plan, config, lock, case = prepared
-    cut, observation, depot_actions = simulate(
+    cut, observation, depot_actions, requests = simulate(
         case,
         turns=turns,
         wrong_world=wrong_world,
         empty_registrar=empty_registrar,
+        empty_depot=empty_depot,
     )
     trial = config.trials_dir / config.trial_name
     paths = TrialPaths(trial)
     paths.verifier_dir.mkdir(parents=True)
-    paths.config_path.write_text(config.model_dump_json(indent=4))
-    paths.lock_path.write_text(lock.model_dump_json(indent=4, exclude_none=True))
     paths.verifier_dir.joinpath("observation.json").write_bytes(
         record_bytes(observation)
     )
@@ -126,24 +206,10 @@ def materialize(
     if observation["status"] == "complete":
         reward = {"reward": observation["reward"]}
         paths.reward_json_path.write_bytes(record_bytes(reward))
-    identity = task_identity(native(), TASK, "harbor/exhibit-relay")
-    seats = synthetic_seats(depot_actions)
-    result = TrialResult(
-        id=UUID(int=0),
-        task_name=identity["name"],
-        task_checksum=identity["checksum"],
-        trial_name=config.trial_name,
-        trial_uri=trial.as_uri(),
-        task_id=config.task.get_task_id(),
-        config=config,
-        agent_info=seats[0].agent_info,
-        seat_results=seats,
-        started_at=START,
-        finished_at=END,
-        verifier=TimingInfo(started_at=START, finished_at=END),
-        verifier_result=VerifierResult(rewards=reward),
-    )
-    paths.result_path.write_text(result.model_dump_json(indent=4))
+    if unmatched_request:
+        requests = [{"bytes": 17, "sha256": "0" * 64}]
+    seats = synthetic_seats(depot_actions, requests)
+    write_native_archive(config, lock, seats, observation, paths, START, END)
     leaf = plan / "outcomes" / TICKET / ARM
     return plan, trial, leaf, observation
 
@@ -175,8 +241,15 @@ def test_capture_admits_reference_once(prepared):
         {"wrong_world": True},
         {"retain": False},
         {"empty_registrar": True},
+        {"unmatched_request": True},
     ],
-    ids=["before-depot", "different-world", "missing-cut", "noncanonical-prefix"],
+    ids=[
+        "before-depot",
+        "different-world",
+        "missing-cut",
+        "noncanonical-prefix",
+        "not-the-declared-depot-packet",
+    ],
 )
 def test_capture_rejects_unqualified_development_fixture(prepared, options):
     plan, trial, leaf, _ = materialize(prepared, **options)
@@ -226,3 +299,16 @@ def test_percentiles_resample_pairs_within_each_layout():
     ]
     balanced["b"][0] = (Outcome("missing"), high)
     assert _bootstrap(balanced)["status"] == "not_computed"
+
+
+def test_accepted_empty_filing_has_zero_coverage_not_a_missing_observation(prepared):
+    from examples.seatlab.exhibit_filing import report
+
+    plan, trial, _, observation = materialize(prepared, turns=3, empty_depot=True)
+    assert observation["handoff"]["depot_filed"] == 0 and observation["reward"] is None
+    assert capture(plan, TICKET, ARM, trial)["status"] == "admitted"
+    result = report(plan)
+    assert result["filing_counts"][ARM]["empty_filing"] == 1
+    assert result["filing_counts"][ARM]["no_outcome_leaf"] == 3
+    assert result["metrics"]["C"]["arms"][ARM]["observed_mean"] == "0"
+    assert result["metrics"]["C"]["difference_bounds"] == ["-2/5", "3/10"]

@@ -1,3 +1,4 @@
+import hashlib
 import json
 from typing import Any
 
@@ -29,3 +30,7 @@ def encode_request(prompt: str) -> bytes:
         )
         + "\n"
     ).encode("utf-8")
+
+
+def request_stamp(request: bytes) -> dict[str, Any]:
+    return {"bytes": len(request), "sha256": hashlib.sha256(request).hexdigest()}

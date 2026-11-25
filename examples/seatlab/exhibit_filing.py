@@ -29,7 +29,7 @@ from .exhibit_plan import load_plan
 
 CAPS = {"C": Fraction(2, 5), "P": Fraction(1, 2)}
 STATUSES = (
-    "no_filing",
+    "no_outcome_leaf",
     "invalid_or_missing_evidence",
     "empty_filing",
     "nonempty_filing",
@@ -75,12 +75,24 @@ def _admitted(
         "arm": arm,
         "manifest_digest": enrollment["manifest_digest"],
         "local_task_tree_digest": enrollment["local_task_tree_digest"],
+        "host_harness_digest": enrollment["host_harness_digest"],
         "evidence": "declared-local/artifact-bound",
     }
     require(
         all(receipt.get(key) == value for key, value in expected.items())
         and receipt.get("fixed_prefix_verified") is True,
         "capture receipt mismatch",
+    )
+    stamp = receipt.get("depot_owner_request")
+    require(
+        isinstance(stamp, dict)
+        and stamp.keys() == {"bytes", "sha256"}
+        and type(stamp["bytes"]) is int
+        and 0 < stamp["bytes"] <= 65536
+        and isinstance(stamp["sha256"], str)
+        and len(stamp["sha256"]) == 64
+        and all(char in "0123456789abcdef" for char in stamp["sha256"]),
+        "missing owner request receipt",
     )
     hashes = receipt.get("artifact_digests")
     if not isinstance(hashes, dict):
@@ -145,7 +157,7 @@ def _outcome(
     try:
         folder = open_folder(root, path_parts(path))
     except FileNotFoundError:
-        return Outcome("no_filing")
+        return Outcome("no_outcome_leaf")
     except OSError:
         return Outcome("invalid_or_missing_evidence")
     try:
@@ -294,7 +306,7 @@ def report(plan: Path) -> dict[str, Any]:
         "estimand": "fixed-prefix depot filing coverage, right minus left",
         "physical_reward_reported": False,
         "empirical_causal_verdict": None,
-        "no_filing_definition": "no registered outcome leaf; not evidence of zero coverage",
+        "no_outcome_leaf_definition": "no registered outcome leaf; not evidence of zero coverage",
         **_summary(rows, arms),
         "layouts": {layout: _summary(group, arms) for layout, group in layouts.items()},
         "bootstrap": _bootstrap(layouts),
