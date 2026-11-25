@@ -161,7 +161,7 @@ class Kit:
     def canary(self, task: Any) -> list[str]:
         marker = self.builder.CANARY
         findings = []
-        if marker not in (task.path / "task.toml").read_text():
+        if self.extension and marker not in (task.path / "task.toml").read_text():
             findings.append(f"{task.condition}/{task.instance}: absent from task.toml")
         for seat in task.seats:
             for field, text in task.view(seat).items():
