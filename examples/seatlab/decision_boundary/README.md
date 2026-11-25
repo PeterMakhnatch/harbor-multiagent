@@ -128,3 +128,18 @@ The faithful handoff separates the two layouts. Its optimal coverage rises by `3
 Use `compare --files BEFORE AFTER` for your own case tables. A comparison requires the same world names, masses, score scale, rule labels and per-world scores. Table order may differ. Identical rule labels must also mean the same executable rule; the author must check that. The tool refuses a changed score matrix instead of reporting a gain.
 
 `relation` describes the **after** partition relative to the **before** partition. `refinement` splits old classes without merging any. `coarsening` merges without splitting. `equivalent` preserves every equality relation, not necessarily the bytes themselves. `incomparable` does both. `same_bytes` counts worlds with literally unchanged inputs. A new nonce per world can create perfect separation without a usable signal: pair nuisance bytes and repeat the check across independently generated development cases.
+
+## Does the final decision need both handoffs?
+
+For a task with 2 sources, make 4 files in the [finite world format](#inspect-your-own-finite-worlds). Supply the receiver’s actual input with neither source shown, first only, second only, and both. Keep common public information in every input. Use the same world names, probabilities (positive integer masses), rule labels, scores and scale. JSON object order and world row order do not matter.
+
+```sh
+python3.12 -BS -m examples.seatlab.decision_boundary joint \
+  --files neither.json first.json second.json both.json --expect-each-needed yes
+```
+
+The command checks that each single source preserves the public distinctions. It also checks a stronger requirement: 2 worlds must look identical with both sources **exactly when** they look identical in each single-source input. For example, it rejects a joint-only case ID that separates a previously indistinguishable pair. It cannot tell whether an ID repeats information the pair of inputs already revealed. Check the actual authoring and transport paths separately.
+
+`conditional_gains.first_given_second` is the best attainable value with both sources minus the value with only the second. The other field reverses the roles. Both differences must be strictly positive for `--expect-each-needed yes`. The separate interaction is `both − first − second + neither`. Its sign alone does not establish that both sources are necessary. An input that separates more worlds need not improve any decision. The values depend on the specified priors and payoff table; they do not measure participant skill. Exit 0 means the check passes, 1 means the expected result is false, and 2 means the inputs do not specify a matched comparison.
+
+See the [native 3-role warehouse](../joint_handoffs/README.md) for a complete control with two independently changing sources and a physical team reward.
