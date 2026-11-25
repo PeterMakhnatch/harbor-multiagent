@@ -4,7 +4,7 @@ import hashlib
 
 
 def supports(name, variant):
-    return (name in ("careful", "naive", "naive_read", "lone", "focal", "blind", "alternate", "ask", "script-loop")
+    return (name in ("careful", "naive", "naive_read", "lone", "focal", "blind", "alternate", "ask", "script-loop", "eager")
             or name.startswith("lapse-") and name[6:] in ("10", "20", "30", "50"))
 
 
@@ -131,6 +131,12 @@ def guess(name, own, group, family):
     return family.CONVENTIONS[int.from_bytes(digest[:8], "big") % len(family.CONVENTIONS)]
 
 
+def setting_from_messages(group, messages, family):
+    candidates = {c for message in messages if message["from"] == group["desk"]
+                  for c in family.announcement_settings(group, message["text"])}
+    return next(iter(candidates)) if len(candidates) == 1 else None
+
+
 def select(name, client, own, group, choices, state, messages, family):
     g = group["name"]
     if g in choices:
@@ -145,9 +151,7 @@ def select(name, client, own, group, choices, state, messages, family):
     if g in state.get("export_settings", {}):
         convention = tuple(state["export_settings"][g])
     elif group["hidden"] or name == "ask":
-        candidates = [c for c in family.CONVENTIONS if any(message["from"] == group["desk"]
-                      and family.announced(group, c, message["text"]) for message in messages)]
-        convention = candidates[0] if len(candidates) == 1 else fallback
+        convention = setting_from_messages(group, messages, family) or fallback
     else:
         status, reply = yield from client.get(f"/staging?group={g}")
         if status != 200:
@@ -157,9 +161,65 @@ def select(name, client, own, group, choices, state, messages, family):
     return fallback if name == "naive_read" else convention
 
 
+def submit_order(client, group, counts, convention, family):
+    name = group["name"]
+    values = [row["target"] - sum(counts[name, row["site"], row["item"]]) for row in group["rows"]]
+    body = make_file(family, group, convention, "order", values)
+    status, reply = yield from client.post("/publish", body)
+    if status != 201:
+        raise ValueError("order upload refused")
+    return reply
+
+
+def wait_play(name, client, own, family):
+    target = next(g for g in own["groups"] if g["hidden"])
+    other = [g for g in own["groups"] if not g["hidden"]]
+    blind = name in ("blind", "lone", "focal")
+    asked_at = None
+    if not blind:
+        status, reply = yield from client.post("/messages", {"to": target["desk"],
+                                                "text": f"What key form and unit for {target['name']}?"})
+        if status != 201:
+            raise ValueError("catalog question refused")
+        asked_at = reply["tick"]
+    counts, complete = yield from read_work(client)
+    status, _ = yield from client.post("/prepare", {})
+    if status != 200:
+        raise ValueError("preparation refused")
+    desks = {g["desk"] for g in own["groups"]}
+    state = yield from wait_status(client, lambda reply: desks <= set(reply["finished"]))
+    if state.get("frozen"):
+        return
+    _, inbox = yield from client.get("/messages")
+    setting = setting_from_messages(target, inbox["messages"], family)
+    eager = name in ("naive", "eager", "naive_read") or lapses(own, "wait-for-answer", target)
+    early = blind or (eager and setting is None and asked_at is not None
+                      and inbox["tick"] - asked_at >= family.WAIT_EAGER_TICKS)
+    if early:
+        setting = guess(name, own, target, family)
+        yield from submit_order(client, target, counts, setting, family)
+    for group in other:
+        if group["name"] in complete:
+            convention = yield from select("careful", client, own, group, {}, state, [], family)
+            yield from submit_order(client, group, counts, convention, family)
+    if not early:
+        _, inbox = yield from client.get("/messages")
+        setting = setting_from_messages(target, inbox["messages"], family)
+        while setting is None:
+            status, reply = yield from client.get("/await?until=message")
+            if status != 200 or reply.get("frozen"):
+                return
+            setting = setting_from_messages(target, reply.get("new_messages", []), family)
+        yield from submit_order(client, target, counts, setting, family)
+    yield from client.post("/done", {})
+
+
 def play(name, client, own, family):
     if own["role"] == "desk":
         yield from desk_play(name, client, own, family)
+        return
+    if "wait" in own:
+        yield from wait_play(name, client, own, family)
         return
     choices = {}
     if own["role"] == "all":

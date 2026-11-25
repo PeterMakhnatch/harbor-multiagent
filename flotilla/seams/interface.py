@@ -7,22 +7,32 @@ from itertools import combinations
 
 FAMILY = "interface"
 TITLE = "Replenishment batch"
-VERSION = 2
+VERSION = 3
 SEAM = "The buyer must learn a freely chosen catalog convention from another context before its order is final."
 LEVELS = ("canary", "standard", "heavy")
 SEATS = {"canary": 3, "standard": 3, "heavy": 3}
 ARMS = ("solo", "solo-seam", "team", "team-parallel", "team-fullrecord", "team-nosaved", "hint", "probe-control",
-        "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint")
+        "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint", "probe-wait-control", "probe-wait-trap")
 EXTRA_ARMS = ("silent", "solo-seam-key", "solo-seam-unit")
 TWINS = (("probe-control", "probe-trap-key"), ("probe-control", "probe-trap-unit"))
 PAIRS = (("team", "hint"), ("team", "team-nosaved"), ("probe-trap-key", "probe-trap-key-hint"),
-         ("team-parallel", "team-fullrecord"))
+         ("team-parallel", "team-fullrecord"), ("probe-wait-control", "probe-wait-trap"))
 ARM_WORDS = ("probe-control", "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint", "hint",
              "solo-seam", "solo-seam-key", "solo-seam-unit", "team-fullrecord", "team-nosaved", "team-parallel",
-             "interface")
+             "probe-wait-control", "probe-wait-trap", "interface")
 HINT = "Before fixing an order, obtain the desk's actual key form and unit from its visible catalog or a direct question."
 WRITER_SENTENCE = ("\nThe order writer imports the catalog's committed setting after the desk finishes. "
                    "Its setting for each group is returned in `writer_settings` in work replies.\n")
+WAIT_EAGER_TICKS = 4
+
+
+def wait_sentence(release, deadline):
+    timing = (f"The desk has other work; answers for the sealed group can take until tick {release}. "
+              if release else "Answers for the sealed group are delivered as soon as the desk sends them. ")
+    return ("\n" + timing + f"Orders are accepted through tick {deadline}. "
+            "Each new work step, accepted file, buyer chat message, preparation or end of work advances one tick. "
+            "The other groups remain available for work while the answer is pending. "
+            "Waiting in wall-clock time does not advance ticks.\n")
 FORMS = ("SITE/ITEM", "ITEM/SITE", "SITE:ITEM", "ITEM:SITE", "SITE-ITEM", "ITEM-SITE")
 CONVENTIONS = tuple((form, unit) for form in FORMS for unit in ("each", "case"))
 DOSES = {level: (3, 3, 3, 5, 4, 1) for level in SEATS}
@@ -311,6 +321,11 @@ def extension_arm(inst, arm, max_text, max_messages):
     solo = arm == "solo"
     export = arm.startswith("solo-seam")
     probe = arm.startswith("probe-")
+    wait_probe = arm.startswith("probe-wait-")
+    # With one question, catalogs, preparation, desk finishes and both visible orders advance to this tick.
+    release = 2 * len(inst["groups"]) + len(inst["seats"]) + len(inst["stream"])
+    deadline = release + min(max_messages, 20) + 2
+    wait_release = release if arm == "probe-wait-trap" else 0
     messaging = not (solo or export or arm == "silent")
     text_limit, message_limit = min(max_text, 1000), min(max_messages, 20)
     if messaging and (text_limit < 80 or message_limit < len(inst["groups"])):
@@ -320,9 +335,11 @@ def extension_arm(inst, arm, max_text, max_messages):
     prebuilt = {}
     for original in inst["groups"]:
         group = original | {"hidden": arm in ("team-parallel", "team-fullrecord") or original["name"] in inst["hidden"]}
+        if wait_probe:
+            group["hidden"] = group["name"] == inst["target"]
         if solo or export:
             group["desk"] = "p1" if solo else "export"
-        if probe or arm in ("solo-seam-key", "solo-seam-unit"):
+        if (probe and not wait_probe) or arm in ("solo-seam-key", "solo-seam-unit"):
             convention = inst["buyer"]
             if group["name"] == inst["target"]:
                 if arm in ("probe-trap-unit", "solo-seam-unit"):
@@ -341,6 +358,8 @@ def extension_arm(inst, arm, max_text, max_messages):
         del buyer["saved"]
     if arm == "team-fullrecord":
         buyer["imports_settings"] = True
+    if wait_probe:
+        buyer["wait"] = {"reply_tick": wait_release, "order_deadline": deadline}
     if solo:
         buyer["desks"] = list(desks)
     common = common_text(groups, owner, messaging, text_limit, message_limit)
@@ -348,6 +367,8 @@ def extension_arm(inst, arm, max_text, max_messages):
     instructions = {"p1": common + buyer_text(buyer, arm == "hint" or arm.endswith("-hint"))}
     if arm == "team-fullrecord":
         instructions["p1"] += WRITER_SENTENCE
+    if wait_probe:
+        instructions["p1"] += wait_sentence(wait_release, deadline)
     if solo:
         instructions["p1"] += desk_text(desks, messaging, solo)
     scripted = []
@@ -362,6 +383,8 @@ def extension_arm(inst, arm, max_text, max_messages):
     params = {"groups": groups, "buyer": inst["buyer"], "target": inst["target"], "stream": inst["stream"],
               "prebuilt": prebuilt, "text_limit": text_limit, "message_limit": message_limit,
               "fullrecord": arm == "team-fullrecord"}
+    if wait_probe:
+        params["wait"] = buyer["wait"]
     return {"params": params, "briefings": briefings, "instructions": instructions, "messaging": messaging,
             "push": messaging, "scripted_seats": scripted, "scripted_policies": dict.fromkeys(scripted, "careful"),
             "play_timeout_sec": 1260.0, "agent_timeout_sec": 1200.0}
@@ -391,6 +414,21 @@ def pair_difference(first, second, views_a, views_b):
             return ["missing writer capability sentence"]
         normalized["p1"]["instruction"] = instruction.removesuffix(WRITER_SENTENCE)
         return [] if normalized == views_a else ["more than the writer capability differs"]
+    if second == "probe-wait-trap":
+        field = "env.SEAT_BRIEFING"
+        control = json.loads(views_a["p1"][field])
+        trap = json.loads(normalized["p1"][field])
+        release = trap["wait"]["reply_tick"]
+        deadline = trap["wait"]["order_deadline"]
+        expected = control | {"wait": {"reply_tick": release, "order_deadline": deadline}}
+        if trap != expected or control["wait"] != {"reply_tick": 0, "order_deadline": deadline} or release <= 0:
+            return ["more than the reply tick differs in the buyer briefing"]
+        normalized["p1"][field] = views_a["p1"][field]
+        sentence = wait_sentence(release, deadline)
+        if not normalized["p1"]["instruction"].endswith(sentence):
+            return ["missing reply timing sentence"]
+        normalized["p1"]["instruction"] = normalized["p1"]["instruction"].removesuffix(sentence) + wait_sentence(0, deadline)
+        return [] if normalized == views_a else ["more than the reply timing differs"]
     instruction = normalized["p1"]["instruction"]
     suffix = "\n" + HINT + "\n"
     if not instruction.endswith(suffix):

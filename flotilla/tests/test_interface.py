@@ -20,7 +20,7 @@ SEED = 7236499753218553
 LEVELS = FAMILY.LEVELS
 ALL_ARMS = (*FAMILY.ARMS, *FAMILY.EXTRA_ARMS)
 TARGET_ARMS = {"probe-control", "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint", "solo-seam-key",
-               "solo-seam-unit"}
+               "solo-seam-unit", "probe-wait-control", "probe-wait-trap"}
 EXACT = ("careful", "naive", "nop", "blind", "lone", "script-loop")
 
 
@@ -47,7 +47,7 @@ def expected_reward(task, policy):
     for group in params["groups"]:
         desk = tuple(group["saved"])
         guess = hashed(group["name"]) if policy == "blind" or arm == "team-nosaved" else buyer
-        if arm in ("solo", "team-fullrecord"):
+        if arm in ("solo", "team-fullrecord") or (arm == "probe-wait-control" and policy == "naive"):
             valid[group["name"]] = True
         elif policy in ("careful", "script-loop"):
             valid[group["name"]] = not (arm == "silent" and group["hidden"]) or guess == desk
@@ -454,3 +454,38 @@ def test_fullrecord_matches_parallel_and_delivers_setting(tmp_path):
         run = SIM.simulate_built(path, "naive", 0)
         assert run["reward"] == 1 and run["score"]["valid_coordinated"] == 1
         assert not any(e["kind"] == "send" for e in run["events"])
+
+
+@pytest.mark.parametrize("level", LEVELS)
+def test_wait_pair_release_and_premature_order(tmp_path, level):
+    paths = build(tmp_path, level, ("probe-wait-trap", "probe-wait-control"), range(5))
+    for path in paths:
+        task = load_task(path)
+        params = task["params"]
+        target = next(g for g in params["groups"] if g["name"] == params["target"])
+        trap = task["condition"] == "probe-wait-trap"
+        for schedule in range(3):
+            for policy in ("careful", "eager", "naive", "lapse-30"):
+                run = SIM.simulate_built(path, policy, schedule)
+                assert run["invalid"] is None
+                entry = run["score"]["groups"][target["name"]]
+                assert entry["asked"] == 1 and entry["announced"] and not entry["desk_answer_wrong"]
+                if policy == "careful" or not trap:
+                    assert run["reward"] == 1 and entry["valid_coordinated"] and not entry["premature"]
+                elif policy in ("eager", "naive"):
+                    assert entry["premature"] and not entry["exposed"]
+                    assert run["reward"] == float(target["saved"] == params["buyer"])
+                if trap:
+                    answer = next(e for e in run["events"] if e["kind"] == "send" and e["seat"] == target["desk"])
+                    route = next(e for e in run["events"] if e["kind"] == "message_route"
+                                 and e["data"]["id"] == answer["data"]["id"])
+                    assert route["data"]["arrival"] == params["wait"]["reply_tick"] < params["wait"]["order_deadline"]
+                    receipt = next(e for e in run["events"] if e["kind"] == "deliver" and e["seat"] == "p1"
+                                   and answer["data"]["id"] in e["data"]["ids"])
+                    upload = next(e for e in run["events"] if e["kind"] == "file_publish"
+                                  and e["data"]["file"]["kind"] == "order" and e["data"]["file"]["group"] == target["name"])
+                    assert (upload["seq"] < receipt["seq"]) == entry["premature"]
+        inst = FAMILY.generate(SEED, task["instance"], None, level)
+        a = FAMILY.extension_arm(inst, "probe-wait-control", 1000, 20)
+        b = FAMILY.extension_arm(inst, "probe-wait-trap", 1000, 20)
+        assert a["params"] | {"wait": b["params"]["wait"]} == b["params"]

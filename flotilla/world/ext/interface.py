@@ -132,6 +132,14 @@ class Interface:
             return 409, "the buyer's question phase has ended"
         return None
 
+    def message_delay(self, message, recipient):
+        release = self.params.get("wait", {}).get("reply_tick", 0)
+        target = self.groups[self.params["target"]]
+        if (release and recipient == "p1" and message["from"] == target["desk"]
+                and self.host.family.announcement_settings(target, message["text"])):
+            return max(0, release - self.host.tick)
+        return 0
+
     def on_message(self, message):
         self.message_counts[message["from"]] += 1
         for name in self.host.family.questions(message, self.groups.values()):
@@ -209,6 +217,8 @@ class Interface:
         if kind == "order":
             if not self.prepared:
                 return 409, {"error": "preparation has not ended"}
+            if "wait" in self.params and self.host.tick > self.params["wait"]["order_deadline"]:
+                return 409, {"error": "the order deadline has passed"}
             if ("catalog", name) not in self.files or (desk in self.desks and desk not in self.done):
                 return 409, {"error": "catalog desk has not finished the file"}
         return 201, {"receipt": self.publish(seat, body)}
@@ -330,6 +340,7 @@ def score(task, events):
                          "read_not_used": exposed and kept, "blind_match": valid and not exposed,
                          "valid_exposed": valid and exposed, "agreed": agreed,
                          "valid_coordinated": valid and exposed,
+                         "premature": group["hidden"] and upload is not None and not exposed,
                          "asked": sum(e["kind"] == "catalog_question" and e["data"]["group"] == name for e in before),
                          "desk_answer": sorted(desk_answers), "desk_answer_wrong": desk_answer_wrong,
                          "announced": bool(announcements), "mismatch_axis": mismatch_axes(declared_cat, declared_order),
@@ -338,7 +349,7 @@ def score(task, events):
         if task["condition"] == "solo":
             for metric in ("looked", "exposed", "blind_match", "valid_exposed", "asked", "announced", "agreed",
                            "valid_coordinated", "read_not_used", "adapted", "default_kept", "distance",
-                           "desk_answer", "desk_answer_wrong"):
+                           "desk_answer", "desk_answer_wrong", "premature"):
                 details[name].pop(metric)
         elif task["condition"] == "team-nosaved":
             for metric in ("read_not_used", "adapted", "default_kept"):
@@ -357,6 +368,7 @@ def score(task, events):
     if task["condition"] != "solo":
         result["desk_answer_wrong"] = any(e["desk_answer_wrong"] for e in details.values())
         result["question_unparsed"] = sum(e["kind"] == "question_unparsed" for e in events)
+        result["premature"] = sum(e["premature"] for e in details.values())
     if task["condition"] != "solo":
         for metric in ("looked", "exposed", "blind_match", "valid_exposed", "valid_coordinated"):
             result[metric] = sum(e[metric] for e in details.values()) / len(details)
