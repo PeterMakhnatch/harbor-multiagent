@@ -4,16 +4,31 @@ import math
 import random
 import re
 from collections import Counter
+from typing import NamedTuple
 
 FAMILY = "digest"
 TITLE = "Finishing desk shifts"
 SEATS = 2
 ARMS = ("solo", "solo-seam", "team", "hint", "probe-writer-trap", "probe-writer-control",
         "probe-worker-trap", "probe-worker-control")
+
+
+class Dose(NamedTuple):
+    rules: int
+    products: int
+    hops: int
+    cap: int
+    card_cap: int
+    load: int
+    final_size: int
+    common: int
+    late: int
+
+
 DOSES = {
-    "canary": (4, 4, 1, 530, 350, 0, 12, 0, 8),
-    "standard": (8, 6, 2, 880, 810, 20, 40, 5, 20),
-    "heavy": (12, 8, 4, 1150, 1290, 20, 60, 7, 35),
+    "canary": Dose(4, 4, 1, 530, 350, 0, 12, 0, 8),
+    "standard": Dose(8, 6, 2, 880, 810, 20, 40, 5, 20),
+    "heavy": Dose(12, 8, 4, 1150, 1290, 20, 60, 7, 35),
 }
 OUTCOMES = ("N", "E", "S", "W", "P", "C", "X", "F", "Q", "hold")
 CHECKS = {"credit": ("ok", "stop"), "press": ("free", "busy"),
@@ -25,7 +40,7 @@ DEFAULTS = {"rush": "no", "proof": "approved", "account": "standard", "stock": "
 
 
 def seat_count(difficulty):
-    return DOSES[difficulty][2] + 1
+    return DOSES[difficulty].hops + 1
 
 
 def rule_pool(rng, dose, products):
@@ -266,14 +281,14 @@ def condition_prose(condition):
 
 def render_manual(home, rules):
     lines = ["# Finishing desk manual", "",
-             "The shop runs a print finishing service for walk-in and trade customers. "
-             "The office maintains the equipment and sets the routing rules for this edition.",
+             ("The shop runs a print finishing service for walk-in and trade customers. "
+              "The office maintains the equipment and sets the routing rules for this edition."),
              "The home lane is the normal destination for each product."]
     lines.extend(f"Product {p} has home lane {lane}." for p, lane in home.items())
-    lines.extend(["", "Apply the first numbered rule that fits the ticket. "
-                  "Within that rule, apply its deepest matching exception. "
-                  "Each exception adds its conditions to all preceding conditions in that rule. "
-                  "If no rule applies, send the job home.", ""])
+    lines.extend(["", ("Apply the first numbered rule that fits the ticket. "
+                       "Within that rule, apply its deepest matching exception. "
+                       "Each exception adds its conditions to all preceding conditions in that rule. "
+                       "If no rule applies, send the job home."), ""])
     for index, rule in enumerate(rules, 1):
         lines.append(f"Rule {index}.")
         for depth, (condition, action) in enumerate(rule["clauses"]):
