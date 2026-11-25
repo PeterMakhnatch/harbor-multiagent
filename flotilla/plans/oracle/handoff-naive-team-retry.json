@@ -1,0 +1,19 @@
+{
+  "name": "handoff-naive-team-infrastructure-retry",
+  "prereg": {
+    "commit": "734c103be28df65565dd0835d96352d313693776",
+    "doc": "flotilla/docs/seams/handoff.md",
+    "section": "## Zero-cost oracle preregistration"
+  },
+  "task_sets": [{
+    "tasks_dir": "/tmp/seams1125/b-handoff/tasks-naive-final",
+    "manifest": "/tmp/seams1125/b-handoff/tasks-naive-final/manifest.json",
+    "instances": [0],
+    "arms": ["team"]
+  }],
+  "models": [null],
+  "agent": "oracle",
+  "make_jobs": {"max_turns": 15, "env": "docker", "concurrency": 1, "start_spacing_s": 0.0},
+  "budget": {"cap_usd": 0.0, "reserve_per_trial_usd": 0.0, "provider_floors": {}, "max_invalid_streak": 1},
+  "order_seed": 20261125
+}

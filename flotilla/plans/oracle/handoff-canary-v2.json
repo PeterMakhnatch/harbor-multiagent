@@ -1,0 +1,39 @@
+{
+  "name": "handoff-canary-v2",
+  "prereg": {
+    "commit": "ac20f8cd2b07567d9eb654262e86cb89d8f908b2",
+    "doc": "flotilla/docs/seams/handoff.md",
+    "section": "## Zero-cost oracle preregistration"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": "/tmp/seams1125/b2-handoff/tasks-careful",
+      "manifest": "/tmp/seams1125/b2-handoff/tasks-careful/manifest.json",
+      "instances": [0],
+      "arms": ["team", "team-fullrecord"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b2-handoff/tasks-careful",
+      "manifest": "/tmp/seams1125/b2-handoff/tasks-careful/manifest.json",
+      "instances": [0],
+      "arms": ["probe-hunt-control", "probe-hunt-trap"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b2-handoff/tasks-naive",
+      "manifest": "/tmp/seams1125/b2-handoff/tasks-naive/manifest.json",
+      "instances": [0],
+      "arms": ["team", "team-fullrecord"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b2-handoff/tasks-naive",
+      "manifest": "/tmp/seams1125/b2-handoff/tasks-naive/manifest.json",
+      "instances": [0],
+      "arms": ["probe-hunt-control", "probe-hunt-trap"]
+    }
+  ],
+  "models": [null],
+  "agent": "oracle",
+  "make_jobs": {"max_turns": 54, "env": "docker", "concurrency": 2, "start_spacing_s": 0.0},
+  "budget": {"cap_usd": 0.0, "reserve_per_trial_usd": 0.0, "provider_floors": {}, "max_invalid_streak": 3},
+  "order_seed": 20261125
+}
