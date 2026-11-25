@@ -114,6 +114,18 @@ def test_missing_note_and_payload_free_logs():
     assert "hidden parameters" in RECEIPTS.assay(stripped, "sim")[0]["error"]
 
 
+def test_twin_condition_is_refused_before_notes(tmp_path):
+    events = copy.deepcopy(played())
+    start = next(e for e in events if e["kind"] == "start")
+    start["data"]["condition"] = "twin"
+    rows = RECEIPTS.assay(events, "sim")
+    assert len(rows) == 1 and rows[0]["kind"] == "run" and rows[0]["condition"] == "twin"
+    assert rows[0]["notes"] == 0 and rows[0]["shifts"] is None and "twin" in rows[0]["error"]
+    log = tmp_path / "events.jsonl"
+    log.write_text("".join(json.dumps(e) + "\n" for e in events))
+    assert RECEIPTS.main([str(log), "--out", str(tmp_path / "out.jsonl")]) == 1
+
+
 def test_cli_writes_stable_jsonl(tmp_path):
     log = tmp_path / "events.jsonl"
     log.write_text("".join(json.dumps(e) + "\n" for e in played()))
