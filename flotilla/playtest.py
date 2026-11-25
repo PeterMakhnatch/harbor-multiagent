@@ -24,6 +24,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs
 
 import qa
 
@@ -53,6 +54,7 @@ responses.touch()
 request_lock = threading.Lock()
 request_seq = 0
 origin = time.monotonic()
+Path(sys.argv[2]).with_name("clock").write_text(str(origin))
 
 class RecordedWorld(world.World):
     request_id = None
@@ -60,6 +62,8 @@ class RecordedWorld(world.World):
     def _handle(self, method):
         global request_seq
         self.request_id = None
+        self.wait_expired = False
+        self.arrived = time.monotonic()
         seat = self._caller()
         if seat in world.SEATS:
             with request_lock:
@@ -68,13 +72,23 @@ class RecordedWorld(world.World):
                 with requests.open("a") as log:
                     log.write(json.dumps({"seq": request_seq, "seat": seat, "method": method,
                                           "path": self.path.split("?", 1)[0],
+                                          "query": self.path.partition("?")[2],
                                           "t": round(time.monotonic() - origin, 3)}) + "\\n")
         return super()._handle(method)
+
+    def _reply(self, status, body, *args, **kwargs):
+        path = self.path.split("?", 1)[0]
+        self.wait_expired = (status == 200 and isinstance(body, dict)
+                             and ((path == "/await" and body.get("reason") == "timeout")
+                                  or (path == "/wait" and time.monotonic() - self.arrived >= world.WAIT_SECONDS)))
+        return super()._reply(status, body, *args, **kwargs)
 
     def send_response(self, code, message=None):
         if self.request_id is not None:
             with request_lock, responses.open("a") as log:
-                log.write(json.dumps({"seq": self.request_id, "status": code}) + "\\n")
+                log.write(json.dumps({"seq": self.request_id, "status": code,
+                                      "wait_expired": self.wait_expired,
+                                      "t": round(time.monotonic() - origin, 3)}) + "\\n")
         return super().send_response(code, message)
 
 world.World = RecordedWorld
@@ -293,25 +307,100 @@ def world_server(task: qa.Task, out: Path, root: Path, tokens: dict[str, str], t
             stop_process(process)
 
 
-def run_seats(seats: list[SeatRun], timeout: float, max_parallel: int) -> bool:
+def read_delta(stream) -> list[dict]:
+    rows = []
+    while True:
+        offset = stream.tell()
+        line = stream.readline()
+        if not line.endswith("\n"):
+            stream.seek(offset)
+            return rows
+        rows.append(json.loads(line))
+
+
+def is_wait(request: dict) -> bool:
+    if request["method"] != "GET":
+        return False
+    query = parse_qs(request["query"])
+    if request["path"] == "/await":
+        until, after = query.get("until", ["active"]), query.get("after", ["0"])
+        return (len(until) == 1 and until[0] in ("active", "message", "tick")
+                and len(after) == 1 and after[0].isdigit() and len(after[0]) <= 12)
+    return request["path"] == "/wait" and query.get("round", [""])[0].isdigit()
+
+
+class WaitWatch:
+    def __init__(self, requests, responses, events, clock: float):
+        self.requests, self.responses, self.events = requests, responses, events
+        self.clock = clock
+        self.latest = {}
+        self.finished = {}
+        self.since = {}
+        self.progress = time.monotonic()
+
+    def update(self) -> None:
+        requests = read_delta(self.requests)
+        for response in read_delta(self.responses):
+            self.finished[response["seq"]] = response
+        for request in requests:
+            seat = request["seat"]
+            previous = self.latest.get(seat)
+            finish = self.finished.get(previous["seq"]) if previous else None
+            continuous = (previous is not None and is_wait(previous)
+                          and (finish is None or (finish["wait_expired"] and request["t"] - finish["t"] <= 1)))
+            if not continuous or not is_wait(request):
+                self.since[seat] = self.clock + request["t"]
+            self.latest[seat] = request
+        for event in read_delta(self.events):
+            if event["kind"] not in {"await", "wait", "whoami", "health", "state", "bad_token", "invalid_http",
+                                      "invalid", "denied", "probe", "late", "inactive", "look", "repeat"}:
+                self.progress = time.monotonic()
+
+    def stalled(self, running: list[SeatRun], ended_at: float, stall_sec: float) -> bool:
+        now = time.monotonic()
+        if not running or now - max(ended_at, self.progress) < stall_sec:
+            return False
+        for seat in running:
+            request = self.latest.get(seat.seat)
+            if request is None or not is_wait(request) or now - self.since[seat.seat] < stall_sec:
+                return False
+            finish = self.finished.get(request["seq"])
+            if finish is not None and (not finish["wait_expired"] or now - self.clock - finish["t"] > 1):
+                return False
+        return True
+
+
+def run_seats(seats: list[SeatRun], timeout: float, max_parallel: int, watch: WaitWatch,
+              seat_timeout: float | None, stall_sec: float) -> tuple[bool, str | None]:
     origin = time.monotonic()
     pending = list(seats)
     running: list[SeatRun] = []
     ended: set[str] = set()
+    last_exit = None
+    ended_at = origin
     try:
         while pending or running:
             now = time.monotonic() - origin
             for seat in running[:]:
-                if seat.process.poll() is not None:
-                    seat.finish(now)
+                expired = seat_timeout is not None and now - seat.started >= seat_timeout
+                if seat.process.poll() is not None or expired:
+                    seat.finish(now, timeout=expired and seat.process.poll() is None)
                     running.remove(seat)
                     ended.add(seat.seat)
+                    last_exit, ended_at = seat.seat, time.monotonic()
             if not pending and not running:
-                return False
+                return False, None
             if now >= timeout:
                 for seat in running + pending:
                     seat.finish(now, timeout=True)
-                return True
+                return True, "total timeout"
+            watch.update()
+            if last_exit is not None and watch.stalled(running, ended_at, stall_sec):
+                reason = f"seat {last_exit} exited; others wait"
+                for seat in running + pending:
+                    seat.error = reason
+                    seat.finish(now)
+                return False, reason
             external = sum(seat.mode == "external" for seat in running)
             for seat in pending[:]:
                 if time.monotonic() - origin >= timeout:
@@ -322,11 +411,12 @@ def run_seats(seats: list[SeatRun], timeout: float, max_parallel: int) -> bool:
                 seat.start(time.monotonic() - origin)
                 if seat.process is None:
                     ended.add(seat.seat)
+                    last_exit, ended_at = seat.seat, time.monotonic()
                 else:
                     running.append(seat)
                     external += seat.mode == "external"
             time.sleep(min(0.02, max(0, timeout - (time.monotonic() - origin))))
-        return False
+        return False, None
     finally:
         for seat in running:
             if seat.process is not None:
@@ -487,6 +577,7 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
         by_seat[seat].append(f"- #{event['seq']} {clock}={event['t']} {kind}: `{json.dumps(data, ensure_ascii=True)}`")
     lines = ["# Local playtest", "", f"Reward: {result['reward']}; timed out: {result['timed_out']}",
              f"Valid: {result['valid']}; invalid reason: {result['invalid_reason']}",
+             f"Stop reason: {result['stop_reason']}",
              f"Freeze reason: {result['freeze_reason']}; budget events: {json.dumps(result['budget_events'])}",
              (f"Model: {result['model']}; harness: {result['harness']}; "
               f"sandbox profile: {result['sandbox_profile'] or 'none (host processes are not isolated)'}"),
@@ -536,7 +627,8 @@ def seat_failures(info: dict) -> list[str]:
 
 def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: float | None,
              max_parallel: int, out: Path, *, pass_env: tuple[str, ...] = (),
-             profile: Path | None = None, model_label: str | None = None) -> dict:
+             profile: Path | None = None, model_label: str | None = None,
+             seat_timeout: float | None = None, stall_sec: float = 120) -> dict:
     if qa.yaml is None:
         raise ValueError("PyYAML is required; use uvx --quiet --python 3.12 --with pyyaml python flotilla/playtest.py")
     task = qa.load_task(task_dir.resolve())
@@ -551,6 +643,8 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
     timeout = float(config.get("agent", {}).get("timeout_sec", 900)) if timeout is None else timeout
     if not math.isfinite(timeout) or timeout <= 0 or max_parallel <= 0 or not template.strip():
         raise ValueError("timeout and max-parallel must be positive; seat command must not be empty")
+    if any(not math.isfinite(value) or value <= 0 for value in (seat_timeout, stall_sec) if value is not None):
+        raise ValueError("seat-timeout and stall-sec must be positive")
     if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) for name in pass_env):
         raise ValueError("--pass-env requires environment variable names")
     profile = sandbox_profile(profile)
@@ -570,7 +664,12 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
                     mode = "external" if seat in selected else "careful" if seat in subjects else "scripted"
                     seats.append(prepare_seat(task, seat, mode, seat_root, template, out / "seats" / seat,
                                               after[seat], tokens[seat], url, pass_env, profile))
-                timed_out = run_seats(seats, timeout, max_parallel)
+                requests_stream = stack.enter_context((out / "requests.jsonl").open())
+                responses_stream = stack.enter_context((out / "responses.jsonl").open())
+                events_stream = stack.enter_context((out / "artifacts/logs/world/events.jsonl").open())
+                watch = WaitWatch(requests_stream, responses_stream, events_stream,
+                                  float((root / "clock").read_text()))
+                timed_out, stop_reason = run_seats(seats, timeout, max_parallel, watch, seat_timeout, stall_sec)
                 reward, score = verify(task, out, url, env, float(config.get("verifier", {}).get("timeout_sec", 120)))
         finally:
             audit = archive_seats(seats)
@@ -580,6 +679,7 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
         reason = score.get("error") or (None if reward is not None else "verifier returned no reward")
         result = {"task": str(task.path), "reward": reward, "score": score, "timed_out": timed_out,
                   "valid": reason is None, "invalid_reason": reason, **world_causes(out),
+                  "stop_reason": stop_reason,
                   "sandbox_profile": str(profile) if profile else None, "model": model_label,
                   "harness": harness_name(template), "seat_failures": failures, "seats": seat_results}
         (out / "result.json").write_text(json.dumps(result, indent=2) + "\n")
@@ -593,6 +693,8 @@ def main() -> None:
     parser.add_argument("--seat-cmd", required=True, help="shell template; {instruction}, {seat}, {workdir}, {log}")
     parser.add_argument("--seats", help="comma-separated external seats (default: all non-scripted seats)")
     parser.add_argument("--timeout-sec", type=float, help="total seat play time (default: built task timeout)")
+    parser.add_argument("--seat-timeout", type=float, help="maximum seconds per seat, from its own start")
+    parser.add_argument("--stall-sec", type=float, default=120, help="stop when all live seats wait after an exit")
     parser.add_argument("--max-parallel", type=int, default=2, help="maximum concurrent external commands")
     parser.add_argument("--pass-env", action="append", default=[], metavar="NAME",
                         help="host variable to pass to a seat (repeatable; comma-separated names also accepted)")
@@ -604,12 +706,15 @@ def main() -> None:
         selected = {seat.strip() for seat in args.seats.split(",")} if args.seats is not None else None
         passed = tuple(name.strip() for group in args.pass_env for name in group.split(","))
         result = playtest(args.task, args.seat_cmd, selected, args.timeout_sec, args.max_parallel, args.out,
-                          pass_env=passed, profile=args.sandbox_profile, model_label=args.model_label)
+                          pass_env=passed, profile=args.sandbox_profile, model_label=args.model_label,
+                          seat_timeout=args.seat_timeout, stall_sec=args.stall_sec)
     except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         parser.exit(2, f"playtest: {exc}\n")
     print(f"Reward: {result['reward']}; results: {args.out / 'result.json'}")
     for name, info in result["seats"].items():
         print(f"{name}: exit={info['exit_code']}, world calls={info['world_calls']}")
+    if result["stop_reason"]:
+        print(f"playtest: stopped: {result['stop_reason']}", file=sys.stderr)
     if not result["valid"]:
         print(f"playtest: invalid: {result['invalid_reason']}", file=sys.stderr)
     if result["seat_failures"]:

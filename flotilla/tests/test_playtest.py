@@ -88,6 +88,14 @@ elif mode == 'fault':
             urllib.request.urlopen(request).read()
         except urllib.error.HTTPError:
             pass
+elif mode == 'stall':
+    import urllib.request
+    if seat == 'p1':
+        sys.exit(7)
+    request = urllib.request.Request(os.environ['WORLD_URL'] + '/await?until=tick&after=0',
+                                     headers={'Authorization': 'Bearer ' + os.environ['SEAT_TOKEN']})
+    while True:
+        urllib.request.urlopen(request).read()
 """
 
 
@@ -230,6 +238,34 @@ def test_timeout_freezes_and_scores_with_pending_seat(tmp_path):
     assert p1["timed_out"] and p1["exit_code"] < 0
     assert p2["timed_out"] and p2["started_sec"] is None and p2["exit_code"] is None
     assert "No seat events." in summary
+
+
+def test_per_seat_timeout_starts_at_launch(tmp_path):
+    task = build(tmp_path, "talk")
+    config = task / "task.toml"
+    config.write_text(config.read_text().replace("[agents.p2]\n", '[agents.p2]\nstart_after = ["p1"]\n'))
+    _, result = play(tmp_path, task, "wait", extra=("--seat-timeout", "0.5"), expected_exit=1)
+    assert not result["timed_out"]
+    p1, p2 = result["seats"]["p1"], result["seats"]["p2"]
+    for seat in (p1, p2):
+        assert seat["timed_out"] and seat["exit_code"] < 0
+        assert 0.5 <= seat["seconds"] < 2
+    assert p2["started_sec"] >= p1["ended_sec"]
+
+
+def test_stall_stops_waiting_seat_after_exit(tmp_path):
+    task = build(tmp_path, "team")
+    compose = task / "environment" / "docker-compose.yaml"
+    compose.write_text(compose.read_text().replace("    environment:\n",
+                                                  '    environment:\n      FLOTILLA_WAIT_SECONDS: "0.2"\n', 1))
+    completed = play(tmp_path, task, "stall", extra=("--stall-sec", "0.8"), check=False)
+    assert completed.returncode == 1, completed.stdout + completed.stderr
+    result = json.loads((tmp_path / "out" / "result.json").read_text())
+    assert result["stop_reason"] == "seat p1 exited; others wait"
+    assert result["stop_reason"] in completed.stderr
+    assert not result["timed_out"]
+    assert result["seats"]["p2"]["seconds"] < 5
+    assert result["seats"]["p2"]["world_calls"] > 1
 
 
 def test_failed_seat_exit(tmp_path):
