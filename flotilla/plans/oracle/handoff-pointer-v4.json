@@ -1,0 +1,27 @@
+{
+  "name": "handoff-pointer-v4",
+  "prereg": {
+    "commit": "f41ff76060159a0a3e5fb6916a7cb4ff9676a2cc",
+    "doc": "flotilla/docs/seams/handoff.md",
+    "section": "## Zero-cost oracle preregistration"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": "/tmp/seams1125/b4-handoff/tasks-careful",
+      "manifest": "/tmp/seams1125/b4-handoff/tasks-careful/manifest.json",
+      "instances": [0],
+      "arms": ["team"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b4-handoff/tasks-pointer",
+      "manifest": "/tmp/seams1125/b4-handoff/tasks-pointer/manifest.json",
+      "instances": [0],
+      "arms": ["team"]
+    }
+  ],
+  "models": [null],
+  "agent": "oracle",
+  "make_jobs": {"max_turns": 90, "env": "docker", "concurrency": 2, "start_spacing_s": 0.0},
+  "budget": {"cap_usd": 0.0, "reserve_per_trial_usd": 0.0, "provider_floors": {}, "max_invalid_streak": 2},
+  "order_seed": 20261125
+}
