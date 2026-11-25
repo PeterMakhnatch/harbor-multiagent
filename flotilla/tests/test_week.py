@@ -29,11 +29,11 @@ def check_reply(sim, seat, request, result):
     model = sim.world.EXTENSION
     single = model.single
     assert all(set(row) == {"order", "carrier", "departure"} for row in reply["board"])
-    assert ("handbook" in reply) == (single or seat == "A")
-    assert ("ratefiles" in reply) == (single or seat == "R")
-    assert ("amendments" in reply) == (single or seat == "A")
-    assert ("orders" in reply) == (single or seat in ("N1", "N2", "S"))
-    assert ("notebook" in reply) == (seat == "N2")
+    assert ("handbook" in reply) == (single or seat == "a")
+    assert ("ratefiles" in reply) == (single or seat == "r")
+    assert ("amendments" in reply) == (single or seat == "a")
+    assert ("orders" in reply) == (single or seat in ("n1", "n2", "s"))
+    assert ("notebook" in reply) == (seat == "n2")
     if "orders" not in reply:
         assert not any(order["ref"] in wire for order in model.orders.values())
         return
@@ -45,13 +45,13 @@ def check_reply(sim, seat, request, result):
     for receipt in reply["receipts"]:
         entry = model.bookings[receipt["order"]]
         assert entry["ref"] == receipt["carrier_ref"]
-        assert single or entry["desk"] == seat or (seat == "N2" and model.p["fullrecord"])
+        assert single or entry["desk"] == seat or (seat == "n2" and model.p["fullrecord"])
     for callback in reply["callbacks"]:
         assert set(callback) == {"carrier_ref", "status"}
         order = next(o for o in model.orders.values() if o["ref"] == callback["carrier_ref"])
         assert order["callback"] <= reply["round"]
         assert single or FAMILY.desk_for(order["hub"], reply["round"], model.p["shift"]) == seat
-    assert ("prior_record" in reply) == (seat == "N2" and model.p["fullrecord"])
+    assert ("prior_record" in reply) == (seat == "n2" and model.p["fullrecord"])
 
 
 def check_run(result, inst, single=False, nop=False):
@@ -68,10 +68,20 @@ def check_run(result, inst, single=False, nop=False):
     events = result["events"]
     assert result["state"]["frozen"]
     assert not any(e["kind"] in ("extension_error", "week_rejected", "week_budget") for e in events)
-    active = {"A"} if single else set(inst["seats"]) - {"N2"}
+    active = {"a"} if single else set(inst["seats"]) - {"n2"}
     ready = set()
     closed = 0
+    sends = {}
     for e in events:
+        if e["kind"] == "send":
+            sends[e["data"]["id"]] = e
+        if e["kind"] == "deliver":
+            for mid in e["data"]["ids"]:
+                sent = sends[mid]
+                assert e["t"] >= sent["t"] + 1
+                assert sent["seat"] != e["seat"]
+                assert sent["data"]["to"] in ("all", e["seat"])
+                assert e["seat"] != "n2" or sent["t"] >= inst["shift"]
         if e["kind"] == "week_book":
             b = e["data"]
             assert b["desk"] in active and b["round"] == closed + 1
@@ -146,10 +156,17 @@ def test_week_sweep(difficulty, monkeypatch):
             assert run("team-fullrecord", "naive-handoff", schedule)["reward"] == 1
             assert run("hint", "careful", schedule)["reward"] == 1
             run("team", "random-valid", schedule)
+            lapse = {}
+            for percent in (10, 20, 30, 50):
+                lapse[percent] = run("team", f"lapse-{percent}", schedule)
             if instance < 5:
                 replay = SIM.simulate_built(by_arm["team"], "careful", 4)
                 assert replay["events"] == careful["events"]
+                twin = SIM.simulate_built(by_arm["team"], "lapse-30", (schedule + 1) % 5)
+                assert twin["score"] == lapse[30]["score"]
     assert len(instances) == 100
+    for percent in (10, 20, 30, 50):
+        assert 0 < mean(row[0] for row in samples["team", f"lapse-{percent}"]) < 1
     summary = {f"{arm}/{policy}": {"n": len(rows), "reward": mean(row[0] for row in rows),
                                    "costs": {s: mean(row[1][s] for row in rows) for s in FAMILY.SEAMS}}
                for (arm, policy), rows in sorted(samples.items())}
@@ -159,21 +176,21 @@ def test_week_sweep(difficulty, monkeypatch):
 def test_week_private_inputs_and_malformed_requests(monkeypatch):
     original = SIM.POLICY.play
 
-    def probe(name, client, own, family, oracle, custom, variant, extension):
-        if own["role"] == "A":
+    def probe(name, client, own, family, oracle, custom, variant, extension, seed=None, instance=None):
+        if own["role"] == "a":
             for card in (None, [], "x" * 500, "\ud800"):
                 status, check = yield from client.post("/card/check", {"card": card})
                 assert status == 200 and check["valid"] is False
             status, _ = yield from client.post("/round", {"round": 9})
             assert status == 400
-            status, _ = yield from client.post("/messages", {"to": "N2", "text": "test"})
+            status, _ = yield from client.post("/messages", {"to": "n2", "text": "test"})
             assert status == 403
-        if own["role"] == "N1":
+        if own["role"] == "n1":
             status, _ = yield from client.post("/rates/check", {"rates": {}})
             assert status == 403
             status, _ = yield from client.post("/round", {"round": 1, "bookings": [None]})
             assert status == 400
-        yield from original(name, client, own, family, oracle, custom, variant, extension)
+        yield from original(name, client, own, family, oracle, custom, variant, extension, seed, instance)
 
     monkeypatch.setattr(SIM.POLICY, "play", probe)
     result = SIM.simulate("week", "team", 3, "careful", SEED, 2, difficulty="canary")

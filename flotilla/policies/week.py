@@ -14,7 +14,7 @@ def supports(name, variant):
 def failed(name, own, seam, key):
     if name in ("naive", f"naive-{seam}"):
         return True
-    return name.startswith("lapse-") and hasattr(own, "lapse") and own.lapse(int(name.split("-")[1]), f"{seam}:{key}")
+    return own.lapse_percent is not None and own.lapse(own.lapse_percent, (seam, key))
 
 
 def interpret(reply, forms, amendments):
@@ -74,10 +74,13 @@ def account_actions(name, own, desk, body, family):
 def dispatch_actions(name, own, desk, body, family, forms, amendments, refs):
     round_no = desk["round"]
     bookings = []
+    by_hub = {}
     for order in desk["orders"]:
         oid = order["id"]
         early = failed(name, own, "commit", oid) or name == "random-valid"
         if round_no < 2 or not early and round_no <= order["amend_close"]:
+            continue
+        if by_hub.get(order["hub"], 0) >= 3:
             continue
         carriers = family.choices(order, desk["card"])
         if oid in amendments:
@@ -88,6 +91,7 @@ def dispatch_actions(name, own, desk, body, family, forms, amendments, refs):
         form = choose(family.FORMS, oid + ":form") if name == "random-valid" else forms.get(carrier, "C/Z")
         bookings.append({"order": oid, "carrier": carrier, "departure": order["departure"],
                          "rate_key": family.rate_key(carrier, order["zone"], form)})
+        by_hub[order["hub"]] = by_hub.get(order["hub"], 0) + 1
     body["bookings"] = bookings
     reconciles = []
     for callback in desk["callbacks"]:
@@ -108,9 +112,9 @@ def play(name, client, own, family):
     single = role == "all"
     forms, amendments, refs = {}, {}, {}
     pending = []
-    first = own["shift"] + 1 if role == "N2" else 1
-    last = own["shift"] if role == "N1" else own["rounds"]
-    if role == "N2":
+    first = own["shift"] + 1 if role == "n2" else 1
+    last = own["shift"] if role == "n1" else own["rounds"]
+    if role == "n2":
         status, opened = yield from client.get("/await?until=active")
         if status != 200 or opened["active"] != "active":
             raise RuntimeError("late shift did not start")
@@ -121,7 +125,7 @@ def play(name, client, own, family):
             raise RuntimeError("desk did not open the required round")
         interpret(desk, forms, amendments)
         body = {"round": round_no}
-        if single or role == "A":
+        if single or role == "a":
             account_actions(name, own, desk, body, family)
             pending.extend(desk["amendments"])
             if single:
@@ -139,11 +143,12 @@ def play(name, client, own, family):
                         raise RuntimeError("amendment relay failed")
                     interpret(reply, forms, amendments)
                 pending = delayed
-        if (single or role == "R") and (round_no - 1) % own["day_length"] == 0:
+        if (single or role == "r") and (round_no - 1) % own["day_length"] == 0:
             forms = {carrier: supported[0] for carrier, supported in desk["ratefiles"].items()}
             body["rates"] = forms
             if not single:
-                announced = {c: form for c, form in forms.items() if not failed(name, own, "interface", c)}
+                announced = {c: form for c, form in forms.items()
+                             if not failed(name, own, "interface", (desk["day"], c))}
                 if announced:
                     status, reply = yield from client.post(
                         "/messages", {"to": "all", "text": json.dumps({"forms": announced})}
@@ -151,14 +156,14 @@ def play(name, client, own, family):
                     if status != 201:
                         raise RuntimeError("rate form relay failed")
                     interpret(reply, forms, amendments)
-        if single or role in ("N1", "N2", "S"):
+        if single or role in ("n1", "n2", "s"):
             refs.update({r["carrier_ref"]: r["order"] for r in desk["receipts"]})
-            if role == "N2" and round_no == first:
+            if role == "n2" and round_no == first:
                 from_note(desk["notebook"], forms, refs)
             dispatch_actions(name, own, desk, body, family, forms, amendments, refs)
             for reconcile in body["reconciles"]:
                 refs.pop(reconcile["carrier_ref"], None)
-            if role == "N1" and round_no == last:
+            if role == "n1" and round_no == last:
                 if body["bookings"]:
                     raise RuntimeError("generator must leave the last early round free of new bookings")
                 body["notebook"] = make_note(name, own, refs, forms)

@@ -69,8 +69,8 @@ class Week:
 
     def receipts(self, seat):
         return [{"order": oid, "carrier_ref": self.orders[oid]["ref"]} for oid, book in self.bookings.items()
-                if (self.single or book["desk"] == seat or (seat == "N2" and self.p["fullrecord"]
-                    and book["desk"] == "N1")) and self.orders[oid]["ref"] not in self.reconciles]
+                if (self.single or book["desk"] == seat or (seat == "n2" and self.p["fullrecord"]
+                    and book["desk"] == "n1")) and self.orders[oid]["ref"] not in self.reconciles]
 
     def active_callbacks(self, seat):
         return [{"carrier_ref": o["ref"], "status": o["status"]} for o in self.orders.values()
@@ -80,7 +80,7 @@ class Week:
     def desk(self, seat):
         reply = {"round": self.round, "day": self.day, "board": self.board}
         ids = []
-        if self.role(seat, "A"):
+        if self.role(seat, "a"):
             reply["handbook"] = family.handbook(self.p["rules"])
             reply["amendments"] = [{"order": o["id"], "carrier": o["amendment"], "desk":
                                      family.desk_for(o["hub"], self.round, self.p["shift"])}
@@ -88,10 +88,10 @@ class Week:
             reply["questions"] = [q for q in self.questions.values() if q["round"] <= self.round
                                   and q["id"] not in self.answers]
             ids.extend(a["order"] + ":amendment" for a in reply["amendments"])
-        if self.role(seat, "R"):
+        if self.role(seat, "r"):
             reply["ratefiles"] = self.p["supports"]
             reply["published"] = self.rates
-        if self.single or seat in ("N1", "N2", "S"):
+        if self.single or seat in ("n1", "n2", "s"):
             reply["orders"] = [family.public_order(o) for o in self.orders.values() if self.owns(seat, o)
                                and o["release"] <= self.round < o["departure"] and o["id"] not in self.bookings]
             reply["card"] = self.card_live
@@ -99,10 +99,10 @@ class Week:
             reply["callbacks"] = self.active_callbacks(seat)
             ids.extend(o["id"] for o in reply["orders"])
             ids.extend(c["carrier_ref"] for c in reply["callbacks"])
-            if seat == "N2":
+            if seat == "n2":
                 reply["notebook"] = self.note
                 if self.p["fullrecord"]:
-                    reply["prior_record"] = [b for b in self.bookings.values() if b["desk"] == "N1"]
+                    reply["prior_record"] = [b for b in self.bookings.values() if b["desk"] == "n1"]
                 ids.append("notebook")
         return 200, reply, ids
 
@@ -112,14 +112,14 @@ class Week:
 
     def seal_card(self, seat, text):
         card = family.parse_card(text, self.p["card_cap"])
-        if not self.role(seat, "A") or self.round != 1 or self.card is not None or card is None:
+        if not self.role(seat, "a") or self.round != 1 or self.card is not None or card is None:
             return self.reject(seat, "card", "card must be valid and sealed once in round 1 by the account desk")
         self.card = card
         self.host.record("week_card", seat, {"card": card})
         return {"action": "card", "ok": True}
 
     def publish_rates(self, seat, rates):
-        if (not self.role(seat, "R") or self.day in self.rates_days or not self.rates_valid(rates)
+        if (not self.role(seat, "r") or self.day in self.rates_days or not self.rates_valid(rates)
                 or (self.round - 1) % self.p["day_length"] != 0):
             return self.reject(seat, "rates", "publish all four forms once on the first round of the day")
         self.rates_days.add(self.day)
@@ -157,7 +157,7 @@ class Week:
     def answer(self, seat, item):
         qid, eta = item.get("question"), item.get("eta")
         q = self.questions.get(qid) if isinstance(qid, str) else None
-        if (not self.role(seat, "A") or q is None or qid in self.answers or q["round"] > self.round
+        if (not self.role(seat, "a") or q is None or qid in self.answers or q["round"] > self.round
                 or type(eta) is not int):
             return self.reject(seat, "answer", "question is unavailable or ETA is not an integer round")
         self.answers.add(qid)
@@ -165,7 +165,7 @@ class Week:
         return {"action": "answer", "ok": True}
 
     def seal_note(self, seat, note):
-        if (seat != "N1" or self.single or self.round != self.p["shift"]
+        if (seat != "n1" or self.single or self.round != self.p["shift"]
                 or not family.fits_utf8(note, self.p["note_cap"]) or len(note.splitlines()) > self.p["note_lines"]):
             return self.reject(seat, "notebook", "seal within the byte and line cap at the end of the early shift")
         self.note = note
@@ -188,8 +188,8 @@ class Week:
         else:
             self.host.advance()
             if not self.single and round_no == self.p["shift"]:
-                self.host.retire("N1")
-                self.host.activate("N2")
+                self.host.retire("n1")
+                self.host.activate("n2")
 
     def handle(self, seat, method, path, body, query):
         if path == "/desk":
@@ -198,9 +198,9 @@ class Week:
             return 200, {"round": self.round, "board": self.board}
         if path == "/card/check":
             return (200, {"valid": family.parse_card(body.get("card"), self.p["card_cap"]) is not None}) if self.role(
-                seat, "A") else (403, {"error": "account desk only"})
+                seat, "a") else (403, {"error": "account desk only"})
         if path == "/rates/check":
-            return (200, {"valid": self.rates_valid(body.get("rates"))}) if self.role(seat, "R") else (
+            return (200, {"valid": self.rates_valid(body.get("rates"))}) if self.role(seat, "r") else (
                 403, {"error": "rates desk only"})
         if seat in self.done:
             return 409, {"error": "round already closed; wait for next tick"}
@@ -273,7 +273,8 @@ def score(task, events):
     def charge(subject, seam, reason, fee=0, lost=0):
         nonlocal fees
         fees += fee
-        ledger.append({"subject": subject, "seam": seam, "reason": reason, "fee": fee, "lost_revenue": lost})
+        ledger.append({"subject": subject, "seam": "own" if len(task["seats"]) == 1 else seam,
+                       "reason": reason, "fee": fee, "lost_revenue": lost})
 
     for order in p["orders"]:
         oid, ref = order["id"], order["ref"]
@@ -305,7 +306,7 @@ def score(task, events):
         if order["callback"] is not None:
             correct = {"ref": ref, "order": oid, "action": "close" if order["status"] == "delivered" else "reissue"}
             if reconciles.get(ref) != correct:
-                crossing = b["desk"] == "N1" and order["callback"] > p["shift"]
+                crossing = b["desk"] == "n1" and order["callback"] > p["shift"]
                 lost = order["status"] != "delivered"
                 reason = ("in_notebook_not_used" if oid in note and ref in note or p["fullrecord"] else "not_in_notebook")
                 charge(oid, "handoff" if crossing else "own", reason if crossing else "unsettled_callback",
