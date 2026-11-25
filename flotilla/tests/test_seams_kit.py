@@ -232,7 +232,7 @@ def test_extension_fail_closed_over_http(tmp_path, start_world):
     world.ordered = True
     assert world.seat("p2", "POST", "/messages", {"to": "p1", "text": "not allowed"})[0] == 403
     for _ in range(19):
-        assert world.seat("p2", "GET", "/whoami")[0] == 200
+        assert world.seat("p2", "GET", "/board")[0] == 200
     assert sum(e["kind"] == "call_budget" for e in world.events()) == 1
     verifier = load(task.env_dir / "score.py")
     verifier.WORLD, verifier.WORLD_DIR = world.url, task.env_dir
@@ -317,6 +317,34 @@ def test_deadline_stalls(tmp_path, start_world, monkeypatch):
     assert world.seat("p2", "GET", "/await?until=active")[1]["reason"] == "frozen"
     actual = SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir)
     assert actual == {"invalid": "play_timeout", "stalled_seats": ["p2"]}
+
+
+def test_free_control_calls(tmp_path, start_world):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("team",), tmp_path)
+    task = QA.load_task(path)
+    world = start_world("team", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+    world.ordered = True
+    for _ in range(25):
+        for route in ("/whoami", "/await?until=active", "/health"):
+            assert world.seat("p2", "GET", route)[0] == 200
+    assert world.module.HOST.attempts["p2"] == 0
+    left = json.loads(task.env("p1")["SEAT_BRIEFING"])["left"]
+    total = task.task_json["params"]["total"]
+    assert world.seat("p1", "POST", "/messages", {"to": "p2", "text": f"handoff {left}"})[0] == 201
+    assert world.seat("p1", "POST", "/ready", {})[0] == 200
+    assert world.seat("p2", "POST", "/ready", {})[0] == 200
+    assert world.seat("p2", "POST", "/commit", {"total": total})[0] == 200
+    actual = SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir)
+    sim = SIM.simulate_built(path, {"p2": "free-calls"}, 0)
+    assert actual["reward"] == sim["reward"] == 1
+    assert not any(e["kind"] == "call_budget" for e in world.events() + sim["events"])
+    world = start_world("team", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+    world.module.EXTENSION.on_budget = lambda seat: None
+    for _ in range(20):
+        assert world.seat("p2", "GET", "/board")[0] == 200
+    assert world.seat("p2", "GET", "/whoami")[0] == 200
+    status, reply = world.seat("p2", "GET", "/board")
+    assert status == 429 and reply["budget"] == "max_calls" and reply["limit"] == 20
 
 
 def test_rf1v_read_first_reliance_sweep(tmp_path):

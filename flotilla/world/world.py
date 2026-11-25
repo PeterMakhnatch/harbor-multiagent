@@ -1140,7 +1140,7 @@ class World(BaseHTTPRequestHandler):
                         HOST.seat_end(predecessor)
                 if SCHEDULED:
                     _post_scheduled(seat)  # version 14: the first request of a seat under test adds every post
-                if HOST is not None:
+                if HOST is not None and path not in ("/await", "/whoami", "/health"):
                     try:
                         admitted = HOST.admit(seat)
                     except Exception as exc:  # noqa: BLE001 - contain family-code failures
@@ -1148,7 +1148,8 @@ class World(BaseHTTPRequestHandler):
                         self._reply(500, {"error": "world failed"})
                         return
                     if not admitted:
-                        self._reply(429, {"error": "request limit reached"})
+                        self._reply(429, {"error": "max_calls budget exhausted",
+                                          "budget": "max_calls", "limit": HOST.max_calls[seat]})
                         return
                     if HOST.status[seat] == "active" and not STATE["frozen"] and HOST.attempts[seat] == HOST.max_calls[seat]:
                         self.budget_seat = seat

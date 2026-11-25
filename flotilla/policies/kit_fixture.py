@@ -4,17 +4,23 @@ import re
 
 
 def supports(name, variant):
-    return (name in ("careful", "naive", "sender", "exhaust", "stall", "fault", "wait-message", "script-loop")
+    return (name in ("careful", "naive", "sender", "exhaust", "stall", "fault", "wait-message",
+                     "script-loop", "free-calls")
             or re.fullmatch(r"lapse-(?:0|[1-9][0-9]?|100)", name) is not None)
 
 
 def play(name, client, own, family):
     if name == "exhaust":
         for _ in range(21):
-            _, me = yield from client.get("/whoami")
+            _, me = yield from client.get("/board")
             if me.get("frozen"):
                 return
         return
+    if name == "free-calls":
+        for _ in range(25):
+            yield from client.get("/whoami")
+            yield from client.get("/await?until=active")
+            yield from client.get("/health")
     if name == "stall":
         for _ in range(100_000):
             yield from client.sleep(0)
