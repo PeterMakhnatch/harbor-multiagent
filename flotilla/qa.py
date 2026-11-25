@@ -1062,6 +1062,25 @@ def check_extension(task: Task) -> Iterator[Finding]:
                         if "start_after" in config["agents"][seat]}
         if actual_edges != arm.get("start_after", {}):
             yield Finding("qa-error", task.name, "*", "extension start_after differs from generator")
+        if data.get("start_after", actual_edges) != actual_edges:
+            yield Finding("qa-error", task.name, "*", "world start_after differs from task config")
+        play = metadata["play_timeout_sec"]
+        agent = config["agent"]["timeout_sec"]
+        BUILD.validate_timeout(play)
+        BUILD.validate_timeout(agent)
+        if (float(task.env("main")["FLOTILLA_PLAY_SECONDS"]) != play
+                or data.get("play_timeout_sec", play) != play
+                or arm.get("play_timeout_sec", play) != play):
+            yield Finding("qa-error", task.name, "*", "extension play timeout differs")
+        requested = arm.get("agent_timeout_sec", agent)
+        expected = requested if isinstance(requested, dict) else dict.fromkeys(seats, requested)
+        if (data.get("agent_timeout_sec", expected) != expected or agent != max(expected.values())
+                or metadata.get("agent_timeout_sec", expected) != expected):
+            yield Finding("qa-error", task.name, "*", "extension agent timeout differs")
+        staged = {seat for seat, predecessors in actual_edges.items() if predecessors}
+        staged.update(p for predecessors in actual_edges.values() for p in predecessors)
+        if staged and play < len(staged) * agent + BUILD.STAGED_TIMEOUT_MARGIN_SEC:
+            yield Finding("qa-error", task.name, "*", "staged play timeout is too short for agent limits and margin")
         for name, text in arm.get("files", {}).items():
             if (task.env_dir / "player" / name).read_text() != text:
                 yield Finding("qa-error", task.name, "*", "extension file differs from generator")

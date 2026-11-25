@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import tomllib
 
 import pytest
 from conftest import FLOTILLA, load
@@ -231,7 +232,7 @@ def test_extension_fail_closed_over_http(tmp_path, start_world):
     world.ordered = True
     assert world.seat("p2", "POST", "/messages", {"to": "p1", "text": "not allowed"})[0] == 403
     for _ in range(19):
-        assert world.seat("p2", "GET", "/whoami")[0] == 200
+        assert world.seat("p2", "GET", "/board")[0] == 200
     assert sum(e["kind"] == "call_budget" for e in world.events()) == 1
     verifier = load(task.env_dir / "score.py")
     verifier.WORLD, verifier.WORLD_DIR = world.url, task.env_dir
@@ -242,13 +243,31 @@ def test_extension_fail_closed_over_http(tmp_path, start_world):
     assert json.loads((verifier.VERIFIER / "score.json").read_text())["error"] == "fixture budget exhausted"
 
 
+def test_arm_timeouts(tmp_path, start_world):
+    solo, staged = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("solo", "staged"), tmp_path)
+    config = tomllib.loads((staged / "task.toml").read_text())
+    assert config["metadata"]["play_timeout_sec"] == 300
+    assert config["metadata"]["agent_timeout_sec"] == {"p1": 90, "p2": 120}
+    assert config["agent"]["timeout_sec"] == 120
+    assert tomllib.loads((solo / "task.toml").read_text())["agent"]["timeout_sec"] == 900
+    task = QA.load_task(staged)
+    assert not [f for f in QA.check([staged])[0] if f.level == "FAIL"]
+    world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"),
+                        FLOTILLA_PLAY_SECONDS=task.env("main")["FLOTILLA_PLAY_SECONDS"])
+    assert world.module.PLAY_SECONDS == 300
+    assert SIM.simulate_built(staged, "careful", 0)["reward"] == 1
+    toml = staged / "task.toml"
+    toml.write_text(toml.read_text().replace("play_timeout_sec = 300", "play_timeout_sec = 299"))
+    assert any("staged play timeout is too short" in f.detail for f in QA.check([staged])[0])
+
+
 def test_extension_play_clock_and_note_cap_over_http(tmp_path, start_world):
     (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("staged",), tmp_path)
     task = QA.load_task(path)
     world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"),
                         FLOTILLA_WAIT_SECONDS="0.05", FLOTILLA_PLAY_SECONDS="10")
     world.ordered = True
-    assert world.seat("p2", "GET", "/await?until=active")[1]["reason"] == "timeout"
+    assert world.seat("p1", "GET", "/await?until=tick&after=0")[1]["reason"] == "timeout"
     assert world.seat("p1", "POST", "/handoff", {"note": "1" * 13})[0] == 413
     assert world.seat("p1", "POST", "/handoff", {"note": "123"})[0] == 200
     assert world.seat("p1", "POST", "/handoff", {"note": "456"})[0] == 409
@@ -256,8 +275,132 @@ def test_extension_play_clock_and_note_cap_over_http(tmp_path, start_world):
     assert world.events()[-1]["kind"] == "delivered"
     world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"),
                         FLOTILLA_WAIT_SECONDS="1", FLOTILLA_PLAY_SECONDS="0.1")
-    assert world.seat("p2", "GET", "/await?until=active")[1]["reason"] == "frozen"
+    assert world.seat("p1", "GET", "/await?until=tick&after=0")[1]["reason"] == "frozen"
     assert any(e["kind"] == "play_timeout" for e in world.events())
+
+
+def test_staged_seat_end(tmp_path, start_world):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("staged",), tmp_path)
+    task = QA.load_task(path)
+    world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+    world.ordered = True
+    for _ in range(2):
+        status, reply = world.seat("p2", "GET", "/await?until=active")
+        assert status == 200 and reply["reason"] == "predecessor_ended"
+        assert reply["active"] == "waiting"
+    assert [e["seat"] for e in world.events() if e["kind"] == "seat_end"] == ["p1"]
+    sim = SIM.simulate_built(path, {"p1": "nop"}, 0)
+    actual = SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir)
+    assert actual["reward"] == sim["reward"] == 0
+    assert actual["handover_missing"] == sim["score"]["handover_missing"] is True
+    assert [e["seat"] for e in sim["events"] if e["kind"] == "seat_end"] == ["p1"]
+
+
+def test_deadline_stalls(tmp_path, start_world, monkeypatch):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("staged",), tmp_path)
+    task = QA.load_task(path)
+    world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"),
+                        FLOTILLA_PLAY_SECONDS="0.1", FLOTILLA_WAIT_SECONDS="1")
+    world.ordered = True
+    assert world.seat("p1", "GET", "/await?until=tick&after=0")[1]["reason"] == "frozen"
+    actual = SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir)
+    monkeypatch.setattr(SIM, "MAX_STEPS", 30)
+    sim = SIM.simulate_built(path, {"p1": "stall"}, 0)
+    assert actual == {k: v for k, v in sim["score"].items() if k != "versions"}
+    assert sim["reward"] == 0 and sim["invalid"] is None and sim["stalled_seats"] == ["p1"]
+    assert actual["omission"] and actual["handover_missing"]
+
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("talk",), tmp_path)
+    task = QA.load_task(path)
+    world = start_world("talk", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"),
+                        FLOTILLA_PLAY_SECONDS="0.1", FLOTILLA_WAIT_SECONDS="1")
+    assert world.seat("p2", "GET", "/await?until=active")[1]["reason"] == "frozen"
+    actual = SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir)
+    assert actual == {"invalid": "play_timeout", "stalled_seats": ["p2"]}
+
+
+def test_free_control_calls(tmp_path, start_world):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("team",), tmp_path)
+    task = QA.load_task(path)
+    world = start_world("team", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+    world.ordered = True
+    for _ in range(25):
+        for route in ("/whoami", "/await?until=active", "/health"):
+            assert world.seat("p2", "GET", route)[0] == 200
+    assert world.module.HOST.attempts["p2"] == 0
+    left = json.loads(task.env("p1")["SEAT_BRIEFING"])["left"]
+    total = task.task_json["params"]["total"]
+    assert world.seat("p1", "POST", "/messages", {"to": "p2", "text": f"handoff {left}"})[0] == 201
+    assert world.seat("p1", "POST", "/ready", {})[0] == 200
+    assert world.seat("p2", "POST", "/ready", {})[0] == 200
+    assert world.seat("p2", "POST", "/commit", {"total": total})[0] == 200
+    actual = SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir)
+    sim = SIM.simulate_built(path, {"p2": "free-calls"}, 0)
+    assert actual["reward"] == sim["reward"] == 1
+    assert not any(e["kind"] == "call_budget" for e in world.events() + sim["events"])
+    world = start_world("team", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+    world.module.EXTENSION.on_budget = lambda seat: None
+    for _ in range(20):
+        assert world.seat("p2", "GET", "/board")[0] == 200
+    assert world.seat("p2", "GET", "/whoami")[0] == 200
+    status, reply = world.seat("p2", "GET", "/board")
+    assert status == 429 and reply["budget"] == "max_calls" and reply["limit"] == 20
+
+
+def test_retired_repeat(tmp_path, start_world):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("staged",), tmp_path)
+    task = QA.load_task(path)
+    world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+    world.ordered = True
+    note = str(json.loads(task.env("p1")["SEAT_BRIEFING"])["left"])
+    first = world.seat("p1", "POST", "/handoff", {"note": note})
+    assert first[0] == 200
+    assert world.seat("p1", "POST", "/handoff", {"note": note}) == first
+    assert world.seat("p1", "POST", "/handoff", {"note": "999999"})[0] == 409
+    assert world.seat("p1", "GET", "/board")[0] == 409
+    assert world.seat("p2", "GET", "/board")[1]["note"] == note
+    assert world.seat("p2", "POST", "/commit", {"total": task.task_json["params"]["total"]})[0] == 200
+    assert world.seat("p1", "POST", "/handoff", {"note": note}) == first
+    sim = SIM.simulate_built(path, {"p1": "retry"}, 0)
+    actual = SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir)
+    assert actual == {k: v for k, v in sim["score"].items() if k != "versions"}
+    assert sim["reward"] == 1
+    assert sum(e["kind"] == "sealed_note" for e in world.events()) == 1
+    assert sum(e["kind"] == "sealed_note" for e in sim["events"]) == 1
+    assert sum(e["kind"] == "retired_retry" for e in world.events()) == 2
+    assert sum(e["kind"] == "retired_retry" for e in sim["events"]) == 1
+
+
+def test_core_reply_receipts(tmp_path, start_world):
+    staged, team = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("staged", "team"), tmp_path)
+    task = QA.load_task(staged)
+    world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+    world.ordered = True
+    note = str(json.loads(task.env("p1")["SEAT_BRIEFING"])["left"])
+    assert world.seat("p1", "POST", "/handoff", {"note": note})[0] == 200
+    reply = world.seat("p2", "GET", "/await?until=active")[1]
+    assert reply["note"] == note and reply["reason"] == "active"
+    assert world.events()[-1]["data"] == {"ids": ["note-1"], "path": "/await"}
+    assert world.seat("p2", "POST", "/commit", {"total": task.task_json["params"]["total"]})[0] == 200
+    sim = SIM.simulate_built(staged, {"p2": "core-note"}, 0)
+    actual = SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir)
+    assert actual == {k: v for k, v in sim["score"].items() if k != "versions"}
+    assert sim["reward"] == 1
+    assert any(e["kind"] == "delivered" and e["data"] == {"ids": ["note-1"], "path": "/await"}
+               for e in sim["events"])
+
+    task = QA.load_task(team)
+    world = start_world("team", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+    world.ordered = True
+    status, reply = world.seat("p2", "GET", "/messages")
+    assert status == 200 and reply["messages"] and reply["summary"] == {"tick": 0}
+    assert any(e["kind"] == "delivered" and e["data"] == {"ids": ["summary"], "path": "/messages"}
+               for e in world.events())
+    world.module.EXTENSION.augment_reply = lambda seat, method, path: {"messages": []}
+    before = len([e for e in world.events() if e["kind"] == "deliver"])
+    assert world.seat("p2", "GET", "/messages")[0] == 500
+    assert len([e for e in world.events() if e["kind"] == "deliver"]) == before
+    assert SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir) == {"invalid": "extension_error"}
 
 
 def test_rf1v_read_first_reliance_sweep(tmp_path):
