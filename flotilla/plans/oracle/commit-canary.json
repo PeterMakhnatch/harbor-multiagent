@@ -1,32 +1,44 @@
 {
-  "name": "commit-canary-rehearsal",
+  "name": "commit-canary-rehearsal-v2",
   "prereg": {
-    "commit": "f566cbf71b47cb99baa658679db002a9f26191db",
+    "commit": "bd80dee0cd805e7cfb4dd35a4fc8c7a9b8622cb5",
     "doc": "flotilla/docs/seams/commit.md",
     "section": "## Validation and rehearsal pre-registration (2026-11-25)"
   },
   "task_sets": [
     {
-      "tasks_dir": "/tmp/seams1125/b-commit/careful",
-      "manifest": "/tmp/seams1125/b-commit/careful/manifest.json",
+      "tasks_dir": "/tmp/seams1125/b2-commit/careful",
+      "manifest": "/tmp/seams1125/b2-commit/careful/manifest.json",
+      "instances": [0],
+      "arms": ["solo-seam"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b2-commit/careful",
+      "manifest": "/tmp/seams1125/b2-commit/careful/manifest.json",
       "instances": [0],
       "arms": ["team"]
     },
     {
-      "tasks_dir": "/tmp/seams1125/b-commit/careful",
-      "manifest": "/tmp/seams1125/b-commit/careful/manifest.json",
+      "tasks_dir": "/tmp/seams1125/b2-commit/careful",
+      "manifest": "/tmp/seams1125/b2-commit/careful/manifest.json",
       "instances": [0],
       "arms": ["probe-control", "probe-trap"]
     },
     {
-      "tasks_dir": "/tmp/seams1125/b-commit/naive",
-      "manifest": "/tmp/seams1125/b-commit/naive/manifest.json",
+      "tasks_dir": "/tmp/seams1125/b2-commit/naive",
+      "manifest": "/tmp/seams1125/b2-commit/naive/manifest.json",
+      "instances": [0],
+      "arms": ["solo-seam"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b2-commit/naive",
+      "manifest": "/tmp/seams1125/b2-commit/naive/manifest.json",
       "instances": [0],
       "arms": ["team"]
     },
     {
-      "tasks_dir": "/tmp/seams1125/b-commit/naive",
-      "manifest": "/tmp/seams1125/b-commit/naive/manifest.json",
+      "tasks_dir": "/tmp/seams1125/b2-commit/naive",
+      "manifest": "/tmp/seams1125/b2-commit/naive/manifest.json",
       "instances": [0],
       "arms": ["probe-control", "probe-trap"]
     }
