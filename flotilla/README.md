@@ -237,7 +237,10 @@ See [the runbook](docs/NEXT-WAVE.md) for `run_wave.py`, including the cost forec
 
 Seams studies one coordination mechanism per task. A careful single agent must solve the `solo`
 arm. A team has the same work with one named seam between its agents. Matched probe arms measure
-the effect of that seam with scripted teammates.
+the effect of that seam with scripted teammates. The suite, its 6 families and the live playtest
+results are in [docs/seams/README.md](docs/seams/README.md). Read
+[docs/seams/AUTHORING.md](docs/seams/AUTHORING.md) before you write a family: it has the 7 steps
+and 25 rules, each from a fault that a review or a live playtest found.
 
 Add these files, with the same Python identifier for `<family>`:
 
