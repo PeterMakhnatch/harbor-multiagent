@@ -24,7 +24,7 @@ Two smaller models (GPT-6 Luna, Claude Haiku 5.5) played a part of them.
 | `digest` | A chain of capped notes with replacement rules | 34 of 34 (base and order levels) | 0 of 8; 73 of 90 wrong jobs at the seam | Canary for frontier models; a measure for smaller models. Twin `team-implicit`: see the family page |
 | `commit` | A notice that arrives before an irreversible booking | 51 of 52 (base and bulk levels) | 5 of 6 | Canary |
 | `tell` | A fact that matters only to another desk | 28 of 28 | Luna 1 of 2, Haiku 1 of 1 | Canary for frontier models |
-| `interface` | A setting that only another desk knows | 8 of 8 live teams | Luna 0 of 1, Haiku 1 of 1 | Canary in the team arms; pair `probe-wait`: see the family page |
+| `interface` | A setting that only another desk knows | 8 of 8 live teams; 28 of 28 pair runs, 0 premature orders | Luna 0 of 1, Haiku 1 of 1 | Canary. The pair `probe-wait` does not yet measure waiting (see the family page) |
 | `settle` | Agree on one value with delayed messages | 19 of 20 (the loss was a scripted-desk defect) | not played | Canary with a shared sorted list; pair `team-ownorder` / `team-implicit`: see the family page |
 | `week` | All seams in one scenario of 4 or 5 desks | 8 of 12 teams at the reference value or EUR 2 below it; no seam failure in a finished run; 4 teams ended by 1 seat (1 refusal, 3 wait-call errors) | not played | Integration scenario, not a measure |
 
