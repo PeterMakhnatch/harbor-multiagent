@@ -30,6 +30,7 @@ import os
 import re
 import secrets
 import shutil
+import stat
 import sys
 import tomllib
 from datetime import UTC, datetime
@@ -226,6 +227,22 @@ set -eu
 python3 "$(dirname "$0")/oracle.py"
 """
 POLICY_SH = SOLVE_SH.replace("oracle.py", "policy.py")
+CONTAINER_PAYLOADS = ("solution", "tests")
+
+
+def open_container_payloads(task_dir: Path) -> None:
+    for name in CONTAINER_PAYLOADS:
+        root = task_dir / name
+        assert root.is_dir() and not root.is_symlink(), root
+        for path in (root, *sorted(root.rglob("*"))):
+            mode = path.lstat().st_mode
+            assert stat.S_ISDIR(mode) or stat.S_ISREG(mode), path
+            searchable = stat.S_ISDIR(mode) or mode & stat.S_IXUSR
+            wanted = stat.S_IMODE(mode) | (0o555 if searchable else 0o444)
+            if wanted != stat.S_IMODE(mode):
+                path.chmod(wanted)
+            assert stat.S_IMODE(path.lstat().st_mode) == wanted, path
+
 
 CONDITION_TEXT = {
     "solo": "You work alone, and you have all of the information the task needs.",
@@ -978,6 +995,7 @@ def build(family_name: str, instances: list[int], n_seats: int | None, difficult
             (env / "task.json").write_text(json.dumps(task_json, indent=2, sort_keys=True) + "\n")
             for script in (task_dir / "tests" / "test.sh", task_dir / "solution" / "solve.sh"):
                 script.chmod(0o755)
+            open_container_payloads(task_dir)
             entries[f"flotilla/{name}"] = {
                 "path": f"{label}/{name}", "label": label, "family": family_name, "variant": variant, "instance": i,
                 "condition": condition, "seats": seats, "built": built_at,
