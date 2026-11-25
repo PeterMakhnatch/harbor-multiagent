@@ -448,7 +448,8 @@ def compose(condition: str, seats: list[str], tokens: dict[str, str], admin: str
 
 
 def task_toml(name: str, meta: dict[str, Any], seats: list[str], title: str,
-              scripted: tuple[str, ...] = (), play_timeout: float = PLAY_TIMEOUT_SEC) -> str:
+              scripted: tuple[str, ...] = (), play_timeout: float = PLAY_TIMEOUT_SEC,
+              start_after: dict[str, list[str]] | None = None) -> str:
     lines = [
         'schema_version = "1.4"',
         'artifacts = ["/logs/world/events.jsonl", "/logs/world/messages.jsonl"]',
@@ -470,7 +471,9 @@ def task_toml(name: str, meta: dict[str, Any], seats: list[str], title: str,
         "[environment]",
         "build_timeout_sec = 600.0",
         "",
-        *(f"[agents.{seat}]\n" + ("under_test = false\n" if seat in scripted else "") for seat in seats),
+        *(f"[agents.{seat}]\n" + ("under_test = false\n" if seat in scripted else "")
+          + (f"start_after = {json.dumps(start_after[seat])}\n" if start_after and seat in start_after else "")
+          for seat in seats),
     ]
     return "\n".join(lines)
 
@@ -545,7 +548,78 @@ def update_manifest(out: Path, entries: dict[str, dict[str, Any]]) -> Path:
     return path
 
 
-def build(family_name: str, instances: list[int], n_seats: int, difficulty: str, seed: int,
+def default_seats(family: Any, difficulty: str) -> int | None:
+    count = getattr(family, "SEATS", 2)
+    if isinstance(count, dict):
+        count = count[difficulty]
+    if count is not None and (type(count) is not int or count < 1):
+        raise ValueError("invalid family SEATS")
+    return count
+
+
+def validate_arm(arm: dict, team_seats: list[str], condition: str) -> dict:
+    required = {"briefings", "instructions", "params"}
+    optional = {"initial_active", "messaging", "scripted_seats", "scripted_policies", "files",
+                "push", "senders", "max_calls", "start_after"}
+    if not isinstance(arm, dict) or required - arm.keys() or arm.keys() - required - optional:
+        raise ValueError("invalid extension_arm keys")
+    briefings, instructions = arm["briefings"], arm["instructions"]
+    if not isinstance(briefings, dict) or not briefings or not isinstance(instructions, dict):
+        raise ValueError("invalid arm briefings or instructions")
+    seats = set(briefings)
+    if (not seats <= set(team_seats) or seats != set(instructions)
+            or any(not isinstance(v, dict) for v in briefings.values())
+            or any(not isinstance(v, str) for v in instructions.values()) or not isinstance(arm["params"], dict)):
+        raise ValueError("invalid extension arm roster or values")
+    result = arm.copy()
+    for key, default, allowed in (("initial_active", sorted(seats), seats), ("scripted_seats", [], seats),
+                                  ("senders", [], None)):
+        values = arm.get(key, default)
+        if (not isinstance(values, list | tuple) or any(not isinstance(v, str) or not v for v in values)
+                or len(values) != len(set(values)) or (allowed is not None and not set(values) <= allowed)):
+            raise ValueError(f"invalid {key}")
+        result[key] = list(values)
+    if set(result["senders"]) & (seats | {"admin", "all"}):
+        raise ValueError("invalid non-seat sender")
+    messaging = arm.get("messaging", condition not in ("solo", "silent"))
+    push = arm.get("push", messaging)
+    if type(messaging) is not bool or type(push) is not bool or (push and not messaging):
+        raise ValueError("invalid messaging or push")
+    result["messaging"], result["push"] = messaging, push
+    cap = arm.get("max_calls", 1000)
+    caps = cap if isinstance(cap, dict) else dict.fromkeys(seats, cap)
+    if set(caps) - seats or any(type(v) is not int or v < 1 for v in caps.values()):
+        raise ValueError("invalid max_calls")
+    result["max_calls"] = cap
+    for key in ("scripted_policies", "files"):
+        mapping = arm.get(key, {})
+        if not isinstance(mapping, dict) or any(not isinstance(v, str) for v in mapping.values()):
+            raise ValueError(f"invalid {key}")
+    if set(arm.get("scripted_policies", {})) - set(result["scripted_seats"]):
+        raise ValueError("policy assigned to a seat under test")
+    if any(Path(name).name != name or name in ("", ".", "..", "Dockerfile") for name in arm.get("files", {})):
+        raise ValueError("invalid extension file name")
+    if "start_after" in arm:
+        validate_start_after(arm["start_after"], seats)
+    json.dumps(result, allow_nan=False)
+    return result
+
+
+def validate_start_after(edges: dict, seats: set[str]) -> None:
+    if not isinstance(edges, dict) or set(edges) - seats:
+        raise ValueError("invalid start_after seats")
+    for seat, predecessors in edges.items():
+        if (not isinstance(predecessors, list) or any(not isinstance(p, str) for p in predecessors)
+                or len(predecessors) != len(set(predecessors)) or set(predecessors) - (seats - {seat})):
+            raise ValueError("invalid start_after predecessors")
+    started: set[str] = set()
+    for _ in seats:
+        started |= {seat for seat in seats if set(edges.get(seat, [])) <= started}
+    if started != seats:
+        raise ValueError("start_after cycle")
+
+
+def build(family_name: str, instances: list[int], n_seats: int | None, difficulty: str, seed: int,
           conditions: tuple[str, ...], out: Path, variant: str = "", scripted: bool = False,
           play_timeout: float = PLAY_TIMEOUT_SEC, max_text: int = DEFAULT_MAX_TEXT,
           max_messages: int = DEFAULT_MAX_MESSAGES, submitter: str = "", announce: bool = False,
@@ -633,13 +707,19 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
         if policy_file:
             inst = family.with_policy(inst, i, seed, difficulty)
         team_seats = list(inst["seats"]) if game or extension else sorted(inst["private"])
-        if extension and len(team_seats) != n_seats:
+        if extension and (not team_seats or any(not isinstance(seat, str)
+                or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", seat)
+                or seat.casefold() in ("all", "admin") for seat in team_seats)
+                or len({seat.casefold() for seat in team_seats}) != len(team_seats)):
+            raise ValueError("invalid extension generator seat names")
+        if extension and n_seats is not None and len(team_seats) != n_seats:
             raise ValueError("extension generator must return the requested number of seats")
         scripted_seats = tuple(inst.get("scripted_seats", ())) if scripted or probe else ()
         for condition in conditions:
             seats = ["p1"] if condition == "solo" else team_seats
             ext_arm = family.extension_arm(inst, condition, max_text, max_messages) if extension else None
-            if ext_arm is not None:
+            if extension:
+                ext_arm = validate_arm(ext_arm, team_seats, condition)
                 briefings = ext_arm["briefings"]
                 seats = sorted(briefings)
                 scripted_seats = tuple(ext_arm.get("scripted_seats", ()))
@@ -697,6 +777,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                          "max_messages_per_round": max_messages_per_round}
             if extension:
                 meta["mode"] = "extension"
+                if n_seats is None:
+                    meta["generator_seats"] = 0
             meta |= selected_fields
             meta["names"] = "readable" if readable_names else "opaque"  # qa.py checks an opaque name (opaque-names)
             if submitter:
@@ -717,7 +799,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 meta["post_trigger"] = post_trigger
             meta |= budget_fields | policy_fields
             (task_dir / "task.toml").write_text(
-                task_toml(f"flotilla/{name}", meta, seats, family.TITLE, scripted_seats, play_timeout)
+                task_toml(f"flotilla/{name}", meta, seats, family.TITLE, scripted_seats, play_timeout,
+                          ext_arm.get("start_after") if extension else None)
             )
             for seat in seats:
                 text = (
@@ -759,8 +842,10 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             if extension:
                 task_json |= {"mode": "extension", "extension": family_name, "params": ext_arm["params"],
                               "initial_active": ext_arm.get("initial_active", seats),
-                              "messaging": ext_arm.get("messaging", condition.startswith("talk")),
+                              "messaging": ext_arm["messaging"],
                               "scripted_seats": list(scripted_seats)}
+                for field in ("push", "senders", "max_calls"):
+                    task_json[field] = ext_arm[field]
             elif game:
                 task_json |= {"mode": "rounds", "game": arm, "round_seconds": round_seconds,
                               "max_messages_per_round": max_messages_per_round, "read_gate": condition == "gated"}
@@ -934,7 +1019,7 @@ def main() -> None:
         except ValueError as exc:
             parser.error(str(exc))
     arms = tuple(getattr(module, "ARMS", ()))
-    n_seats = args.seats if args.seats is not None else int(getattr(module, "SEATS", 2))
+    n_seats = args.seats if args.seats is not None else default_seats(module, args.difficulty)
     conditions = tuple(c for c in args.conditions.split(",") if c)
     if arms and path.parent != ROOT / "games" and args.conditions == ",".join(CONDITIONS):
         conditions = arms  # an answer family with arms of its own (probe)
@@ -944,7 +1029,7 @@ def main() -> None:
         parser.error(f"unknown conditions {unknown}; known: {sorted(known)}")
     if args.scripted and args.conditions == ",".join(CONDITIONS):
         conditions = ("talk", "talk-liar")
-    if args.submitter and args.submitter not in [f"p{k}" for k in range(1, (3 if args.scripted else n_seats) + 1)]:
+    if args.submitter and args.submitter not in [f"p{k}" for k in range(1, (3 if args.scripted else n_seats or 0) + 1)]:
         parser.error(f"--submitter {args.submitter} is not a seat of this build")
     if args.seed is not None:
         seed, source = args.seed, "given with --seed"
