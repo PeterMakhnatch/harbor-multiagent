@@ -34,12 +34,9 @@ QUESTION = "did every task in this local Docker oracle rehearsal get the same re
 SCHEDULES = 3
 ABSOLUTE = re.compile(r"(?<![\w.~/-])~?/[^\s'\"(),]+")
 NOT_BOUND = (
-    "Docker image bytes: job configs set force_build false, so Docker may reuse an image built from older "
-    "environment bytes; no retained file records the image digest.",
-    "Wall-clock interleaving: the Docker run records no schedule; parity is checked against the simulator only on "
-    "the listed number of schedule seeds.",
-    "Retained files: state.json, configs and trial folders are local, unsigned and mutable; only their mutual "
-    "consistency and the plan sha256 are checked.",
+    "Docker image bytes: the job can reuse a cached image. No retained file records the image digest.",
+    "Wall-clock interleaving: Docker records no schedule. The simulator checks only the listed number of schedules.",
+    "Retained files: local unsigned state, configs and trial folders can change. The check binds them to the plan.",
     "Harbor and its oracle agent code: the plan pins neither; the receipt names only the agent the trial recorded.",
 )
 
@@ -371,7 +368,7 @@ def verify(plan_path: Path, run_dir: Path, *, jobs_dir: Path | None = None, rev:
 def text_of(receipt: dict) -> str:
     lines = [f"oracle parity {receipt['verdict']}: {receipt['matched']}/{receipt['planned']} cells match",
              f"question: {receipt['question']}",
-             f"plan {receipt['plan']} sha256 {receipt['plan_sha256']} from {receipt['plan_source']}, "
+             f"plan {receipt['plan']} sha256 {receipt['plan_sha256']} from {receipt['plan_source']}",
              f"mode {receipt['mode']}, {receipt['schedule_seeds_checked']} schedule seeds per cell",
              f"task digest: {receipt['task_digest']}"]
     lines += [f"problem: {item}" for item in receipt["problems"]]

@@ -44,6 +44,9 @@ use those same 8 instances: 32 four-seat playtests. Never use these instances fo
 The local build is `.flotilla-local/seams-entry-20261125`. Its `manifest.json` SHA-256 is
 `78abf0fb8d356408faa29cf5236709dbf6f6bb0c69651d873d61106cdc574a7e`. All 16 tasks passed static QA.
 The world parameters match across arms in each pair. No assistant has played this build.
+The content commitment is `89b4eadb7016ae021a3863f630947391d9c84e9bfda5aaabb59a8be00c929e67`.
+Compute it as SHA-256 of compact JSON for sorted `[instance, condition, Harbor content digest]` rows.
+Use the lowercase hex digest from `Packager.compute_content_hash` without a `sha256:` prefix.
 
 Opus is the primary model because its development notes contain the failure. Sol is a comparison, not a
 second opportunity to pass. Use fresh native CLI seats. On even instances, play `team` first for Opus and

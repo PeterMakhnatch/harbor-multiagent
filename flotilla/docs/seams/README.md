@@ -13,6 +13,19 @@ policies in the simulator; the `oracle` agent on local Docker ($0); and live pla
 command-line assistant sits in every model seat through its subscription (`flotilla/playtest.py`). A playtest
 is not an experiment: n is small and the harness is the assistant's own CLI.
 
+### Try one boundary without a model
+
+From the fork root, run this with Python 3.12 and PyYAML installed. No Docker or API key is needed.
+
+```sh
+python3 flotilla/sim.py --family handoff --difficulty standard \
+  --arms team,team-fullrecord --policies careful,pointer --instances 0 --schedule-seeds 0
+```
+
+The careful policy wins in both arms. The pointer policy scores 0.5 with the note alone and 1 with the full
+record. It does the same work in both cases. What changes is whether the next shift can look up the batch
+named in the note. This is a scripted example, not a result about models.
+
 ## What the live playtests showed
 
 Two frontier assistants (GPT-6.2 Sol in the Codex CLI, Claude Opus 5.5 in Claude Code) played every family.

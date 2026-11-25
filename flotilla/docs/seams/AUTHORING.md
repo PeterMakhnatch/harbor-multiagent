@@ -11,10 +11,10 @@ of a first build. The contract for the 3 files of a family is CONTRACT.md sectio
 | 1. Simulation sweeps | `flotilla/sim.py`, the family's tests | $0 | `careful` scores 1 in every arm and level; `naive` scores 1 in controls and loses in traps; `nop` is at the floor; replay is exact |
 | 2. Eval card | `flotilla/eval_card.py --family <f>` | $0 | No check fails; every NA has a reason; the power plan gives the n |
 | 3. Built tasks | `build_tasks.py`, `qa.py` | $0 | 0 FAIL: no answer, arm or canary string in any text that a seat reads |
-| 4. Oracle parity | Harbor `oracle` agent on local Docker | $0 | The rewards of `careful` and `naive` builds equal the simulator's |
+| 4. Oracle parity | Harbor `oracle` on local Docker; `flotilla/oracle_parity.py` in the Harbor environment | Both winning and losing policies match on the same built tasks. A missing reward is not a loss |
 | 5. Independent review | 2 reviewers, see below | $0 | No open BLOCKER or MAJOR finding |
 | 6. Live playtest | `flotilla/playtest.py` with a command-line assistant in a seat | subscription only | A real assistant can do the work from the briefing; no sentence misleads it |
-| 7. Pilot | `flotilla/run_wave.py`, staged, pre-registered | paid, capped | See PILOT.md |
+| 7. Pilot | `flotilla/run_wave.py`, staged, pre-registered | paid, budgeted | See PILOT.md; the threshold stops new starts, not charges from trials already in flight |
 
 A family that fails a step goes back to its author. Step 5 found 11 distinct BLOCKER findings in the first 5
 builds, with no model call.
