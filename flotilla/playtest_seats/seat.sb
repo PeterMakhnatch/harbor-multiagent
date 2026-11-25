@@ -8,6 +8,7 @@
 (allow file-read* file-read-data
   (subpath (param "SEATROOT"))
   (subpath (param "SEATSCRIPTS"))
+  (subpath (param "SEATPYTHON"))
   (subpath (string-append (param "HOSTHOME") "/.local/bin"))
   (subpath (string-append (param "HOSTHOME") "/.local/share/claude"))
   (subpath (string-append (param "HOSTHOME") "/.local/state/claude"))

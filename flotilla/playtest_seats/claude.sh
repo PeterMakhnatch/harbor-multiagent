@@ -15,8 +15,8 @@ root=$(dirname "$workdir")
 binary=${CLAUDE_BIN:-$(command -v claude)}
 mkdir -p "$root/tmp" "$root/zdot"
 cd "$workdir"
-export TMPDIR="$root/tmp" CLAUDE_CODE_TMPDIR="$root/tmp" SHELL=/bin/zsh ZDOTDIR="$root/zdot"
-export PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
+# PATH comes from playtest.py: the seat's own bin (python3) first. zsh writes here-documents to TMPPREFIX.
+export TMPDIR="$root/tmp" TMPPREFIX="$root/tmp/zsh" CLAUDE_CODE_TMPDIR="$root/tmp" SHELL=/bin/zsh ZDOTDIR="$root/zdot"
 exec "$binary" -p --model "$model" --safe-mode --setting-sources "" --strict-mcp-config \
   --disable-slash-commands --no-session-persistence --dangerously-skip-permissions \
   --output-format stream-json --verbose < "$prompt"
