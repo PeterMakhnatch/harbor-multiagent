@@ -121,9 +121,9 @@ def booking_instruction(inst, arm, max_text, max_messages):
         lines.append("These are all the outages today:")
         lines.extend(f"- {o['text']}" for o in inst["outages"])
     elif arm == "solo-seam":
-        lines.append("The carrier board knows the outages and submits the report. You do not submit a report.")
+        lines.append("The carrier board knows the outages and submits the report. You cannot submit a report.")
     else:
-        lines.append("The carrier desk knows the outages and submits the report. You do not submit a report.")
+        lines.append("The carrier desk knows the outages and submits the report. You cannot submit a report.")
     if arm != "solo":
         lines.append("The dispatch mail service releases the report as notices during the day.")
     lines.extend([
@@ -153,7 +153,7 @@ def booking_instruction(inst, arm, max_text, max_messages):
     if arm != "solo":
         lines.extend([
             "Round 2 waits for both the report and your opening acknowledgment.",
-            "The report can be submitted before round 1 ends; its notices can arrive much later.",
+            "Notices arrive in replies during the day, not on a timer; waiting does not bring them.",
             "After round 1's `/step`, `stepped` is true. Call `GET /await?until=active` to acknowledge the step.",
             "If `round_ready` is true, get `/view`. Otherwise wait with `GET /await?until=tick&after=0`.",
             "When `tick` exceeds 0, get `/view`.",

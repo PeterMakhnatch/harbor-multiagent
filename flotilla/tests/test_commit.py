@@ -63,7 +63,9 @@ def test_commit_layouts(dose):
                 assert all(o["text"] not in json.dumps(setting["briefings"]["p1"]) for o in inst["outages"])
                 assert "max_outages" not in setting["briefings"]["p1"]
                 assert "at most 4 outage notices" in setting["instructions"]["p1"]
-                assert "You do not submit a report." in setting["instructions"]["p1"]
+                assert "You cannot submit a report." in setting["instructions"]["p1"]
+                assert "Notices arrive in replies during the day, not on a timer; waiting does not bring them." in (
+                    setting["instructions"]["p1"])
                 assert ("carrier board" if arm == "solo-seam" else "carrier desk") in setting["instructions"]["p1"]
             assert setting["max_calls"] == FAMILY.call_limit(inst)
             assert FAMILY.call_limit_text(inst) in setting["instructions"]["p1"]
