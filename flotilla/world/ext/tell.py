@@ -23,7 +23,6 @@ class Tell:
         self.parked = set()
         self.arrivals = {desk: [] for desk in family.DESKS}
         self.forwards = set()
-        self.omitted = set()
         self.carrier = False
 
     @property
@@ -86,10 +85,18 @@ class Tell:
     def on_budget(self, seat):
         self.omit(seat)
 
+    def pending(self, seat):
+        if self.host.status[seat] != "active":
+            return False
+        return self.index < len(self.batch) if seat == "p1" else not self.carrier
+
+    def augment_reply(self, seat, method, path):
+        return {"round": self.round, "acted": seat in self.acted, "parked": seat in self.parked,
+                "carrier_left": self.carrier}
+
     def omit(self, seat):
         if self.host.status[seat] == "active":
             self.host.record("desk_omission", seat)
-            self.omitted.add(seat)
             self.host.retire(seat)
             self.advance_if_ready()
 

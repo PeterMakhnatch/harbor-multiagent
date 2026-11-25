@@ -11,14 +11,16 @@ LEVELS = ("canary", "standard", "heavy")
 SEATS = 3
 ARMS = ("solo", "solo-control", "team", "team-control", "probe-trap", "probe-control",
         "solo-seam", "solo-seam-control", "auto", "auto-control", "hint", "hint-control")
-EXTRA_ARMS = ("team-x", "team-x-control")
+EXTRA_ARMS = ("team-x", "team-x-control", "probe-hint", "probe-hint-control")
 TWINS = (("solo", "solo-control"), ("team", "team-control"), ("probe-trap", "probe-control"),
          ("solo-seam", "solo-seam-control"), ("auto", "auto-control"), ("hint", "hint-control"),
-         ("team", "team-x"), ("team-x", "team-x-control"))
-PAIRS = (("probe-trap", "solo-seam"), ("probe-trap", "auto"), ("probe-trap", "hint"),
-         ("probe-control", "solo-seam-control"), ("probe-control", "auto-control"), ("probe-control", "hint-control"))
+         ("team", "team-x"), ("team-x", "team-x-control"), ("probe-hint", "probe-hint-control"))
+PAIRS = (("probe-trap", "solo-seam"), ("probe-trap", "auto"), ("team", "hint"),
+         ("probe-control", "solo-seam-control"), ("probe-control", "auto-control"), ("team-control", "hint-control"),
+         ("probe-trap", "probe-hint"), ("probe-control", "probe-hint-control"))
 ARM_WORDS = ("probe-trap", "probe-control", "solo-seam", "auto-control", "hint-control", "team-control",
-             "solo-control", "team-x", "team-x-control", "canary", "standard", "heavy")
+             "solo-control", "team-x", "team-x-control", "probe-hint", "probe-hint-control",
+             "canary", "standard", "heavy")
 COMMON_WORDS = ("solo", "team", "auto", "hint", "tell")
 PRODUCTS = ("Gauze pads", "Cotton rolls", "Paper tape", "Nitrile gloves", "Sample labels", "Face masks",
             "Storage trays", "Eye shields", "Bandage rolls", "Exam gowns", "Paper towels", "Packing sleeves",
@@ -127,8 +129,9 @@ TIME = (
     "GET /await?until=tick&after=r-1 (replace r-1 with the number) waits for the next round. "
     "The `tick` field in that reply is the round number minus 1. "
     "If an await times out, repeat the await; logical time has not changed. "
-    f"Keep within {CALLS} authenticated calls, including GETs and refused calls. "
-    "Reserve calls for the receiving log or the final dispatch action. "
+    f"Keep within {CALLS} authenticated work calls, including GETs and refused calls. "
+    "The /await, /whoami and /health calls are free. Reserve 12 work calls for remaining records and forwards. "
+    "At dispatch, reserve 2 work calls for the last round. "
     "Use $WORLD_URL with Authorization: Bearer $SEAT_TOKEN and JSON bodies for POSTs."
 )
 RECEIVING = (
@@ -181,21 +184,23 @@ def extension_arm(inst, arm, max_text, max_messages):
     if solo:
         instructions = {"p1": "\n\n".join(["You work the receiving and both dispatch desks of a supply warehouse.",
                                            *common, DISPATCH,
-                                           "GET /board shows the original plans. Use the quarantine documents in "
-                                           "your receiving batch for dispatch decisions.", WAIT])}
+                                           ("GET /board shows the original plans. Use the quarantine documents in "
+                                            "your receiving batch for dispatch decisions."), WAIT])}
         return {"briefings": {"p1": {"role": "both"}}, "instructions": instructions,
-                "params": params, "messaging": False, "max_calls": CALLS}
-    added = HINT if base == "hint" else AUTO if automatic else ""
+                "params": params, "messaging": False, "max_calls": CALLS,
+                "agent_timeout_sec": 900, "play_timeout_sec": 960}
+    added = HINT if base in ("hint", "probe-hint") else AUTO if automatic else ""
     sender = "\n\n".join(["You work the receiving desk of a supply warehouse. "
                           + (MACHINE if base == "solo-seam" else SOCIAL),
                           *common, FORWARD + (" " + added if added else ""), WAIT])
-    dispatch = "\n\n".join(["You work a dispatch desk of a supply warehouse. The receiving desk is seat p1.",
-                            SCORE, TIME, DISPATCH, DISPATCH_WAIT])
-    scripted = [] if base in ("team", "team-x") else list(DESKS)
+    dispatch = (f"You work a dispatch desk of a supply warehouse. The receiving desk is seat p1.\n\n"
+                f"{SCORE}\n\n{TIME}\n\n{DISPATCH}\n\n{DISPATCH_WAIT}")
+    scripted = [] if base in ("team", "team-x", "hint") else list(DESKS)
     return {"briefings": {"p1": {"role": "receiving"}, **{desk: {"role": "dispatch"} for desk in DESKS}},
             "instructions": {"p1": sender, **dict.fromkeys(DESKS, dispatch)}, "params": params,
             "scripted_seats": scripted, "scripted_policies": dict.fromkeys(scripted, "follow"),
-            "messaging": True, "push": True, "senders": ["receiving"], "max_calls": CALLS}
+            "messaging": True, "push": True, "senders": ["receiving"], "max_calls": CALLS,
+            "agent_timeout_sec": 900, "play_timeout_sec": 960}
 
 
 def pair_difference(first, second, views_a, views_b):
@@ -203,7 +208,7 @@ def pair_difference(first, second, views_a, views_b):
     instruction = normalized["p1"]["instruction"]
     if second.startswith("solo-seam"):
         instruction = instruction.replace(MACHINE, SOCIAL, 1)
-    elif second.startswith("hint"):
+    elif second.startswith(("hint", "probe-hint")):
         instruction = instruction.replace(" " + HINT, "", 1)
     elif second.startswith("auto"):
         instruction = instruction.replace(" " + AUTO, "", 1)
@@ -230,7 +235,7 @@ def guess_forward(boards, item, used, shared_used):
 
 def chance_baseline(task_json, policy):
     params = task_json["params"]
-    if len(task_json["seats"]) == 1 or params["automatic"] or task_json["condition"].endswith("-control"):
+    if len(task_json["seats"]) == 1 or task_json["condition"].endswith("-control"):
         return 1.0
     used, shared_used = 0, False
     for index, document in enumerate(params["batch"]):
@@ -238,7 +243,9 @@ def chance_baseline(task_json, policy):
             continue
         desks = guess_forward(params["boards"], document, used, shared_used)
         if index == params["hit"]:
-            return 1 / len(desks) if desks else 0.0
+            if params["automatic"] and index + 1 + used + bool(desks) < CARRIER:
+                return 1.0
+            return 1 / len(desks) if desks and index + 1 + used < CARRIER else 0.0
         if desks:
             used += 1
             shared_used |= len(desks) == 2

@@ -5,7 +5,8 @@ import re
 
 
 def supports(name, variant):
-    return (name in ("careful", "naive", "after", "late", "spray", "random", "lone", "follow", "ignore", "product")
+    return (name in ("careful", "naive", "after", "late", "spray", "random", "fixed", "default",
+                     "lone", "follow", "ignore", "product")
             or re.fullmatch(r"lapse-(?:0|[1-9][0-9]?|100)", name) is not None)
 
 
@@ -44,25 +45,30 @@ def receive(name, client, own, family):
             return
         action = None
         if document["kind"] == "quarantine" and (solo or name not in ("naive", "lone")):
-            if boards is None:
-                _, board_reply = yield from client.get("/board")
-                boards = board_reply["boards"]
-            if not solo and name in ("spray", "random"):
-                choices = (family.guess_forward(boards, document, used, shared_used) if name == "random"
-                           else family.matching_desks(boards, document["product"]) if used < family.FORWARDS else [])
-                if choices:
-                    destination = choices[-1] if len(choices) == 2 and own.lapse(50, document["item"]) else choices[0]
-                    shared_used |= len(choices) == 2
-                    action = "/forward", {"item": document["item"], "to": destination}
+            if not solo and name == "fixed":
+                if used < family.FORWARDS:
+                    action = "/forward", {"item": document["item"], "to": "p2"}
             else:
-                desk, row = target(boards, document)
-                if solo and desk:
-                    other = next(lot for lot in stock[desk][row["order"]] if lot != row["lot"])
-                    action = "/sheet", {"order": row["order"], "lot": other}
-                elif desk and name == "late":
-                    late.append((document, desk))
-                elif desk and (own.lapse_percent is None or not own.lapse(own.lapse_percent, document["item"])):
-                    action = "/forward", {"item": document["item"], "to": desk}
+                if boards is None:
+                    _, board_reply = yield from client.get("/board")
+                    boards = board_reply["boards"]
+                if not solo and name in ("spray", "random", "default"):
+                    choices = (family.guess_forward(boards, document, used, shared_used) if name != "spray"
+                               else family.matching_desks(boards, document["product"]) if used < family.FORWARDS else [])
+                    if choices:
+                        choose_last = name != "default" and len(choices) == 2 and own.lapse(50, document["item"])
+                        destination = choices[-1] if choose_last else choices[0]
+                        shared_used |= len(choices) == 2
+                        action = "/forward", {"item": document["item"], "to": destination}
+                else:
+                    desk, row = target(boards, document)
+                    if solo and desk:
+                        other = next(lot for lot in stock[desk][row["order"]] if lot != row["lot"])
+                        action = "/sheet", {"order": row["order"], "lot": other}
+                    elif desk and name == "late":
+                        late.append((document, desk))
+                    elif desk and (own.lapse_percent is None or not own.lapse(own.lapse_percent, document["item"])):
+                        action = "/forward", {"item": document["item"], "to": desk}
             if action and name != "after":
                 status, act = yield from client.post(*action)
                 if status != 200 or not (yield from next_round(client, act)):
