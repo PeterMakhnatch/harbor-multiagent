@@ -438,3 +438,19 @@ def test_hint_and_default_pairs_change_one_sentence(tmp_path):
             control = FAMILY.extension_arm(inst, "probe-control", 1000, 20)
             assert trap["instructions"]["p1"] == control["instructions"]["p1"]
             assert trap["briefings"]["p1"] == control["briefings"]["p1"]
+
+
+def test_fullrecord_matches_parallel_and_delivers_setting(tmp_path):
+    for level in LEVELS:
+        inst = FAMILY.generate(SEED, 3, None, level)
+        parallel = FAMILY.extension_arm(inst, "team-parallel", 1000, 20)
+        control = FAMILY.extension_arm(inst, "team-fullrecord", 1000, 20)
+        assert "for example `What key form and unit" not in parallel["instructions"]["p1"]
+        assert FAMILY.HINT not in parallel["instructions"]["p1"]
+        assert parallel["params"] | {"fullrecord": True} == control["params"]
+        assert parallel["instructions"]["p1"] + FAMILY.WRITER_SENTENCE == control["instructions"]["p1"]
+        assert all(g["hidden"] for g in control["params"]["groups"])
+        (path,) = build(tmp_path / level, level, ("team-fullrecord",))
+        run = SIM.simulate_built(path, "naive", 0)
+        assert run["reward"] == 1 and run["score"]["valid_coordinated"] == 1
+        assert not any(e["kind"] == "send" for e in run["events"])

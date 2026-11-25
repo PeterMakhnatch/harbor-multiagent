@@ -15,11 +15,14 @@ ARMS = ("solo", "solo-seam", "team", "team-parallel", "team-fullrecord", "team-n
         "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint")
 EXTRA_ARMS = ("silent", "solo-seam-key", "solo-seam-unit")
 TWINS = (("probe-control", "probe-trap-key"), ("probe-control", "probe-trap-unit"))
-PAIRS = (("team", "hint"), ("team", "team-nosaved"), ("probe-trap-key", "probe-trap-key-hint"))
+PAIRS = (("team", "hint"), ("team", "team-nosaved"), ("probe-trap-key", "probe-trap-key-hint"),
+         ("team-parallel", "team-fullrecord"))
 ARM_WORDS = ("probe-control", "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint", "hint",
              "solo-seam", "solo-seam-key", "solo-seam-unit", "team-fullrecord", "team-nosaved", "team-parallel",
              "interface")
 HINT = "Before fixing an order, obtain the desk's actual key form and unit from its visible catalog or a direct question."
+WRITER_SENTENCE = ("\nThe order writer imports the catalog's committed setting after the desk finishes. "
+                   "Its setting for each group is returned in `writer_settings` in work replies.\n")
 FORMS = ("SITE/ITEM", "ITEM/SITE", "SITE:ITEM", "ITEM:SITE", "SITE-ITEM", "ITEM-SITE")
 CONVENTIONS = tuple((form, unit) for form in FORMS for unit in ("each", "case"))
 DOSES = {level: (3, 3, 3, 5, 4, 1) for level in SEATS}
@@ -243,8 +246,7 @@ Each work reply and each `/await` or `/messages` reply includes a `staging` summ
         api += (f"- `POST /messages` with {{\"to\":\"<seat>\" or \"all\",\"text\":...}} sends chat "
                 f"(at most {max_messages} messages of {max_text} characters each).\n"
                 "New chat messages appear in `new_messages` with replies. `GET /messages` lists your messages.\n"
-                "The buyer can send chat only before `/prepare`. For a direct question about a setting, "
-                "address its desk and name the group, for example `What key form and unit for <group>?`.\n")
+                "The buyer can send chat only before `/prepare`.\n")
     else:
         api += "Chat is not available.\n"
     if owner == "export":
@@ -317,7 +319,7 @@ def extension_arm(inst, arm, max_text, max_messages):
     groups = []
     prebuilt = {}
     for original in inst["groups"]:
-        group = original | {"hidden": arm == "team-parallel" or original["name"] in inst["hidden"]}
+        group = original | {"hidden": arm in ("team-parallel", "team-fullrecord") or original["name"] in inst["hidden"]}
         if solo or export:
             group["desk"] = "p1" if solo else "export"
         if probe or arm in ("solo-seam-key", "solo-seam-unit"):
@@ -345,10 +347,7 @@ def extension_arm(inst, arm, max_text, max_messages):
     briefings = {"p1": buyer}
     instructions = {"p1": common + buyer_text(buyer, arm == "hint" or arm.endswith("-hint"))}
     if arm == "team-fullrecord":
-        instructions["p1"] += (
-            "\nThe order writer imports the catalog's committed setting after the desk finishes. "
-            "Its setting for each group is returned in `writer_settings` in work replies. "
-            "Use that setting for the group's order.\n")
+        instructions["p1"] += WRITER_SENTENCE
     if solo:
         instructions["p1"] += desk_text(desks, messaging, solo)
     scripted = []
@@ -381,6 +380,17 @@ def pair_difference(first, second, views_a, views_b):
         normalized["p1"]["instruction"] = normalized["p1"]["instruction"].replace(
             "\nTargets (items):\n", saved_sentence(saved) + "\nTargets (items):\n", 1)
         return [] if normalized == views_a else ["more than the saved setting sentence differs"]
+    if second == "team-fullrecord":
+        field = "env.SEAT_BRIEFING"
+        expected = json.loads(views_a["p1"][field]) | {"imports_settings": True}
+        if json.loads(normalized["p1"][field]) != expected:
+            return ["more than the writer capability differs in the buyer briefing"]
+        normalized["p1"][field] = views_a["p1"][field]
+        instruction = normalized["p1"]["instruction"]
+        if not instruction.endswith(WRITER_SENTENCE):
+            return ["missing writer capability sentence"]
+        normalized["p1"]["instruction"] = instruction.removesuffix(WRITER_SENTENCE)
+        return [] if normalized == views_a else ["more than the writer capability differs"]
     instruction = normalized["p1"]["instruction"]
     suffix = "\n" + HINT + "\n"
     if not instruction.endswith(suffix):

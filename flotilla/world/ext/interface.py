@@ -259,8 +259,10 @@ class Interface:
     def augment_reply(self, seat, method, path):
         if seat in self.done:
             return None
-        return {"staging": self.summary()} | {k: v for k, v in self.readiness().items()
-                                              if k != "tick" or path == "/messages"}
+        _, fields, ids = self.response(seat, path, {}, 200, {})
+        if path == "/await":
+            del fields["tick"]
+        return fields, ids
 
     def pending(self, seat):
         return seat in self.players and seat not in self.done
