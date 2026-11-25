@@ -807,7 +807,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--read-first", action="store_true")
     parser.add_argument("--seats", type=positive)
     parser.add_argument("--seed", type=int, default=None, help="repeat a disposable simulation seed")
+    parser.add_argument("--from-cards", action="store_true",
+                        help="with --suite: write SUITE.md from the stored <family>.card.json files in --out; no run")
     args = parser.parse_args(argv)
+    if args.from_cards:
+        if not args.suite:
+            parser.error("--from-cards needs --suite")
+        missing = [family for family in args.suite if not (args.out / f"{family}.card.json").is_file()]
+        if missing:
+            parser.error(f"no stored card for: {', '.join(missing)}")
+        cards = [json.loads((args.out / f"{family}.card.json").read_text()) for family in args.suite]
+        (args.out / "SUITE.md").write_text(render_suite(cards))
+        return 0 if all(card["passed"] for card in cards) else 1
     families = args.suite or (args.family,)
     if not all(family.isidentifier() for family in families):
         parser.error("--family and --suite require Python identifiers; use --variant separately")
