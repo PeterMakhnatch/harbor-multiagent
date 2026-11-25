@@ -471,6 +471,69 @@ The plan runs every seat on the oracle at $0, with 2 Docker slots and no provide
 Expect 24 trials and `stop-futility` at the first look. Read the jobs with `probe_analysis.py --models oracle`.
 Use `stages.json` for the rehearsal decision. `rr1_decide.py` accepts only the `rr1` plan.
 
+### Named stages for a Seams pilot
+
+Use `flotilla/pilot_plan.py` to build private task sets, select the dose levels, and generate plans in
+`flotilla/plans/seams/`. See [the pilot forecast](seams/pilot-forecast.md). These plans are not spend approval.
+The `stages` list is a different format from the global fractions object above. Each cell selector uses
+a zero-based `task_set` index and explicit subsets of that set's arms, instances and the plan's models.
+`level` is the eligibility group, together with the model. One set can occur once in a stage.
+The same cell cannot occur in two stages. Different stages may use different build roots.
+
+```json
+"notes": "A control gate, a matched probe screen, and a fresh headline sample.",
+"stages": [
+  {"name": "A", "cap_usd": 1.0,
+   "cells": [{"task_set": 0, "level": "standard", "arms": ["solo"],
+              "instances": [0, 1], "models": ["openrouter/example/model"]}],
+   "gate": {"type": "min_success", "controls": [{"task_set": 0, "arm": "solo", "k": 2}]}},
+  {"name": "B", "cap_usd": 2.0,
+   "cells": [{"task_set": 1, "level": "standard", "arms": ["talk-control", "talk-trap"],
+              "instances": [2, 3], "models": ["openrouter/example/model"]}],
+   "gate": {"type": "effect", "tests": [{"task_set": 1, "arms": ["talk-control", "talk-trap"]}],
+            "looks": [1, 2], "minimum": 2, "alpha": 0.05}},
+  {"name": "C", "cap_usd": 3.0,
+   "cells": [{"task_set": 2, "level": "standard", "arms": ["solo", "team"],
+              "instances": [4, 5], "models": ["openrouter/example/model"]}],
+   "gate": {"type": "none"}}
+]
+```
+
+- An extension's binary primary is full reward (`reward == 1`) unless the shipped family declares a literal
+  `PRIMARY = "passed"` (boolean score field) or `PRIMARY = {"field": "accuracy", "gte": 0.95}`.
+  A valid omission or flagged result counts as a failure. An invalid result never counts. The runner retries
+  each invalid cell once and checks extension score identity, reward and version stamps.
+- `min_success` requires each named control in a model-level group to meet its `k` on all planned valid
+  instances. An incomplete control is not a failure observation, but blocks the group.
+- `effect` pairs the first arm (control) and second arm (test) by instance in the same set. `minimum` is
+  the number of control-only successes that can pass the gate. The exact sequential McNemar rule may stop
+  early for positive efficacy with the threshold met. It does not stop early for statistical futility.
+  Report `no-effect` only when all planned pairs are valid and the threshold is not met. Otherwise report
+  `incomplete`. A group passes if any of its comparisons passes; Holm is within model and level.
+- `none` runs all surviving groups. The runner stops with `gate` if no eligible cells remain.
+  A failed group cannot return in a later stage. Stage C has a fixed pre-registered sample; conditional
+  sizing and first-signal-level selection require a separate plan. Week has no probe gate.
+- `cap_usd` is a cumulative model cap through that stage (defaults to the full plan cap).
+  Caps must be nondecreasing and at most the total cap. Reserve checks include in-flight trials.
+  The model accounting estimates are not provider billing limits.
+
+After checking private builds, QA, oracle parity, and the dry run, commit the final plan.
+Obtain approval for A before starting the first command. Use the same plan and run directory each time:
+
+```bash
+python3 flotilla/run_wave.py PLAN --run-dir RUN_DIR --stop-after-stage A
+python3 flotilla/run_wave.py PLAN --run-dir RUN_DIR --stop-after-stage B
+python3 flotilla/run_wave.py PLAN --run-dir RUN_DIR --stop-after-stage C
+```
+
+Review `progress.log` and `stages.json` after each command. Approve the next stage separately.
+`stop paused` means the requested gate closed and the runner did not start the next stage.
+`stop gate` means no group can advance. `stop cap` or an infrastructure guard stop does not close the gate.
+The unchanged plan and `state.json` allow the runner to resume without rerunning valid cells.
+The detailed named-stage records contain model-level decisions, valid counts, counted trial IDs and adjusted p
+values. Do not use the descriptive B gate as a statistically significant headline result.
+Skip the B command for a plan with no B stage. Do not use `--smoke` for this rehearsal: it ignores all gates.
+
 Data policy: the account has zero data retention on. The dry run, and a smoke with OpenRouter models, print
 `ZDR warning: <model>: no zero-data-retention endpoint: an account with ZDR on gets 404` for each OpenRouter
 model that has no ZDR endpoint in the public list (`/api/v1/endpoints/zdr`, cached 24 h in
