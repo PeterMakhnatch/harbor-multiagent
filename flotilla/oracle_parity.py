@@ -6,10 +6,10 @@ task's built seat policies. It launches no job, reads no key and writes nothing 
 
 A cell passes only when: its key is in the plan's order and in state.json, it has exactly one valid attempt, the
 stored job config equals the config run_wave.py would write now, its job folder holds exactly one trial whose ids,
-task path, roster and agents match, run_wave.trial_problem finds nothing wrong, every roster seat left its oracle log
-and no nonzero or malformed exit-code.txt, Harbor recorded a finite reward in [0, 1] that the verifier files repeat,
-and the simulator gives that same reward on every checked schedule seed. A missing reward is a failure, never a
-zero. A cell may hold earlier invalid attempts (retries); it counts once.
+task path, roster and agents match, run_wave.trial_problem finds nothing wrong (it also rejects a nonzero or
+malformed exit-code.txt on every oracle seat), every roster seat left its oracle log, Harbor recorded a finite
+reward in [0, 1] that the verifier files repeat, and the simulator gives that same reward on every checked schedule
+seed. A missing reward is a failure, never a zero. A cell may hold earlier invalid attempts (retries); it counts once.
 
     python flotilla/oracle_parity.py flotilla/plans/oracle/handoff-pilot-oracle.json /tmp/run
     python flotilla/oracle_parity.py flotilla/plans/oracle/handoff-pilot-oracle.json /tmp/run --rev 7bdf55d0 --json
@@ -35,9 +35,6 @@ QUESTION = "did every task in this local Docker oracle rehearsal get the same re
 SCHEDULES = 3
 ABSOLUTE = re.compile(r"(?<![\w.~/-])~?/[^\s'\"(),]+")
 ORACLE_LOG = "oracle.txt"
-EXIT_MARKER = "exit-code.txt"
-EXIT_MARKER_BYTES = 32
-EXIT_STATUS = re.compile(r"-?[0-9]{1,10}")
 NOT_BOUND = (
     "Docker image bytes: the job can reuse a cached image. No retained file records the image digest.",
     "Wall-clock interleaving: Docker records no schedule. The simulator checks only the listed number of schedules.",
@@ -241,22 +238,11 @@ def identity_problem(cell: dict, job: str, jobs_dir: Path, trial: Path, result, 
 def execution_problem(trial: Path, seats: tuple[str, ...]) -> str | None:
     assert seats, "a trial roster has at least one seat"
     for seat in seats:
-        agent = trial / "seats" / seat / "agent"
+        agent = RUN.seat_agent_dir(trial, seat)
+        if agent is None:
+            return "a roster seat name is malformed"
         if not (agent / ORACLE_LOG).is_file():
             return f"seat {seat} left no {ORACLE_LOG}, so its oracle solve.sh has no execution record"
-        marker = agent / EXIT_MARKER
-        if not marker.exists() and not marker.is_symlink():
-            continue
-        if not marker.is_file() or marker.stat().st_size > EXIT_MARKER_BYTES:
-            return f"seat {seat} {EXIT_MARKER} is malformed"
-        try:
-            text = marker.read_bytes().decode("ascii").strip()
-        except UnicodeDecodeError:
-            return f"seat {seat} {EXIT_MARKER} is malformed"
-        if not EXIT_STATUS.fullmatch(text):
-            return f"seat {seat} {EXIT_MARKER} is malformed"
-        if int(text) != 0:
-            return f"seat {seat} oracle solve.sh exited with status {int(text)} ({EXIT_MARKER})"
     return None
 
 

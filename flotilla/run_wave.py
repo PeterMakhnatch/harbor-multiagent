@@ -18,7 +18,8 @@ costs nothing. All tasks of a task set must have the same scripted seats; the op
 must equal them. seat_assignments rows then list models for the seats under test only.
 
 A plan with agent "oracle" and no model (models omitted or [null]) runs every seat on the oracle, on Docker only.
-It can run stages and reads no provider key, balance, or prices.
+It can run stages and reads no provider key, balance, or prices. A trial is invalid when any seat configured as the
+oracle, scripted or not, left a nonzero or malformed exit-code.txt (Harbor writes it only after a nonzero solve.sh).
 
 Guards: before each start, each provider's balance must be at or above its floor; the OpenRouter balance is the
 lower of the account balance (/api/v1/credits) and the key's own limit left (/api/v1/key). After
@@ -60,6 +61,7 @@ import json
 import math
 import os
 import random
+import re
 import secrets
 import subprocess
 import sys
@@ -93,6 +95,10 @@ BALANCE_BACKOFF = (2, 5, 10)
 START_SPACING_S = 10.0
 LEAKY = ("silent", "talk", "open", "propose", "gated", "solo", "deepseek", "qwen", "gpt", "claude", "haiku", "luna",
           "oracle")
+EXIT_MARKER = "exit-code.txt"
+EXIT_MARKER_BYTES = 32
+EXIT_STATUS = re.compile(r"-?[0-9]{1,10}")
+SEAT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
 _SPEC = importlib.util.spec_from_file_location("flotilla_pricing", ROOT / "pricing.py")
 PRICING = importlib.util.module_from_spec(_SPEC)  # type: ignore[arg-type]
 assert _SPEC and _SPEC.loader
@@ -1036,7 +1042,43 @@ def trial_problem(trial: Path | None, result: dict | None, cell: dict) -> str | 
                                   and ran.get(row.get("seat"), "oracle") == "oracle" for row in tested)
     else:
         ok = bool(tested) and all(row.get("model_name") == cell["model"] for row in tested)
-    return None if ok else "seat model mismatch"
+    if not ok:
+        return "seat model mismatch"
+    for row in participants:
+        if row.get("name") == "oracle" and (problem := exit_marker_problem(trial, row.get("seat"))):
+            return problem
+    return None
+
+
+def seat_agent_dir(trial: Path, seat) -> Path | None:
+    """trial/seats/<seat>/agent, or None when the seat is not one plain path component."""
+    if type(seat) is not str or not SEAT_NAME.fullmatch(seat):
+        return None
+    return trial / "seats" / seat / "agent"
+
+
+def exit_marker_problem(trial: Path, seat) -> str | None:
+    """Why an oracle seat's exit-code.txt rejects the trial. Harbor's oracle writes it only after a nonzero
+    solve.sh exit, so a missing marker is a normal run."""
+    agent = seat_agent_dir(trial, seat)
+    if agent is None:
+        return "an oracle participant seat name is malformed"
+    marker = agent / EXIT_MARKER
+    if not marker.exists() and not marker.is_symlink():
+        return None
+    if marker.is_symlink() or not marker.is_file():
+        return f"seat {seat} {EXIT_MARKER} is malformed"
+    try:
+        with marker.open("rb") as handle:
+            raw = handle.read(EXIT_MARKER_BYTES + 1)
+        text = raw.decode("ascii").strip()
+    except (OSError, UnicodeDecodeError):
+        return f"seat {seat} {EXIT_MARKER} is malformed"
+    if len(raw) > EXIT_MARKER_BYTES or not EXIT_STATUS.fullmatch(text):
+        return f"seat {seat} {EXIT_MARKER} is malformed"
+    if int(text) != 0:
+        return f"seat {seat} oracle solve.sh exited with status {int(text)} ({EXIT_MARKER})"
+    return None
 
 
 def trial_valid(trial: Path | None, result: dict | None, cell: dict) -> bool:

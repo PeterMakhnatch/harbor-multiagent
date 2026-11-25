@@ -56,6 +56,9 @@ not cover the `instructions/` directory or file permissions.
    never stepped), which is a valid result with a named flag; and an infrastructure fault, which is invalid. A
    stalling seat does not turn a team's failure into an invalid trial that the analysis drops. The kit hooks are
    `on_seat_end`, `pending` and `on_deadline`.
+   For an oracle seat, `run_wave.py` rejects a nonzero or malformed `exit-code.txt` before counting the
+   reward. This also applies to scripted peers in a model run. The offline parity check also requires each
+   oracle seat's `oracle.txt`. Neither check turns a model seat's own omission into a harness fault.
 10. The outcome of `team` never depends on which seat's call reaches the world first in wall-clock time. Use the
     world's logical time and a round barrier.
 
