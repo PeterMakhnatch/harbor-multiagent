@@ -15,10 +15,13 @@ SEATS = DOSES
 CALL_CAP = 30
 AGENT_SECONDS = 240
 NOTE_CAP = 200
-ARMS = ("solo", "solo-seam", "team", "hint", "twin", "team-record", "team-fullrecord",
+ARMS = ("solo", "solo-seam", "team", "team-implicit", "hint", "twin", "team-record", "team-fullrecord",
         "probe-hunt-control", "probe-hunt-trap", "probe-ref-control", "probe-ref-trap")
 TWINS = (("probe-hunt-control", "probe-hunt-trap"), ("probe-ref-control", "probe-ref-trap"))
-PAIRS = tuple(("team", arm) for arm in ("solo-seam", "hint", "twin", "team-record", "team-fullrecord"))
+PAIRS = tuple(("team", arm) for arm in ("solo-seam", "hint", "twin", "team-record", "team-fullrecord",
+                                        "team-implicit"))
+# `team-implicit` is `team` without this one fact: the writer must infer what the next shift cannot see.
+SETTLED_FACT = "Once a batch is settled, it leaves the desk; no later shift can see its lot list on the desk."
 COMMON_WORDS = ("team",)
 ARM_WORDS = ("handoff", *(arm for arm in ARMS if arm not in COMMON_WORDS))
 TEAM_SENTENCE = "A different operator works each shift."
@@ -385,6 +388,9 @@ def extension_arm(inst, arm, max_text, max_messages):
     seats = inst["seats"][:1 if arm == "solo" else count]
     budget = CALL_CAP * (count if arm == "solo" else 1)
     common = COMMON.format(shifts=count, cap=params["cap"], budget=budget)
+    assert common.count(SETTLED_FACT + "\n") == 1
+    if arm == "team-implicit":
+        common = common.replace(SETTLED_FACT + "\n", "", 1)
     instructions, briefings = {}, {}
     for index, seat in enumerate(seats, 1):
         if arm == "solo":
@@ -412,6 +418,13 @@ def pair_difference(first, second, views_a, views_b):
         return
     normalized = {seat: dict(view) for seat, view in views_b.items()}
     for seat, view in normalized.items():
+        if second == "team-implicit":
+            expected = views_a[seat]["instruction"].replace(SETTLED_FACT + "\n", "", 1)
+            if SETTLED_FACT in view["instruction"] or view["instruction"] != expected:
+                yield f"{seat} differs by more than the settled-batch sentence"
+            else:
+                view["instruction"] = views_a[seat]["instruction"]
+            continue
         sentence = RESET_SENTENCE if second == "solo-seam" else EXTRA_SENTENCES[second]
         if view["instruction"].count(sentence) != 1:
             yield f"{seat} lacks its one declared sentence"

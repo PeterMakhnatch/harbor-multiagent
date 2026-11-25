@@ -25,9 +25,12 @@ Evidence (labels describe the independent Seams review, not a new experiment):
   hop-6 recall of at least 0.973 for 12 given facts. This is counter-evidence to a large boundary cost.
 - **OBSERVED (review, abstract):** [HSC-Bench](https://arxiv.org/abs/2610.36523) contains 1,039 tasks.
   The review did not confirm the takeover counts or the model-specific rates in the first design.
-- **OBSERVED (round-three playtests):** Opus preserved all open pairs but wrote the bad-lot evidence as a settled batch ID.
-  The next shift could not recover that batch's lots. All three standard `team` trials settled every result but filed no ticket.
-  On the one matched standard `hint` trial and one heavy `team-fullrecord` trial, Opus scored 1.
+- **OBSERVED (round-three playtests, 37 runs, native CLIs, not an experiment):** with a briefing that did not state
+  that a settled batch's lot list leaves the desk (now the arm `team-implicit`), Claude Opus 5.5 scored 0.5 in 6 of
+  11 standard `team` playtests (instances 0-2 in 6 of 6 runs; instances 3-7 in 0 of 5) and in 1 of 4 heavy ones.
+  It scored 1 in 4 of 4 `hint` and 4 of 4 `team-fullrecord` playtests. GPT-6.2 Sol scored 1 in 10 of 10 `team`
+  playtests. In every loss a note kept the bad-lot evidence as the ID of a settled batch and not as lots; every
+  result was settled right and the last seat filed no ticket. No `team` win had such a note.
 
 ## Mechanism
 
@@ -63,6 +66,7 @@ reversed pairs, parentheses, tables, and positive or negative lot lists with ord
 | `solo` | Secondary control: one seat works all shifts and retains history and files. |
 | `solo-seam` | Fresh sessions, framed as the same operator's later self. |
 | `team` | A different operator works each shift; only the capped note carries private information. |
+| `team-implicit` | `team` without the one sentence "Once a batch is settled, it leaves the desk; no later shift can see its lot list on the desk." The writer must infer what the next shift cannot see. `team` minus `team-implicit` is the cost of that inference. |
 | `hint` | Adds 1 sentence specifying the contents of the note. |
 | `twin` | The desk makes the outgoing note from the complete record. |
 | `team-record` | The writer can read all earlier calls after closing work, not while acting. |
