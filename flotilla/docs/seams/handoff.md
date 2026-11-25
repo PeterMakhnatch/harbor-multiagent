@@ -172,6 +172,11 @@ Both builds passed static QA. Both Docker trials were valid at $0 and matched th
 (`handoff-pointer-v4`, jobs `2ebd4b` and `b47d9f`). Each settled all 16 results correctly.
 The careful note kept the exact candidates at all 3 crossings; the pointer note lost them at shift 1.
 
+Pilot rehearsal (`flotilla/plans/oracle/handoff-pilot-oracle.json`): the first 2 instances of every stage and
+arm of the pilot plan `flotilla/plans/seams/handoff.json`, 22 trials, with Harbor `oracle` on local Docker, no
+model and $0 cap. The pilot builds carry the careful policy. Expected: 22 valid trials, each with reward 1.
+This checks that the pilot's own task folders run end to end; it says nothing about a model.
+
 ## Validity limits
 
 - Rules are stated, not learned from unfamiliar worlds. Frontier models can reach the ceiling.
