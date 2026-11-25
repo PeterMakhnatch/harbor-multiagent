@@ -138,18 +138,14 @@ def pooling(client: Client, own: dict[str, Any], family: Any, oracle: Any, me: d
 
 
 def legacy_play(name: str, client: Client, own: dict[str, Any], family: Any, oracle: Any) -> Generator:
-    if "script" in own:
-        yield from scripted(client, own, oracle)
-        return
-    if name == "nop":
-        return
-    _, me = yield from client.get("/whoami")
-    if not getattr(family, "POOLING", True) or name == "naive":
-        yield from own_answer(client, own, family)
-    elif name == "careful":
-        yield from pooling(client, own, family, oracle, me)
-    else:
+    pooling_family = getattr(family, "POOLING", True)
+    if name != "careful" and not (name == "naive" and pooling_family):
         raise ValueError(f"unknown legacy policy {name}")
+    _, me = yield from client.get("/whoami")
+    if not pooling_family or name == "naive":
+        yield from own_answer(client, own, family)
+    else:
+        yield from pooling(client, own, family, oracle, me)
 
 
 def play(name: str, client: Client, own: dict[str, Any], family: Any, oracle: Any,

@@ -354,6 +354,7 @@ if AUDIT is not None:
     STATE["audits"] = []  # every audit attempt: {"seat", "month", "t", "ok", "status", "left", "attempts_before"}
     STATE["audit_attempts"] = dict.fromkeys(SEATS, 0)
 _SEQ = [0]
+EVENT_SINK: Callable[[dict[str, Any]], None] | None = None
 EXTENSION: Any = None
 EXTENSION_ROUTES: dict[str, tuple[str, ...]] = {}
 
@@ -469,6 +470,9 @@ def record(kind: str, seat: str | None, data: dict[str, Any] | None = None) -> N
     """Append one event. Callers hold LOCK."""
     _SEQ[0] += 1
     event = {"seq": _SEQ[0], "t": now(), "seat": seat, "kind": kind, "data": data or {}}
+    if EVENT_SINK is not None:
+        EVENT_SINK(event)
+        return
     with (LOGS / "events.jsonl").open("a") as events:
         events.write(json.dumps(event, sort_keys=True) + "\n")
 
