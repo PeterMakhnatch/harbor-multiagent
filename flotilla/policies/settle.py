@@ -13,7 +13,10 @@ talker     careful, but never files.
 blind      (also fixed, lone) no messages, no reads: files its alphabetically first free window in r1.
 guess      no messages: files one of its free windows, drawn from a hash of its briefing.
 script-loop  careful's calls planned after one read: it never uses a later message.
-lapse-N    careful with a seeded lapse per opportunity: tell the list, read a round's messages, wait for the last round.
+lapse-N    careful with a seeded lapse per opportunity: tell the list, read a round's messages, wait for the
+           last round, file the agreed window (a lapse files the desk's own last-time window).
+last-rule  careful with the rule "last in alphabetical order": another valid answer.
+fuzz, burn test play: malformed and repeated actions; a desk that uses all its calls.
 """
 
 import hashlib
@@ -21,7 +24,7 @@ import json
 import re
 
 NAMES = ("careful", "naive", "eager", "polite", "rule-own", "follower", "proposer", "mute", "talker", "blind",
-         "fixed", "lone", "guess", "script-loop")
+         "fixed", "lone", "guess", "script-loop", "last-rule", "fuzz", "fuzz-file", "burn")
 ALPHA_RULE = ("Rule: all desks file the window that comes first in alphabetical order among the windows that "
               "no desk has blocked.")
 LAST_RULE = ALPHA_RULE.replace("first", "last")

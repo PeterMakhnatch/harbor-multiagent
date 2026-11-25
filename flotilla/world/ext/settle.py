@@ -233,16 +233,22 @@ def score(task, events, receipts=True):
         for window in family.choices(send["text"], windows):
             named.setdefault((desk, window), send["round"])
     shape, hasty = failure_shape(desks, files, lists, told, named, rounds, agreed, feasible)
+    # Pooled: the list was in the view of every first filer before that desk's own filing. A filer's receipts
+    # depend only on its own calls and on logical arrival, never on the order of calls of different desks.
     first_round = min((filing["round"] for filing in files.values()), default=rounds + 1)
+    filers = [desk for desk in desks if desk in files and files[desk]["round"] == first_round] or desks
     if receipts:
-        first_seq = min((filing["seq"] for filing in files.values()), default=float("inf"))
         seen = {}
         for event in events:
             if event["kind"] == "deliver":
                 for item in event["data"]["ids"]:
                     seen.setdefault((event["seat"], item), event["seq"])
-        pooled = [desk for desk in told if all(seen.get((other, tell_id[desk]), float("inf")) < first_seq
-                                               for other in desks if other != desk)]
+
+        def reached(filer, item):
+            at = seen.get((filer, item))
+            return at is not None and (filer not in files or at < files[filer]["seq"])
+
+        pooled = [desk for desk in told if all(reached(filer, tell_id[desk]) for filer in filers if filer != desk)]
     else:
         pooled = [desk for desk in told if told[desk] + p["delay"] < first_round]
     result |= {
