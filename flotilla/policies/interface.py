@@ -4,7 +4,12 @@ import hashlib
 
 
 def supports(name, variant):
-    return name in ("careful", "naive", "naive_read", "lone", "focal", "blind", "alternate", "ask")
+    return (name in ("careful", "naive", "naive_read", "lone", "focal", "blind", "alternate", "ask", "script-loop")
+            or name.startswith("lapse-") and name[6:] in ("10", "20", "30", "50"))
+
+
+def lapses(own, opportunity, group):
+    return own.lapse_percent is not None and own.lapse(own.lapse_percent, [opportunity, group["name"]])
 
 
 def make_file(family, group, convention, kind, values):
@@ -61,7 +66,7 @@ def desk_play(name, client, own, family):
             return
         asked = {group for message in inbox["messages"] for group in family.questions(message, groups)}
         for group in groups:
-            if group["name"] in asked:
+            if group["name"] in asked and not lapses(own, "answer", group):
                 text = family.describe(group, choices[group["name"]])
                 status, _ = yield from client.post("/messages", {"to": "p1", "text": text})
                 if status != 201:
@@ -104,6 +109,8 @@ def select(name, client, own, group, choices, state, messages, family):
     fallback = guess(name, own, group, family)
     if name in ("naive", "lone", "focal", "blind"):
         return fallback
+    if lapses(own, "obtain-setting", group):
+        return fallback
     if g in state.get("export_settings", {}):
         convention = tuple(state["export_settings"][g])
     elif group["hidden"] or name == "ask":
@@ -130,7 +137,7 @@ def play(name, client, own, family):
     coordinate = own["messaging"] and not own.get("imports_settings") and name not in ("naive", "lone", "focal", "blind")
     if coordinate:
         for group in own["groups"]:
-            if group["hidden"] or name == "ask":
+            if (group["hidden"] or name == "ask") and not lapses(own, "obtain-setting", group):
                 status, _ = yield from client.post("/messages", {"to": group["desk"],
                                                   "text": f"What key form and unit for {group['name']}?"})
                 if status != 201:
@@ -144,6 +151,7 @@ def play(name, client, own, family):
     if coordinate:
         _, inbox = yield from client.get("/messages")
         messages = inbox["messages"]
+    orders = []
     for group in own["groups"]:
         g = group["name"]
         if g not in complete or g not in state.get("ready", []):
@@ -153,7 +161,14 @@ def play(name, client, own, family):
         convention = yield from select(name, client, own, group, choices, state, messages, family)
         values = [row["target"] - sum(counts[g, row["site"], row["item"]]) for row in group["rows"]]
         body = make_file(family, group, convention, "order", values)
-        status, _ = yield from client.post("/publish", body)
-        if status != 201:
-            raise ValueError("order upload refused")
+        orders.append(body)
+        if name != "script-loop":
+            status, _ = yield from client.post("/publish", body)
+            if status != 201:
+                raise ValueError("order upload refused")
+    if name == "script-loop":
+        for body in orders:
+            status, _ = yield from client.post("/publish", body)
+            if status != 201:
+                raise ValueError("order upload refused")
     yield from client.post("/done", {})
