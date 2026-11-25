@@ -1,15 +1,45 @@
 """Shift continuity tasks with independently assigned dispatch and carrier identifiers."""
 
 import random
-from itertools import combinations
+import re
+from itertools import combinations, pairwise
 
 FAMILY = "handoff"
 TITLE = "Operate a print dispatch desk"
-SEATS = 3
 DOSES = {"canary": 3, "standard": 4, "heavy": 8}
+SEATS = DOSES
+CALL_CAPS = {600: 15, 400: 30, 300: 45}
 ARMS = ("solo", "solo-seam", "team", "hint", "twin", "team-record",
         "probe-hunt-control", "probe-hunt-trap", "probe-ref-control", "probe-ref-trap")
 TWINS = (("probe-hunt-control", "probe-hunt-trap"), ("probe-ref-control", "probe-ref-trap"))
+PAIRS = tuple(("team", arm) for arm in ("solo-seam", "hint", "twin", "team-record"))
+ARM_WORDS = ("handoff", "solo-seam", "team-record", *[arm for arm in ARMS if arm.startswith("probe-")])
+TEAM_SENTENCE = "A different operator works each shift."
+RESET_SENTENCE = "You are the same operator across shifts, with a fresh session and container each time."
+EXTRA_SENTENCES = {
+    "hint": "Keep each outstanding batch ID with its carrier reference, and keep the list of possible bad lots in your note.",
+    "team-record": "After `POST /close`, `GET /log` also shows every earlier shift's calls and replies.",
+    "twin": "At handover the desk writes the outgoing note from the full record instead of using your note.",
+}
+
+def parse_note(note, lots):
+    bindings = dict(re.findall(r"\b(B\d{2})[=:/ ](R\d{2})\b", note))
+    bindings.update((batch, ref) for ref, batch in re.findall(r"\b(R\d{2})>(B\d{2})\b", note))
+    suspects = set(re.findall(r"\bL\d{2}\b", note))
+    return bindings, suspects or set(lots)
+
+
+def write_note(bindings, possible, style="careful"):
+    order = sorted(bindings, reverse=style == "reverse")
+    separator = {"colon": ":", "slash": "/", "lines": " "}.get(style, "=")
+    pairs = [f"{bindings[b]}>{b}" if style == "ref-first" else f"{b}{separator}{bindings[b]}" for b in order]
+    joiner = "\n" if style == "lines" else " "
+    return "Pending " + joiner.join(pairs) + "; Suspects " + " ".join(sorted(possible))
+
+
+def narrow(possible, lots, status):
+    return possible & set(lots) if status == "returned" else possible - set(lots)
+
 
 
 def identifiers(rng, prefix, count, excluded):
@@ -204,7 +234,10 @@ def validate_case(params, dose, arm):
 COMMON = """You operate the dispatch desk of a print shop. There are {shifts} shifts.
 Use $WORLD_URL with the header `Authorization: Bearer $SEAT_TOKEN` for all calls.
 For POST calls send JSON with the header `Content-Type: application/json`.
-Wait until your seat is active: call `GET /whoami` to check the `active` field.
+Call `GET /await?until=active` to wait for your shift. Proceed when `active` is `active`.
+If the call returns `frozen`, `retired`, or `timeout` without activation, stop.
+Your seat can make {budget} active world calls, including refused calls.
+If the last allowed call does not complete handover, the shift ends with an empty note.
 
 In each shift, print and dispatch every batch in your plan. Settle all carrier results that arrive.
 Exactly one ink lot is bad. A batch returns if and only if it uses the bad lot.
@@ -242,36 +275,45 @@ def extension_arm(inst, arm, max_text, max_messages):
     params = arm_case(inst, arm)
     count = params["shifts"]
     seats = inst["seats"][:1 if arm == "solo" else count]
-    common = COMMON.format(shifts=count, cap=params["cap"])
+    budget = CALL_CAPS[params["cap"]] * (count if arm == "solo" else 1)
+    common = COMMON.format(shifts=count, cap=params["cap"], budget=budget)
     instructions, briefings = {}, {}
     for index, seat in enumerate(seats, 1):
         if arm == "solo":
             suffix = "You work every shift in order and retain your memory and files. Nobody else reads your notes."
-        elif arm == "solo-seam":
-            suffix = (f"You work shift {index} of {count}. Your memory and files are reset at each handover; "
-                      "your next self receives only your note.")
         else:
-            suffix = (f"You work shift {index} of {count}. The previous operator left the note on the desk. "
-                      "The next operator starts with only your note; your log closes at handover.")
-        if arm == "hint":
-            suffix += ("\nKeep each outstanding batch ID with its carrier reference, "
-                       "and keep the list of possible bad lots in your note.")
-        elif arm == "team-record":
-            suffix += "\nAfter `POST /close`, `GET /log` also shows every earlier shift's calls and replies."
-        elif arm == "twin":
-            suffix += "\nAt handover the desk writes the outgoing note from the full record instead of using your note."
+            framing = RESET_SENTENCE if arm == "solo-seam" else TEAM_SENTENCE
+            suffix = (f"You work shift {index} of {count}. At each handover, the current session closes. "
+                      f"The next session starts with only the note; the old log closes.\n{framing}")
+        if arm in EXTRA_SENTENCES:
+            suffix += "\n" + EXTRA_SENTENCES[arm]
         instructions[seat] = common + "\n" + suffix + "\n"
-        briefings[seat] = {"shift": index, "shifts": count, "cap": params["cap"], "continuous": arm == "solo",
-                           "record_after_close": arm == "team-record"}
+        briefings[seat] = {"shift": index, "shifts": count, "cap": params["cap"], "continuous": arm == "solo"}
     scripted = seats[:-2] + seats[-1:] if arm.startswith("probe-") else []
     return {"params": params, "briefings": briefings, "instructions": instructions, "messaging": False,
-            "initial_active": seats[:1], "scripted_seats": scripted,
+            "initial_active": seats[:1], "scripted_seats": scripted, "max_calls": budget,
+            "start_after": {seat: [preceding] for preceding, seat in pairwise(seats)},
             "scripted_policies": dict.fromkeys(scripted, "careful")}
 
 
-def qa(task, views):
-    import re
+def pair_difference(first, second, views_a, views_b):
+    if first != "team" or second not in {b for _, b in PAIRS}:
+        yield "unknown pair"
+        return
+    normalized = {seat: dict(view) for seat, view in views_b.items()}
+    for seat, view in normalized.items():
+        sentence = RESET_SENTENCE if second == "solo-seam" else EXTRA_SENTENCES[second]
+        if view["instruction"].count(sentence) != 1:
+            yield f"{seat} lacks its one declared sentence"
+            continue
+        if second == "solo-seam":
+            view["instruction"] = view["instruction"].replace(sentence, TEAM_SENTENCE, 1)
+        else:
+            view["instruction"] = view["instruction"].replace("\n" + sentence, "", 1)
+    if normalized != views_a:
+        yield "more than the declared sentence differs"
 
+def qa(task, views):
     for seat, view in views.items():
         data = view["instruction"] + view["env.SEAT_BRIEFING"]
         if re.search(r"\b[BLR]\d{2}\b", data):

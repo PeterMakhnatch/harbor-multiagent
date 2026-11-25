@@ -1,30 +1,12 @@
 """Policies using only the dispatch desk views and their own carried state."""
 
 import hashlib
-import re
 
 
 def supports(name, variant):
-    return name in ("careful", "naive", "lone", "blind", "reverse", "colon", "slash", "lines", "ref-first")
+    return name in ("careful", "naive", "lone", "blind", "reverse", "colon", "slash", "lines", "ref-first",
+                    "exhaust", "stall")
 
-
-def parse_note(note, lots):
-    bindings = dict(re.findall(r"\b(B\d{2})[=:/ ](R\d{2})\b", note))
-    bindings.update((batch, ref) for ref, batch in re.findall(r"\b(R\d{2})>(B\d{2})\b", note))
-    suspects = set(re.findall(r"\bL\d{2}\b", note))
-    return bindings, suspects or set(lots)
-
-
-def write_note(bindings, possible, style="careful"):
-    order = sorted(bindings, reverse=style == "reverse")
-    separator = {"colon": ":", "slash": "/", "lines": " "}.get(style, "=")
-    pairs = [f"{bindings[b]}>{b}" if style == "ref-first" else f"{b}{separator}{bindings[b]}" for b in order]
-    joiner = "\n" if style == "lines" else " "
-    return "Pending " + joiner.join(pairs) + "; Suspects " + " ".join(sorted(possible))
-
-
-def narrow(possible, lots, status):
-    return possible & set(lots) if status == "returned" else possible - set(lots)
 
 
 def check(code, reply):
@@ -33,7 +15,7 @@ def check(code, reply):
     return reply
 
 
-def record_candidates(log, lots):
+def record_candidates(log, lots, family):
     batches, refs, results = {}, {}, {}
     for call in log:
         reply = call["reply"]
@@ -43,7 +25,7 @@ def record_candidates(log, lots):
     possible = set(lots)
     for ref, status in results.items():
         if ref in refs and refs[ref] in batches:
-            possible = narrow(possible, batches[refs[ref]], status)
+            possible = family.narrow(possible, batches[refs[ref]], status)
     return possible
 
 
@@ -58,7 +40,7 @@ def feasible_lots(possible, unknown_lots, statuses):
             and sum(lot not in inks for inks in unknown_lots) >= delivered}
 
 
-def work(name, client, own, memory):
+def work(name, client, own, memory, family):
     desk = check(*(yield from client.get("/desk")))
     lots = desk["lots"]
     if memory is not None:
@@ -66,7 +48,7 @@ def work(name, client, own, memory):
     elif name in ("lone", "blind"):
         bindings, possible = {}, set(lots)
     else:
-        bindings, possible = parse_note(desk["note"], lots)
+        bindings, possible = family.parse_note(desk["note"], lots)
     local = set(lots)
     available = {b["batch"]: b["lots"] for b in desk["plan"] + desk["open"]}
     planned = [b["batch"] for b in desk["plan"] if b["state"] == "planned"]
@@ -89,8 +71,8 @@ def work(name, client, own, memory):
     for ref, status in inbox.items():
         batch = by_ref.get(ref)
         if batch is not None:
-            possible = narrow(possible, available[batch], status)
-            local = narrow(local, available[batch], status)
+            possible = family.narrow(possible, available[batch], status)
+            local = family.narrow(local, available[batch], status)
             items.append(settlement(ref, batch, status))
     if name == "blind":
         unknown_refs = sorted(set(inbox) - set(by_ref))
@@ -119,14 +101,14 @@ def work(name, client, own, memory):
     elif name == "naive":
         keep = {b: r for b, r in bindings.items() if b in fresh}
         suspects = local
-        if own["record_after_close"]:
-            record = check(*(yield from client.get("/log")))
-            suspects = record_candidates(record["calls"], lots)
+        record = check(*(yield from client.get("/log")))
+        if any(call["shift"] < desk["shift"] for call in record["calls"]):
+            suspects = record_candidates(record["calls"], lots, family)
     elif name in ("lone", "blind"):
         keep, suspects = {}, set()
     else:
         keep, suspects = bindings, possible
-    note = write_note(keep, suspects, name)
+    note = family.write_note(keep, suspects, name)
     if own["continuous"] and len(note) > own["cap"]:
         note = ""
     check(*(yield from client.post("/handover", {"note": note})))
@@ -137,19 +119,23 @@ def settlement(ref, batch, status):
     return {"reference": ref, "batch": batch, "action": "close" if status == "delivered" else "reissue"}
 
 
-def play(name, client, own):
-    for _ in range(300):
-        _, me = yield from client.get("/whoami")
-        if me["active"] == "active":
-            break
-        if me["frozen"]:
-            return
-        yield from client.sleep(0.2)
-    else:
+def play(name, client, own, family):
+    if name == "stall":
+        for _ in range(100_000):
+            yield from client.sleep(0)
+        return
+    status, me = yield from client.get("/await?until=active")
+    if status != 200 or me["active"] != "active" or me["frozen"]:
+        return
+    if name == "exhaust":
+        for _ in range(family.CALL_CAPS[own["cap"]]):
+            code, _ = yield from client.get("/desk")
+            if code != 200:
+                return
         return
     if own["continuous"]:
         memory = None
         for _ in range(own["shifts"]):
-            memory = yield from work(name, client, own, memory)
+            memory = yield from work(name, client, own, memory, family)
     else:
-        yield from work(name, client, own, None)
+        yield from work(name, client, own, None, family)
