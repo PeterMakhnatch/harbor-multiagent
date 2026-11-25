@@ -37,10 +37,11 @@ assert Path(workdir).parent.parent == Path.home().resolve()
 assert 'PLAYTEST_SECRET' not in os.environ
 if mode == 'env':
     assert os.environ['PLAYTEST_KEEP'] == 'allowed'
-    assert set(os.environ) <= {
+    allowed = {
         'PATH', 'HOME', 'TMPDIR', 'SEAT', 'SEAT_TOKEN', 'SEAT_BRIEFING', 'WORLD_URL',
-        'PWD', 'SHLVL', '_', 'LC_CTYPE', 'PLAYTEST_KEEP'
+        'PWD', 'SHLVL', '_', 'LC_CTYPE', '__CF_USER_TEXT_ENCODING', 'PLAYTEST_KEEP'
     }
+    assert not (unexpected := set(os.environ) - allowed), unexpected
     mode = 'careful'
 assert list(Path.cwd().iterdir()) == [] or list(Path.cwd().iterdir()) == [Path.cwd() / 'private.txt']
 if Path('private.txt').exists():
@@ -56,6 +57,8 @@ if mode == 'wait':
     time.sleep(30)
 elif mode == 'careful':
     runpy.run_path(solution, run_name='__main__')
+elif mode == 'fail':
+    sys.exit(7)
 """
 
 
@@ -63,7 +66,7 @@ def build(tmp_path, arm):
     return BUILD.build("kit_fixture", [0], 2, "easy", 7236499753218553, (arm,), tmp_path / "tasks")[0]
 
 
-def play(tmp_path, task, mode="careful", extra=(), name="out", check=True):
+def play(tmp_path, task, mode="careful", extra=(), name="out", check=True, expected_exit=0):
     fake_seat = tmp_path / "fake seat.py"
     fake_seat.write_text(FAKE_SEAT)
     out = tmp_path / name
@@ -75,7 +78,7 @@ def play(tmp_path, task, mode="careful", extra=(), name="out", check=True):
                                check=False, capture_output=True, text=True, timeout=25)
     if not check:
         return completed
-    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.returncode == expected_exit, completed.stdout + completed.stderr
     return out, json.loads((out / "result.json").read_text())
 
 
@@ -121,15 +124,22 @@ def test_scripted_probe_and_noop(tmp_path, monkeypatch):
     monkeypatch.setenv("FLOTILLA_ADMIN", "must-not-reach-seats")
     monkeypatch.setenv("FLOTILLA_TOKENS", "must-not-reach-seats")
     task = build(tmp_path, "talk-trap")
-    good_out, good = play(tmp_path, task)
+    good_out, good = play(tmp_path, task, extra=("--model-label", "fake-model"))
     events, summary = assert_evidence(task, good_out, good, 1)
     assert good["seats"]["p1"]["mode"] == "scripted"
     assert good["seats"]["p2"]["mode"] == "external"
     assert all(info["exit_code"] == 0 for info in good["seats"].values())
+    assert good["model"] == "fake-model" and good["harness"] == "fake seat.py"
+    assert good["seat_failures"] == {}
+    receiver = good["seats"]["p2"]
+    assert receiver["world_calls"] > 0 and receiver["first_read"] < receiver["first_submit"]
+    assert receiver["read_before_submit"] is True
     assert any(event["kind"] == "commit_value" and event["seat"] == "p2" for event in events)
     assert 'tick=2.0 deliver:' in summary and '"text": "handoff ' in summary
     assert 'tick=2.0 commit_value:' in summary
-    bad_out, bad = play(tmp_path, task, "nop", name="no-op")
+    bad_out, bad = play(tmp_path, task, "nop", name="no-op", expected_exit=1)
+    assert bad["seat_failures"] == {"p2": ["no world calls"]}
+    assert bad["seats"]["p2"]["world_calls"] == 0
     events, _ = assert_evidence(task, bad_out, bad, 0)
     assert [event["kind"] for event in events if event["seat"] == "p2"] == ["seat_transition"]
     good_log = (good_out / "seats" / "p2" / "seat.log").read_text()
@@ -183,13 +193,25 @@ def test_timeout_freezes_and_scores_with_pending_seat(tmp_path):
     task = build(tmp_path, "talk")
     config = task / "task.toml"
     config.write_text(config.read_text().replace("[agents.p2]\n", '[agents.p2]\nstart_after = ["p1"]\n'))
-    out, result = play(tmp_path, task, "wait", extra=("--timeout-sec", "0.5"))
+    out, result = play(tmp_path, task, "wait", extra=("--timeout-sec", "0.5"), expected_exit=1)
     _, summary = assert_evidence(task, out, result, 0)
     assert result["timed_out"]
     p1, p2 = result["seats"]["p1"], result["seats"]["p2"]
     assert p1["timed_out"] and p1["exit_code"] < 0
     assert p2["timed_out"] and p2["started_sec"] is None and p2["exit_code"] is None
     assert "No seat events." in summary
+
+
+def test_failed_seat_exit(tmp_path):
+    task = build(tmp_path, "talk-trap")
+    completed = play(tmp_path, task, "fail", check=False)
+    assert completed.returncode == 1
+    assert "p2: exit=7, world calls=0" in completed.stdout
+    assert "p2: exit code 7, no world calls" in completed.stderr
+    result = json.loads((tmp_path / "out" / "result.json").read_text())
+    assert result["seat_failures"]["p2"] == ["exit code 7", "no world calls"]
+    assert result["seats"]["p2"]["first_read"] is None
+    assert result["seats"]["p2"]["first_submit"] is None
 
 
 def test_reject_scripted_external_and_cyclic_dependencies(tmp_path):

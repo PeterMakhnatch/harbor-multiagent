@@ -37,9 +37,32 @@ PATH_MENTION = re.compile(
 )
 WORLD_BOOT = """\
 import sys
+import json
+import threading
+import time
 from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 import world
+requests = Path(sys.argv[3])
+requests.touch()
+request_lock = threading.Lock()
+request_seq = 0
+origin = time.monotonic()
+
+class RecordedWorld(world.World):
+    def _handle(self, method):
+        global request_seq
+        seat = self._caller()
+        if seat in world.SEATS:
+            with request_lock:
+                request_seq += 1
+                with requests.open("a") as log:
+                    log.write(json.dumps({"seq": request_seq, "seat": seat, "method": method,
+                                          "path": self.path.split("?", 1)[0],
+                                          "t": round(time.monotonic() - origin, 3)}) + "\\n")
+        return super()._handle(method)
+
+world.World = RecordedWorld
 server = world.serve('127.0.0.1', 0)
 Path(sys.argv[2]).write_text(str(server.server_address[1]))
 server.serve_forever()
@@ -92,12 +115,18 @@ class SeatRun:
             self.process = None
         self.ended, self.timed_out = now, timeout
 
-    def result(self) -> dict[str, Any]:
+    def result(self, requests: list[dict]) -> dict[str, Any]:
+        first_read = next((r["seq"] for r in requests if r["method"] == "GET"
+                           and r["path"] not in ("/whoami", "/await", "/health")), None)
+        first_submit = next((r["seq"] for r in requests if r["method"] == "POST"
+                             and r["path"] in ("/submit", "/commit")), None)
         return {"mode": self.mode, "command": self.command, "exit_code": self.exit_code,
                 "seconds": None if self.started is None else self.ended - self.started,
                 "started_sec": self.started, "ended_sec": self.ended, "timed_out": self.timed_out,
                 "error": self.error, "start_after": list(self.after), "workdir": str(self.workdir),
-                "mapping": self.mapping}
+                "mapping": self.mapping, "world_calls": len(requests),
+                "first_read": first_read, "first_submit": first_submit,
+                "read_before_submit": None if first_read is None or first_submit is None else first_read < first_submit}
 
 
 def stop_process(process: subprocess.Popen) -> None:
@@ -230,7 +259,8 @@ def world_server(task: qa.Task, out: Path, root: Path, tokens: dict[str, str], t
             env[name] = str(task.env_dir / env[name].removeprefix("/world/"))
     port_file = root / "port"
     with (out / "world.log").open("wb") as log:
-        process = subprocess.Popen([sys.executable, "-B", "-c", WORLD_BOOT, str(task.env_dir), str(port_file)],
+        process = subprocess.Popen([sys.executable, "-B", "-c", WORLD_BOOT, str(task.env_dir), str(port_file),
+                                    str(out / "requests.jsonl")],
                                    cwd=root, env=env, stdin=subprocess.DEVNULL, stdout=log,
                                    stderr=subprocess.STDOUT, start_new_session=True)
         try:
@@ -364,9 +394,29 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]]) -> None:
     (out / "summary.md").write_text("\n".join(lines))
 
 
+def harness_name(template: str) -> str:
+    args = shlex.split(template)
+    if Path(args[0]).name in ("bash", "sh", "zsh", "python", "python3", "python3.12") and len(args) > 1:
+        return Path(args[1]).name
+    return Path(args[0]).name
+
+
+def seat_failures(info: dict) -> list[str]:
+    failures = []
+    if info["timed_out"]:
+        failures.append("timed out")
+    if info["error"]:
+        failures.append(info["error"])
+    if info["exit_code"] != 0:
+        failures.append(f"exit code {info['exit_code']}")
+    if info["mode"] == "external" and info["world_calls"] == 0:
+        failures.append("no world calls")
+    return failures
+
+
 def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: float | None,
              max_parallel: int, out: Path, *, pass_env: tuple[str, ...] = (),
-             profile: Path | None = None) -> dict:
+             profile: Path | None = None, model_label: str | None = None) -> dict:
     if qa.yaml is None:
         raise ValueError("PyYAML is required; use uvx --quiet --python 3.12 --with pyyaml python flotilla/playtest.py")
     task = qa.load_task(task_dir.resolve())
@@ -404,9 +454,12 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
                 reward, score = verify(task, out, url, env, float(config.get("verifier", {}).get("timeout_sec", 120)))
         finally:
             audit = archive_seats(seats)
+        requests = read_jsonl(out / "requests.jsonl")
+        seat_results = {seat.seat: seat.result([r for r in requests if r["seat"] == seat.seat]) for seat in seats}
+        failures = {name: errors for name, info in seat_results.items() if (errors := seat_failures(info))}
         result = {"task": str(task.path), "reward": reward, "score": score, "timed_out": timed_out,
-                  "sandbox_profile": str(profile) if profile else None,
-                  "seats": {seat.seat: seat.result() for seat in seats}}
+                  "sandbox_profile": str(profile) if profile else None, "model": model_label,
+                  "harness": harness_name(template), "seat_failures": failures, "seats": seat_results}
         (out / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         timeline(out, result, audit)
         return result
@@ -422,16 +475,23 @@ def main() -> None:
     parser.add_argument("--pass-env", action="append", default=[], metavar="NAME",
                         help="host variable to pass to a seat (repeatable; comma-separated names also accepted)")
     parser.add_argument("--sandbox-profile", type=Path, help="macOS sandbox-exec profile for external seats")
+    parser.add_argument("--model-label", help="model name to record in result.json")
     parser.add_argument("--out", type=Path, required=True, help="new or empty output folder")
     args = parser.parse_args()
     try:
         selected = {seat.strip() for seat in args.seats.split(",")} if args.seats is not None else None
         passed = tuple(name.strip() for group in args.pass_env for name in group.split(","))
         result = playtest(args.task, args.seat_cmd, selected, args.timeout_sec, args.max_parallel, args.out,
-                          pass_env=passed, profile=args.sandbox_profile)
+                          pass_env=passed, profile=args.sandbox_profile, model_label=args.model_label)
     except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         parser.exit(2, f"playtest: {exc}\n")
     print(f"Reward: {result['reward']}; results: {args.out / 'result.json'}")
+    for name, info in result["seats"].items():
+        print(f"{name}: exit={info['exit_code']}, world calls={info['world_calls']}")
+    if result["seat_failures"]:
+        for name, failures in result["seat_failures"].items():
+            print(f"playtest: {name}: {', '.join(failures)}", file=sys.stderr)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
