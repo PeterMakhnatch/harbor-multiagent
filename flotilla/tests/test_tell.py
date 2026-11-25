@@ -205,3 +205,52 @@ def test_permission_errors_and_receipt_order(tmp_path, start_world):
     world.request("POST", "/admin/freeze", token=world.admin)
     score = SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir)
     assert score["reward"] == 0 and score["receiving_incomplete"] and score["stalled_seats"]
+
+
+def test_guessed_edit_and_pull_path(tmp_path, start_world):
+    (path,) = BUILD.build("tell", [11], 3, "heavy", SEED, ("team",), tmp_path)
+    task = QA.load_task(path)
+    world = start_world("team", tuple(task.seats), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+    world.ordered = True
+
+    def call(seat, method, route, body=None):
+        status, reply = world.seat(seat, method, route, body)
+        assert status == 200, (seat, route, reply)
+        return reply
+
+    boards = call("p1", "GET", "/board")["boards"]
+    docket = call("p1", "GET", "/docket")["docket"]
+    stock = {}
+    for desk in FAMILY.DESKS:
+        sheet = call(desk, "GET", "/sheet")["sheets"][desk]
+        stock[desk] = call(desk, "GET", "/stock")["stock"][desk]
+        for row in sheet:
+            other = next(lot for lot in stock[desk][row["order"]] if lot != row["lot"])
+            assert world.seat(desk, "POST", "/sheet", {"order": row["order"], "lot": other})[0] == 400
+        call(desk, "POST", "/wait", {"until": "delivery"})
+    reply = call("p1", "GET", "/item")
+    for _ in range(FAMILY.ITEMS):
+        document = reply["document"]
+        desk_row = next(((desk, row) for desk, rows in boards.items() for row in rows
+                         if document.get("lot") == row["lot"]), None)
+        if desk_row:
+            desk, row = desk_row
+            call("p1", "POST", "/forward", {"item": document["item"], "to": desk})
+            inbox = call(desk, "GET", "/messages")["messages"]
+            assert any(message["text"].startswith("{") and json.loads(message["text"]) == document
+                       for message in inbox)
+            other = next(lot for lot in stock[desk][row["order"]] if lot != row["lot"])
+            call(desk, "POST", "/sheet", {"order": row["order"], "lot": other})
+        round_no = call("p1", "GET", "/whoami")["tick"] + 1
+        reply = call("p1", "POST", "/record", FAMILY.record_entry(document, docket))
+        if round_no == FAMILY.CARRIER:
+            for desk in FAMILY.DESKS:
+                call(desk, "POST", "/wait", {})
+        elif desk_row and call(desk, "GET", "/whoami")["tick"] + 1 < FAMILY.CARRIER:
+            call(desk, "POST", "/wait", {"until": "delivery"})
+    assert reply["document"] is None
+    world.request("POST", "/admin/freeze", token=world.admin)
+    events = world.events()
+    expected = SIM.SCORE.extension_score(task.task_json, events, task.env_dir)
+    assert expected["reward"] == 1 and expected["told_in_time"] and expected["receiver_applied"]
+    assert expected == SIM.SCORE.extension_score(task.task_json, events, task.env_dir)
