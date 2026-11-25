@@ -132,6 +132,8 @@ def score_extension_task(task: dict[str, Any]) -> None:
         "condition": task["condition"], "seats": task["seats"], "world_version": task["world_version"],
         "score": result.get("reward"), "error": error,
     }
+    if "versions" in task:
+        summary["versions"] = task["versions"]
     if error is None:
         (VERIFIER / "reward.json").write_text(json.dumps({"reward": result["reward"]}) + "\n")
     else:

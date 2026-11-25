@@ -1,8 +1,11 @@
 """Test policies for the fixture; only the receiver's response to missing data differs."""
 
+import re
+
 
 def supports(name, variant):
-    return name in ("careful", "naive", "sender", "exhaust", "stall", "fault", "wait-message")
+    return (name in ("careful", "naive", "sender", "exhaust", "stall", "fault", "wait-message", "script-loop")
+            or re.fullmatch(r"lapse-(?:0|[1-9][0-9]?|100)", name) is not None)
 
 
 def play(name, client, own, family):
@@ -77,5 +80,9 @@ def play(name, client, own, family):
         left = next((family.decode(text) for text in messages if text.startswith("handoff ")), None)
         if left is not None or name == "naive":
             break
+        if own.lapse_percent is not None and own.lapse(own.lapse_percent, "read-late-handoff"):
+            break
         yield from client.post("/advance", {})
+        if name == "script-loop":
+            break
     yield from client.post("/commit", {"total": own["right"] + (left or 0)})

@@ -108,20 +108,33 @@ class ScriptedAgent(BaseAgent):
 AGENT = f"{__name__}:ScriptedAgent"
 
 
-def _task_dir(root: Path, timeout_sec: float = 30, extra: str = "") -> Path:
+def _task_dir(
+    root: Path,
+    timeout_sec: float = 30,
+    extra: str = "",
+    stages: dict[str, list[str]] | None = None,
+) -> Path:
     task_dir = root / "hello"
     (task_dir / "environment").mkdir(parents=True)
+    names = list(stages) if stages is not None else ["maya", "raj", "lee"]
     (task_dir / "environment" / "docker-compose.yaml").write_text(
-        "services:\n  main: {}\n  maya: {}\n  raj: {}\n  lee: {}\n"
+        "services:\n  main: {}\n" + "".join(f"  {name}: {{}}\n" for name in names)
     )
     (task_dir / "instructions").mkdir()
-    for seat in ("maya", "raj", "lee"):
+    for seat in names:
         (task_dir / "instructions" / f"{seat}.md").write_text(f"You are {seat}.")
     (task_dir / "tests").mkdir()
     (task_dir / "tests" / "test.sh").write_text("#!/bin/bash\n")
+    tables = []
+    for seat in names:
+        table = f"[agents.{seat}]\n"
+        if seat == "lee":
+            table += "under_test = false\n"
+        if stages is not None:
+            table += f"start_after = {json.dumps(stages[seat])}\n"
+        tables.append(table)
     (task_dir / "task.toml").write_text(
-        f"[agent]\ntimeout_sec = {timeout_sec}\n{extra}\n"
-        "[agents.maya]\n[agents.raj]\n[agents.lee]\nunder_test = false\n"
+        f"[agent]\ntimeout_sec = {timeout_sec}\n{extra}\n" + "".join(tables)
     )
     return task_dir
 
@@ -294,6 +307,8 @@ async def test_play_ends_when_agents_under_test_end_and_the_rest_are_stopped(
 
     run = asyncio.create_task(trial.run())
     await seen("ended", "maya")
+    await seen("run", "raj", "You are raj.")
+    await seen("run", "lee", "You are lee.")
     assert ("stopped", "lee") not in EVENTS
     RELEASE["raj"].set()
     result = await run
@@ -313,6 +328,152 @@ async def test_play_ends_when_agents_under_test_end_and_the_rest_are_stopped(
     assert seats["lee"].exception_info is None
     assert seats["maya"].agent_result.cost_usd == 0.5
     assert result.compute_token_cost_totals()[3] == 1.0
+
+
+async def test_staged_chain_waits_for_each_predecessor_and_supporting_seat(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(
+                tmp_path,
+                stages={"lee": ["raj"], "raj": ["maya"], "maya": []},
+            ),
+            _participant("maya", hold=True),
+            _participant("raj", hold=True),
+            _participant("lee", hold=True),
+        )
+    )
+
+    run = asyncio.create_task(trial.run())
+    await seen("run", "maya", "You are maya.")
+    assert {e[1] for e in EVENTS if e[0] == "setup"} == {"maya", "raj", "lee"}
+    assert ("run", "raj", "You are raj.") not in EVENTS
+    assert ("run", "lee", "You are lee.") not in EVENTS
+    RELEASE["maya"].set()
+    await seen("run", "raj", "You are raj.")
+    assert ("run", "lee", "You are lee.") not in EVENTS
+    RELEASE["raj"].set()
+    await seen("run", "lee", "You are lee.")
+    assert not _verified(trial)
+    RELEASE["lee"].set()
+    result = await run
+
+    seats = _seat_results(result)
+    assert result.exception_info is None
+    for predecessor, successor in (("maya", "raj"), ("raj", "lee")):
+        assert index("ended", predecessor) < index(
+            "run", successor, f"You are {successor}."
+        )
+        assert (
+            seats[predecessor].agent_execution.finished_at
+            <= seats[successor].agent_execution.started_at
+        )
+    assert index("ended", "lee") < index("verify")
+
+
+async def test_staged_diamond_runs_ready_seats_concurrently_and_joins_both(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(
+                tmp_path,
+                stages={
+                    "maya": [],
+                    "raj": ["maya"],
+                    "zed": ["maya"],
+                    "lee": ["raj", "zed"],
+                },
+            ),
+            _participant("maya", hold=True),
+            _participant("raj", hold=True),
+            _participant("zed", hold=True),
+            _participant("lee"),
+        )
+    )
+
+    run = asyncio.create_task(trial.run())
+    await seen("run", "maya", "You are maya.")
+    assert not any(e[0] == "run" and e[1] != "maya" for e in EVENTS)
+    RELEASE["maya"].set()
+    await seen("run", "raj", "You are raj.")
+    await seen("run", "zed", "You are zed.")
+    assert ("run", "lee", "You are lee.") not in EVENTS
+    RELEASE["raj"].set()
+    await seen("ended", "raj")
+    assert ("run", "lee", "You are lee.") not in EVENTS
+    RELEASE["zed"].set()
+    result = await run
+
+    assert result.exception_info is None
+    for seat in ("raj", "zed"):
+        assert index("ended", "maya") < index("run", seat, f"You are {seat}.")
+        assert index("ended", seat) < index("run", "lee", "You are lee.")
+    assert index("ended", "lee") < index("verify")
+
+
+@pytest.mark.parametrize(
+    "fail, error, graded",
+    [
+        ("exit", "NonZeroAgentExitCodeError", True),
+        ("crash", "RuntimeError", True),
+        ("auth", "AgentAuthenticationError", False),
+    ],
+)
+async def test_staged_predecessor_failure_releases_successors(
+    tmp_path: Path, fail: str, error: str, graded: bool
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path, stages={"maya": [], "raj": ["maya"], "lee": ["raj"]}),
+            _participant("maya", fail=fail),
+            _participant("raj"),
+            _participant("lee"),
+        )
+    )
+
+    result = await trial.run()
+    seats = _seat_results(result)
+
+    assert seats["maya"].exception_info.exception_type == error
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == error
+    assert (
+        seats["maya"].agent_execution.finished_at
+        <= seats["raj"].agent_execution.started_at
+    )
+    assert index("ended", "raj") < index("run", "lee", "You are lee.")
+    assert _verified(trial) is graded
+    if graded:
+        assert index("ended", "lee") < index("verify")
+
+
+async def test_staged_timeout_starts_at_each_seats_own_run(tmp_path: Path):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(
+                tmp_path,
+                timeout_sec=0.15,
+                stages={"maya": [], "raj": ["maya"], "lee": ["raj"]},
+            ),
+            _participant("maya", hold=True),
+            _participant("raj", hold=True),
+            _participant("lee"),
+        )
+    )
+
+    result = await trial.run()
+    seats = _seat_results(result)
+
+    for seat in ("maya", "raj"):
+        assert seats[seat].exception_info.exception_type == "AgentTimeoutError"
+        execution = seats[seat].agent_execution
+        assert (execution.finished_at - execution.started_at).total_seconds() >= 0.14
+    assert index("stopped", "maya") < index("run", "raj", "You are raj.")
+    assert index("stopped", "raj") < index("run", "lee", "You are lee.")
+    assert seats["lee"].exception_info is None
+    assert index("ended", "lee") < index("verify")
 
 
 async def test_a_cancelled_trial_stays_cancelled_over_seat_errors(tmp_path: Path):

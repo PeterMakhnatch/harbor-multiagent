@@ -7,6 +7,7 @@ import tomllib
 import warnings
 from collections.abc import Iterable
 from enum import Enum
+from graphlib import CycleError, TopologicalSorter
 from ipaddress import ip_address, ip_network
 from pathlib import PurePosixPath
 from typing import Any, Literal
@@ -852,13 +853,18 @@ class SeatConfig(BaseModel):
     under_test: bool = Field(
         default=True,
         description=(
-            "Whether this agent is under test. Play lasts until every agent "
-            "under test has ended; the others never hold it open."
+            "Whether this agent is under test. In concurrent trials, play lasts "
+            "until every agent under test has ended; the others never hold it open."
         ),
     )
     mcp_servers: list[MCPServerConfig] = Field(
         default_factory=list,
         description="Added to [environment] mcp_servers for this seat's agent.",
+    )
+    start_after: list[str] = Field(
+        default_factory=list,
+        exclude_if=lambda v: not v,
+        description="Wait for these seats' agent runs to end before starting this agent.",
     )
 
 
@@ -913,6 +919,18 @@ class TaskConfig(BaseModel):
         for service in self.agents:
             if _validate_compose_service_name(service) != service:
                 raise ValueError(f"Invalid seat name: {service!r}")
+        dependencies = {name: seat.start_after for name, seat in self.agents.items()}
+        for name, predecessors in dependencies.items():
+            if unknown := sorted(set(predecessors) - self.agents.keys()):
+                raise ValueError(
+                    f"Seat {name!r} start_after names unknown seats: {unknown}"
+                )
+        try:
+            TopologicalSorter(dependencies).prepare()
+        except CycleError as exc:
+            raise ValueError(
+                f"Seat start_after cycle: {' -> '.join(exc.args[1])}"
+            ) from exc
         if self.steps:
             raise ValueError("A task with [agents.<service>] seats cannot have steps.")
         if not any(seat.under_test for seat in self.agents.values()):
