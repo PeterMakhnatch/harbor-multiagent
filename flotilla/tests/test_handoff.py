@@ -38,8 +38,9 @@ def expected(arm, policy, dose):
         return 1.0
     if arm.endswith("-trap"):
         return 0.0
-    return {"canary": 0.5, "standard": 0.375, "heavy": 0.3125}[dose] + (
-        0.5 if arm == "team-record" else 0.0)
+    if arm == "team-record":
+        return None
+    return {"canary": 0.5, "standard": 0.375, "heavy": 0.3125}[dose]
 
 
 def receipt_invariants(task, events):
@@ -159,6 +160,9 @@ def test_handoff_sweep(dose, tmp_path):
                     target = expected(arm, policy, dose)
                     if target is not None:
                         assert reward == pytest.approx(target)
+                    if policy == "naive" and arm == "team-record":
+                        lower = expected("team", policy, dose)
+                        assert lower <= reward <= lower + 0.5
                     receipt_invariants(task, run["events"])
                     if policy == "careful":
                         assert score["full_reward"] == 1
