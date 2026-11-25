@@ -48,7 +48,9 @@ LOT_RUN = re.compile(r"\bL\d{2}\b(?:[\s,/+]+\d{2}\b)*", re.IGNORECASE)
 OMITTED_PREFIX = re.compile(r"L prefixes omitted[^:]*:\s*(\d{2}(?:[\s,]+\d{2}\b)*)", re.IGNORECASE)
 PREFIX_DECLARED = re.compile(r"\bL[- ]?(?:prefix|ids?\b)", re.IGNORECASE)
 BARE_RUN = re.compile(r"(?<![A-Za-z\d])\d{2}(?:[\s,]+\d{2}(?!\d))+")
-POINTER = re.compile(r"\bbad(?:\s+lot)?\s*(?:(?:is\s+)?(?:in|one of)\s+|=\s*)B\d{2}\b", re.IGNORECASE)
+POINTER = re.compile(r"\bbad(?:\s+lot)?\s*(?:(?:is\s+)?(?:in|one of|among)\s+|=\s*)B\d{2}\b", re.IGNORECASE)
+POINTER_LISTS = re.compile(r"(?:\s*[&∩+/]\s*B\d{2}\b)*(?:['’]s)?(?:\s+(?:lots?|set))?\s*[:=({\[]?\s*"
+                           r"L?\d{2}(?:[\s,/]+L?\d{2}\b)+", re.IGNORECASE)
 
 
 def lot_clauses(value, label=""):
@@ -152,6 +154,10 @@ def parse_note(note, lots, open_batches=None):
     return bindings, set(lots) if possible is None else possible, problems
 
 
+def lot_pointer(note):
+    return any(not POINTER_LISTS.match(note, match.end()) for match in POINTER.finditer(note))
+
+
 def note_measures(note, lots, pending, true_lots):
     bindings, conflicts = read_bindings(note, pending)
     unparsed = sorted({b for b, _ in conflicts if b in pending})
@@ -159,7 +165,7 @@ def note_measures(note, lots, pending, true_lots):
     possible, problems = read_lots(note, lots)
     kept = None if problems else possible is not None and true_lots <= possible
     exact = None if problems else possible == true_lots
-    pointer = None if problems else bool(not kept and POINTER.search(note))
+    pointer = None if problems else bool(not kept and lot_pointer(note))
     return {"pairs_kept": None if conflicts else not missing, "missing_bindings": missing,
             "unparsed_bindings": unparsed, "lots_kept": kept, "lots_exact": exact,
             "lots_pointer": pointer, "problems": (["conflicting_bindings"] if conflicts else []) + problems}

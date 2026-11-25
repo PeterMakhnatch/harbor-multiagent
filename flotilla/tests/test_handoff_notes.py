@@ -3,6 +3,42 @@ from collections import Counter
 from test_handoff import EXT, FAMILY
 from test_handoff_notes_fixture import NOTES
 
+POINTER_NOTES = [
+    (True, "Open: R10=B82, R72=B72 (unsettled). B95 returned, B50 delivered: bad lot is among B95's lots. "
+           "Combine with B82/B72 results. No ticket yet."),
+    (True, "S1: settled R13=B00 returned, R50=B27 delivered. Open: R76=B79, R10=B10. Bad lot is in B00 (16 lots). "
+           "B79 or B10 returning pins it to B00 overlap. No ticket yet."),
+    (True, "S1: open R50=B79, R18=B87 (unsettled). Settled R71/B05 delivered, R78/B54 returned. "
+           "Bad lot is one of B54's 16 lots (see /log). B79 and B87 each hold half of them. No ticket."),
+    (True, "S1: settled R03/B63 close, R21/B50 reissue. Open: R72=B02, R70=B46. Bad lot in B50 (B63 lots clear). "
+           "Exactly one of B02/B46 returns. Bad in B50∩B02 or B50∩B46. No ticket yet."),
+    (True, "S2: open R12=B93 R99=B57 R50=B23 R81=B34. B45 returned, B64 delivered (settled). Bad lot in B45&B04, "
+           "not B81. B93 ret=>lot in B45&B93; B57 ret=>B45&B57. No ticket."),
+    (True, "S1: B57 returned(settled), B13 delivered(settled). Bad lot in B57. Open: R05=B72, R09=B87. "
+           "Bad in B57&B72: L00 L01 L26 L36 L40 L49 L50 L84; else B57&B87. No ticket yet."),
+    (True, "Pending B12=R07; Bad lot in B12."),
+    (False, "S1: R10=B82, R72=B72 open. B50 ok, B95 returned. Bad lot in B95: 08 11 13 19 22 23 34 40 49 55 59 65 "
+            "79 85 90 99. B82 has 11 13 22 23 49 59 79 90; B72 has 08 19 34 40 55 65 85 99."),
+    (False, "S1: B31 returned so bad lot is one of B31 lots: 03 07 14 20 21 36 40 50 51 64 70 71 79 86 92 94. "
+            "B43 clear. Unsettled refs: R69=B23, R90=B48. No ticket yet."),
+    (False, "S2: B10 returned,B67 delivered(settled). Bad in B10:09,15,18,22,37,38,40,59,71,75,77,79,80,81,84,99. "
+            "Open B08=R13 B27=R52 B37=R11 B43=R88. B08 has 09,18,59,77,79,80,84,99 of these. No ticket"),
+    (False, "S2: B36 returned, B05 delivered => bad in B36 lots 11,22,28,34,43,46,49,51,55,58,62,78,79,83,85,99. "
+            "Open refs R77=B86 R00=B19 R10=B82 R72=B72."),
+    (False, "S2: open R77=B86 R00=B19 R10=B82 R72=B72. Settled B36 returned, B05 delivered. "
+            "Bad in B95&B36: L34 L55 L85 L99 or B95's B82 lots among L11 L22 L49 L51 L58 L62 L79 L83. No ticket."),
+    (False, "S2: B34 returned,B88 delivered,settled. Bad in B34: L01 04 05 21 26 36 44 46 54 57 59 65 69 75 81 95 "
+            "(&B24). Open refs R74=B72 R75=B56 R83=B91 R33=B64. No ticket."),
+    (False, "S1: open R98=B00, R66=B80. Settled R00/B23 deliv, R27/B88 returned. Bad lot in B88 set: L13 19 29 33."),
+    (False, "S2: bad lot in 14 20 21 50 51 70 79 92. Open refs: R69=B23 R90=B48 R10=B26 R68=B12. "
+            "Use B26/B12/B23/B48 lot lists from desk to narrow."),
+]
+
+
+def test_pointer_reading_round6():
+    for expected, note in POINTER_NOTES:
+        assert FAMILY.lot_pointer(note) is expected, note
+
 
 def test_real_note_measures():
     agreement = Counter()
@@ -22,6 +58,8 @@ def test_real_note_measures():
         assert summary["pairs_kept"] == len(crossings)
         assert summary["note_unparsed"] == 0
     assert agreement == {("K", "K"): 56, ("B", "B"): 6, ("S", "S"): 4}
+    assert all(FAMILY.lot_pointer(note) is (label == "B") for *_, crossings in NOTES
+               for _, label, note, *_ in crossings if label in "BS")
 
 
 def test_real_notes_readable_by_scripted_successor():
