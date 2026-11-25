@@ -60,18 +60,54 @@ timeout_sec = 120.0
 under_test = false
 ```
 
-Each `[agents.<service>]` table takes two optional keys:
+Each `[agents.<service>]` table takes three optional keys:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `under_test` | `true` | The run lasts until every agent under test has ended. Agents with `under_test = false` are supporting agents: they never hold the run open, and Harbor cancels them when it ends. Scoring is unaffected. |
+| `under_test` | `true` | In concurrent mode, the run lasts until every agent under test has ended. Supporting agents (`false`) never hold it open. In staged mode, every agent runs to completion or timeout. Scoring is unaffected. |
 | `mcp_servers` | `[]` | MCP servers for this agent only, declared as `[[agents.<service>.mcp_servers]]` with the same fields as [`[[environment.mcp_servers]]`](/tasks/environment#mcps). They are added to the task-wide list for that agent. |
+| `start_after` | `[]` | Seat names whose agent runs must end before this agent runs. |
 
 At least one agent must be under test. In the example, p1 is under test and p2 supports it, so the run ends when p1 ends.
 
-`[agent] timeout_sec` is one agent timeout shared by every agent. Trial and job timeout multipliers apply to it as usual. Without it, the run lasts until every agent under test has ended.
+In concurrent mode, `[agent] timeout_sec` is one timeout shared by every agent. Trial and job timeout multipliers apply to it as usual. Without it, the run lasts until every agent under test has ended.
 
 The order of the tables is the agents' order. `agent_info` in `result.json` is the first agent under test, and the trial's error is the first agent error in this order.
+
+### Staged agents
+
+Use `start_after` to run agents in shifts without making later agents poll or
+wait inside their harnesses. For example:
+
+```toml
+[agents.p1]
+
+[agents.p2]
+start_after = ["p1"]
+
+[agents.p3]
+start_after = ["p2"]
+```
+
+All containers start and all agents install at setup, as usual. Only agent
+execution is delayed. Seats with no predecessors start together, and a seat
+with several predecessors waits for all of them. Table order does not control
+execution. Unknown seat names and dependency cycles are invalid.
+
+If any seat has a non-empty `start_after`, the trial uses staged execution:
+
+- `[agent] timeout_sec`, with the usual multiplier, applies to each seat
+  separately from the start of its own run. Waiting consumes none of it.
+- Every seat runs to completion or timeout, including supporting agents.
+  `under_test` still identifies the agents being evaluated.
+- A failed or timed-out agent run releases its dependent seats. Harbor records
+  each run error and applies the normal trial error policy for verification
+  after all seats have ended. A setup failure still fails the trial before play.
+- As with concurrent trials, timeout cancels the harness run; it does not
+  guarantee termination of processes inside the seat's container.
+
+With no non-empty `start_after`, the concurrent execution and timeout rules
+above are unchanged.
 
 ## Instructions
 
@@ -209,9 +245,9 @@ harbor run -c examples/configs/features/seats-job.yaml
 
 1. Harbor starts the Compose project and runs the task's healthcheck, as for any task.
 2. Harbor installs every agent into its container at the same time. Each install has its own agent setup timeout. If any install fails, the trial fails before any agent runs.
-3. All agents start together, each with its own instruction.
-4. The run ends when every agent under test has ended, or when the agent timeout runs out.
-5. Harbor cancels the agents still running, as it does for a single agent at its timeout. The containers stay up.
+3. Agents start with their own instructions, together by default or according to `start_after`.
+4. In concurrent mode, the run ends when every agent under test has ended, or when the agent timeout runs out. Harbor then cancels the agents still running.
+5. In staged mode, every seat runs to completion or its own timeout. The containers stay up in both modes.
 6. Harbor copies each agent's `/logs/agent` to `seats/<service>/agent/` in the trial folder, and records its trajectory, token usage and cost as it does for a single agent. It does this for every agent, under test or not.
 7. Harbor collects the task's artifacts.
 8. When verification is enabled, Harbor copies the trial's `seats/` folder into `main` at `/logs/seats/`.
@@ -220,9 +256,9 @@ harbor run -c examples/configs/features/seats-job.yaml
 
 ### When an agent fails
 
-- An agent that exits non-zero, for example on a rejected API key, has ended. Harbor records the error on its seat, the other agents keep going, and the trial is still verified.
-- When the agent timeout runs out, every agent still running records `AgentTimeoutError`, and the trial is still verified.
-- Any other error from an agent's run, such as a bug in the harness code, cancels the other agents and fails the trial without verification, as it would a single-agent trial.
+- An agent that exits non-zero has ended. Harbor records the error on its seat, the other agents keep going, and the trial is still verified if its error policy allows it.
+- When an agent times out, Harbor records `AgentTimeoutError`. In concurrent mode this applies to every agent still running; in staged mode only to the seat whose timeout expired.
+- In concurrent mode, any other error from an agent's run, such as a bug in the harness code, cancels the other agents and fails the trial without verification. In staged mode it releases the dependent seats; verification follows the trial error policy after all runs end.
 
 The trial's `exception_info` is the first agent error in `[agents.<service>]` order, supporting agents included. Its message starts with the service name, for example `Seat 'p2': ...`.
 
@@ -256,6 +292,7 @@ The job summary reports each key.
   - `agent_setup` and `agent_execution` span all agents.
   - Token and cost totals sum every agent.
   - `seat_results` lists every agent with `seat`, `under_test`, `agent_info`, `agent_result` (tokens and cost), `agent_setup`, `agent_execution` and `exception_info`.
+  - In each seat's `agent_execution`, `started_at` and `finished_at` record its actual run interval, not the time it spent waiting for predecessors.
 
 ## Limitations
 
