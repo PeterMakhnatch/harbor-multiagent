@@ -45,6 +45,8 @@ def test_instances_and_twins(level):
         assert len(inst["groups"]) == FAMILY.DOSES[level][1]
         counts = {}
         complete = set()
+        first_counts = {}
+        corrected = []
         for batch in inst["stream"]:
             for e in batch:
                 assert e["group"] not in complete
@@ -52,6 +54,10 @@ def test_instances_and_twins(level):
                     complete.add(e["group"])
                 else:
                     counts[e["group"], e["site"], e["item"]] = e["on_hand"], e["in_transit"]
+                    key = e["group"], e["site"], e["item"]
+                    first_counts.setdefault(key, counts[key])
+                    if e["kind"] == "correction":
+                        corrected.append(key)
         control = render(inst, "probe-control")
         for arm, axis in (("probe-trap-key", 0), ("probe-trap-unit", 1)):
             trap = render(inst, arm)
@@ -79,6 +85,15 @@ def test_instances_and_twins(level):
                 assert (row["target"] - row["on_hand"] - row["in_transit"]) % row["case"] == 0
                 assert counts[g["name"], row["site"], row["item"]] == (row["on_hand"], row["in_transit"])
                 assert len({FAMILY.key_for(row, (form, "each")) for form in FAMILY.FORMS}) == 6
+        assert len(corrected) == FAMILY.DOSES[level][-1]
+        for name, site, item in corrected:
+            group = next(g for g in inst["groups"] if g["name"] == name)
+            altered = copy.deepcopy(group)
+            row = next(r for r in altered["rows"] if (r["site"], r["item"]) == (site, item))
+            row["on_hand"], row["in_transit"] = first_counts[name, site, item]
+            correct = file_for(group, group["saved"], "catalog")
+            stale = file_for(altered, group["saved"], "order")
+            assert not WORLD.join_result(group, correct, stale)[2]
     assert len(distinct) == 200
 
 

@@ -2,6 +2,7 @@
 
 import json
 import random
+from itertools import combinations
 
 FAMILY = "interface"
 TITLE = "Replenishment batch"
@@ -14,6 +15,10 @@ FORMS = ("SITE/ITEM", "ITEM/SITE", "SITE:ITEM", "ITEM:SITE", "SITE-ITEM", "ITEM-
 CONVENTIONS = tuple((form, unit) for form in FORMS for unit in ("each", "case"))
 DOSES = {"canary": (2, 1, 3, 6, 2, 0), "standard": (3, 4, 10, 15, 16, 2),
          "heavy": (5, 8, 15, 20, 56, 12)}
+SUPPORTS = tuple(choices for choices in combinations(CONVENTIONS, 4)
+                 if len({form[0] for form, _ in choices}) == 2
+                 and len({form[4] for form, _ in choices}) > 1
+                 and len({unit for _, unit in choices}) == 2)
 
 
 def key_for(row, convention):
@@ -37,11 +42,7 @@ def support(rng, difficulty):
         separator = rng.choice("/:-")
         unit = rng.choice(("each", "case"))
         return [(f"SITE{separator}ITEM", unit), (f"ITEM{separator}SITE", unit)]
-    while True:
-        choices = rng.sample(CONVENTIONS, 4)
-        if (len({form[0] for form, _ in choices}) == 2 and len({form[4] for form, _ in choices}) > 1
-                and len({unit for _, unit in choices}) == 2):
-            return choices
+    return list(rng.choice(SUPPORTS))
 
 
 def make_events(rng, groups, target, steps, corrections):
@@ -51,7 +52,8 @@ def make_events(rng, groups, target, steps, corrections):
         for row in group["rows"]:
             updates.append((group["name"], row))
     rng.shuffle(updates)
-    corrected = {(g, row["site"], row["item"]) for g, row in rng.sample(updates, corrections)}
+    positive = [(g, row) for g, row in updates if row["target"] > row["on_hand"] + row["in_transit"]]
+    corrected = {(g, row["site"], row["item"]) for g, row in rng.sample(positive, corrections)}
     for i, (group, row) in enumerate(updates):
         event = {"kind": "count", "group": group, "site": row["site"], "item": row["item"],
                  "on_hand": row["on_hand"], "in_transit": row["in_transit"]}
@@ -60,7 +62,8 @@ def make_events(rng, groups, target, steps, corrections):
             step %= max(1, (steps - 1) // 2)
             buckets[step].append({**event, "on_hand": row["on_hand"] + row["case"]})
             later = rng.randrange(max(step + 1, (steps - 1) // 2), steps - 1)
-            buckets[later].append({**event, "kind": "correction"})
+            reason = rng.choice(("return to supplier", "transfer out", "recount")) if steps > 20 else "recount"
+            buckets[later].append({**event, "kind": "correction", "reason": reason})
         else:
             buckets[step].append(event)
     for group in groups:
