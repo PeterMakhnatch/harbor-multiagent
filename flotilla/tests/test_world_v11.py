@@ -35,9 +35,9 @@ def hook_replies(monkeypatch, world, hook):
     """Run hook(handler, status, body) before each reply is written; the hook may raise or wait."""
     original = world.module.World._reply
 
-    def reply(self, status, body, headers=None):
+    def reply(self, status, body, headers=None, receipt=None):
         hook(self, status, body)
-        original(self, status, body, headers)
+        return original(self, status, body, headers, receipt)
 
     monkeypatch.setattr(world.module.World, "_reply", reply)
 
@@ -408,12 +408,13 @@ def hold_commit(monkeypatch, world, predicate):
     original_reply, original_deliver = world.module.World._reply, world.module._deliver
     holder = []
 
-    def reply(self, status, body, headers=None):
-        original_reply(self, status, body, headers)
+    def reply(self, status, body, headers=None, receipt=None):
+        result = original_reply(self, status, body, headers, receipt)
         if not holder and predicate(self, status, body):
             holder.append(threading.current_thread())
             written.set()
             assert release.wait(10)
+        return result
 
     def deliver(seat, ids, via=""):
         original_deliver(seat, ids, via)
