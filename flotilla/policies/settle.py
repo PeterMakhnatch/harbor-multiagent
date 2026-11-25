@@ -2,6 +2,8 @@
 
 careful    r1 tells its blocked list and the alphabetical rule; asks for a missing list; confirms in the round
            before the last; files in the last round the first window that no told list blocks. It holds its rule.
+own-order  r1 tells its blocked list and the list-order rule; files the first common window in its own order.
+leader     r1 tells its blocked list; p1 names the common window in r2 and all file it in r3.
 naive      r1 names its last-time window and files it at once (no pooling, no wait). A lower bound, not a model.
 eager      pools in r1, names its last-time window in r2, files it in r3.
 polite     pools, names its last-time window in r2, then adopts the latest choice it received and files it in r3.
@@ -11,7 +13,7 @@ proposer   pools; names its last-time window in r2, keeps it, files it in the la
 mute       says nothing; files in the last round by the alphabetical rule over the lists it read.
 talker     careful, but never files.
 blind      (also fixed, lone) no messages, no reads: files its alphabetically first free window in r1.
-guess      no messages: files one of its free windows, drawn from a hash of its briefing.
+guess      sends its list but takes no reads: files one of its free windows, drawn from a hash of its briefing.
 script-loop  careful's calls planned after one read: it never uses a later message.
 lapse-N    careful with a seeded lapse per opportunity: tell the list, read a round's messages, wait for the
            last round, file the agreed window (a lapse files the desk's own last-time window).
@@ -23,12 +25,13 @@ import hashlib
 import json
 import re
 
-NAMES = ("careful", "naive", "eager", "polite", "rule-own", "follower", "proposer", "mute", "talker", "blind",
-         "fixed", "lone", "guess", "script-loop", "last-rule", "fuzz", "fuzz-file", "burn")
+NAMES = ("careful", "own-order", "leader", "naive", "eager", "polite", "rule-own", "follower", "proposer",
+         "mute", "talker", "blind", "fixed", "lone", "guess", "script-loop", "last-rule", "fuzz", "fuzz-file", "burn")
 ALPHA_RULE = ("Rule: all desks file the window that comes first in alphabetical order among the windows that "
               "no desk has blocked.")
 LAST_RULE = ALPHA_RULE.replace("first", "last")
 OWN_RULE = "Rule: all desks file the last-time window of the lowest desk."
+LIST_RULE = "Rule: the first common window in list order."
 
 
 def supports(name, variant):
@@ -48,6 +51,7 @@ class Desk:
         self.name, self.client, self.own, self.family = name, client, own, family
         self.me, self.desks, self.windows, self.rounds = client.seat, own["desks"], own["windows"], own["rounds"]
         self.lists = {self.me: set(own["blocked"])}
+        self.reported = dict(self.lists)
         self.free = [code for code in self.windows if code not in own["blocked"]]
         self.last = own.get("last_time", self.free[0])
         self.lasts = {self.me: self.last} if "last_time" in own else {}
@@ -56,6 +60,7 @@ class Desk:
         self.asked = False
         self.told = False
         self.deaf = name == "script-loop"
+        self.announced = None
 
     def lapse(self, *key):
         return self.own.lapse_percent is not None and self.own.lapse(self.own.lapse_percent, list(key))
@@ -63,10 +68,14 @@ class Desk:
     def absorb(self, reply):
         for message in reply.get("new_messages", []) if isinstance(reply, dict) else []:
             sender, text, tick = message["from"], message["text"], int(message["t"])
+            if sender == self.me:
+                continue
+            blocked = self.family.parse_blocked(text, self.windows, sender)
+            if blocked is not None:
+                self.reported[sender] = blocked
             if self.deaf or self.lapse("read", tick + 2):
                 continue
-            blocked = self.family.parse_blocked(text, self.windows)
-            if blocked is not None and sender not in self.lists:
+            if blocked is not None:
                 self.lists[sender] = blocked
             for sentence in self.family.sentences(text):
                 codes = self.family.mentions(sentence, self.windows)
@@ -82,40 +91,55 @@ class Desk:
 
     def list_text(self):
         self.told = True
+        self.asked = False
         return f"{self.me} blocked: {', '.join(self.own['blocked'])}."
 
     def alphabetical(self):
-        if self.name == "last-rule":  # another valid answer: the grader accepts every window that is free for all
-            common = [code for code in self.windows if all(code not in blocked for blocked in self.lists.values())]
-            return common[-1] if common else self.free[-1]
-        return self.family.first_free(self.windows, self.lists.values()) or self.free[0]
+        if self.name == "last-rule":
+            common = sorted(code for code in self.windows if self.allowed(code))
+            return common[-1] if common else None
+        return self.family.first_free(self.windows, self.lists.values())
 
     def target(self):
         code = None
         if self.name == "rule-own":
-            code = self.lasts.get(self.desks[0], self.last)
-        elif self.name == "follower" and self.rules and min(self.rules)[2] == "lowest":
             code = self.lasts.get(self.desks[0])
-        return code if code in self.free else self.last if self.name == "rule-own" else self.alphabetical()
+            return code if self.allowed(code) else None
+        if self.name == "follower" and self.rules and min(self.rules)[2] == "lowest":
+            code = self.lasts.get(self.desks[0])
+            if self.allowed(code):
+                return code
+        return self.alphabetical()
 
     def missing(self):
         return [desk for desk in self.desks if desk not in self.lists]
+
+    def allowed(self, window):
+        return window in self.windows and all(window not in blocked for blocked in self.reported.values())
+
+    def request_lists(self, missing):
+        return (f"{', '.join(missing)}: which windows are blocked for you? "
+                "Answer as '<desk> blocked: <codes>'.")
 
     def decide(self, r):
         """(text or None, window to file or None) for round r."""
         name, last_round = self.name, self.rounds
         if name in ("blind", "fixed", "lone"):
-            return None, self.free[0]
+            return None, min(self.free)
         if name == "guess":
             digest = hashlib.sha256(json.dumps([self.me, dict(self.own)], sort_keys=True).encode()).digest()
-            return None, self.free[int.from_bytes(digest[:8], "big") % len(self.free)]
+            return self.list_text(), self.free[int.from_bytes(digest[:8], "big") % len(self.free)]
         if name == "naive":
-            return f"I propose {self.last}. I file it now.", self.last
+            return f"{self.list_text()} I propose {self.last}. I file it now.", self.last
         if name == "mute":
             return None, self.target() if r == last_round else None
         if name in ("eager", "polite", "proposer"):
             if r == 1:
                 return self.list_text(), None
+            if self.asked:
+                return self.list_text(), None
+            if self.missing():
+                return self.request_lists(self.missing()), None
             if r == 2:
                 return f"I propose {self.last}.", None
             if name == "proposer":
@@ -128,25 +152,42 @@ class Desk:
             return None, self.last
         if r == 1:
             rule = {"rule-own": f"{OWN_RULE} {self.me} last-time window: {self.last}.", "follower": "",
+                    "own-order": LIST_RULE, "leader": f"Desk {self.desks[0]} will name the common window.",
                     "last-rule": f"{LAST_RULE} We file in round {last_round}."}.get(
                 name, f"{ALPHA_RULE} We file in round {last_round}.")
             if self.lapse("tell"):
                 return rule or None, None
             return f"{self.list_text()} {rule}".strip(), None
+        if self.asked:
+            return self.list_text(), None
+        missing = self.missing()
+        if missing:
+            return self.request_lists(missing), None
+        if name == "own-order":
+            return None, next((code for code in self.windows if self.allowed(code)), None)
+        if name == "leader":
+            return self.leader(r)
         final = self.last if "last_time" in self.own and self.lapse("default") else self.target()
         if r == last_round - 1 and self.lapse("wait"):
             return None, final
         if r == last_round:
             return (None, None) if name == "talker" else (None, final)
-        if self.asked and not self.told:
-            return self.list_text(), None
-        missing = self.missing()
-        if r == last_round - 1:
-            note = f" Missing list: {', '.join(missing)}." if missing else ""
-            return f"Confirm: {self.me} files {self.target()} in round {last_round}.{note}", None
-        if missing:
-            return (f"{', '.join(missing)}: which windows are blocked for you? "
-                    "Answer as '<desk> blocked: <codes>'."), None
+        if r == last_round - 1 and (target := self.target()):
+            return f"Confirm: {self.me} files {target} in round {last_round}.", None
+        return None, None
+
+    def leader(self, r):
+        leader = self.desks[0]
+        if self.me == leader:
+            if self.announced is not None:
+                return None, self.announced
+            if target := self.alphabetical():
+                self.announced = target
+                return f"{leader} proposes {target}. All desks file {target} in round {r + 1}.", None
+        else:
+            choices = [item for item in self.heard if item[1] == leader]
+            if choices:
+                return None, max(choices)[2]
         return None, None
 
     def play(self):
@@ -162,7 +203,7 @@ class Desk:
                 if status != 201:
                     raise RuntimeError(f"message refused: {reply.get('error')}")
                 self.absorb(reply)
-            if window:
+            if window and self.allowed(window):
                 status, reply = yield from client.post("/file", {"window": window})
                 if status != 200:
                     raise RuntimeError(f"filing refused: {reply.get('error')}")

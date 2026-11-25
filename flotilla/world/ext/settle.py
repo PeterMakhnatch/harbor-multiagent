@@ -85,7 +85,7 @@ class Settle:
     def desk(self, seat):
         p = self.p
         reply = {"round": self.round, "rounds": p["rounds"], "rounds_left": p["rounds"] - self.round,
-                 "tick": self.host.tick, "windows": p["windows"], "finished": self.over}
+                 "tick": self.host.tick, "windows": p.get("orders", {}).get(seat, p["windows"]), "finished": self.over}
         if self.single:
             reply |= {"desks": p["desks"], "blocked": p["blocked"], "last_time": p["last_time"],
                       "filed": {desk: self.filed.get(desk) for desk in p["desks"]}}
@@ -108,7 +108,8 @@ class Settle:
             return self.refuse(seat, "file", 400, f"unknown desk; the desks are {', '.join(p['desks'])}")
         window = family.window_code(body["window"], p["windows"])
         if window is None:
-            return self.refuse(seat, "file", 400, f"unknown window; the windows are {', '.join(p['windows'])}")
+            order = p.get("orders", {}).get(seat, p["windows"])
+            return self.refuse(seat, "file", 400, f"unknown window; the windows are {', '.join(order)}")
         if desk in self.filed:
             return self.refuse(seat, "file", 409, "this desk has filed already; a filing is final")
         if seat in self.closed:
@@ -164,15 +165,9 @@ def create(task, host):
     return Settle(task, host)
 
 
-def failure_shape(desks, files, lists, told, named, rounds, agreed, feasible):
-    """One label from events only: who filed in which round, what was named when, which lists were told."""
+def failure_shape(desks, files, lists, complete, named, rounds, agreed, feasible, hasty):
+    """One label from events only. A rule can suffice without a named proposal."""
     never = rounds + 2
-
-    def backed(desk):
-        window, at = files[desk]["window"], files[desk]["round"]
-        return all(named.get((other, window), never) < at for other in desks if other != desk)
-
-    hasty = sorted(desk for desk in files if files[desk]["round"] < rounds and not backed(desk))
     for desk in files:
         window, at = files[desk]["window"], files[desk]["round"]
         for other in files:
@@ -180,15 +175,125 @@ def failure_shape(desks, files, lists, told, named, rounds, agreed, feasible):
             if (other != desk and files[other]["window"] != window and first < at
                     and named.get((desk, window), never) > first):
                 return "crossed", hasty
-    if hasty:
+    if any(files[desk]["round"] < rounds for desk in hasty):
         return "premature", hasty
     if len(files) < len(desks):
         return "late", hasty
     for desk in files:
-        window, at = files[desk]["window"], files[desk]["round"]
-        if any(window in lists[other] and told.get(other, never) >= at for other in desks if other != desk):
+        window = files[desk]["window"]
+        if any(window in lists[other] and other not in complete[desk] for other in desks if other != desk):
             return "unpooled", hasty
-    return ("unpooled" if agreed and not feasible else "rule_clash"), hasty
+    return ("unpooled" if agreed and not feasible else "premature" if hasty else "rule_clash"), hasty
+
+
+def filing_evidence(params, desk, filing, visible):
+    """Use only the desk's own list and messages available before its filing."""
+    windows = params["windows"]
+    reports = {desk: set(params["blocked"][desk])}
+    rules = {}
+    for send in sorted(visible, key=lambda msg: (msg["round"], msg["seat"])):
+        sender = send["seat"]
+        if sender != desk and send["blocked"] is not None:
+            reports[sender] = send["blocked"]
+        if send["rule"]:
+            rules[sender] = send
+    if set(reports) != set(params["desks"]):
+        return False, None
+    common = [code for code in windows if all(code not in blocked for blocked in reports.values())]
+    if not common:
+        return False, None
+    candidates = set()
+    own_order = params.get("orders", {}).get(desk, windows)
+    for send in rules.values():
+        rule = send["rule"]
+        if rule == "alpha":
+            candidates.add(min(common))
+        elif rule == "alpha-last":
+            candidates.add(max(common))
+        elif rule in ("list-order", "desk-order"):
+            order = family.mentions(" ".join(sentence for sentence in family.sentences(send["text"])
+                                              if family.proposed_rule(sentence) == rule), windows)
+            if set(order) >= set(common):
+                candidates.add(next(code for code in order if code in common))
+            elif rule == "list-order" and "orders" not in params:
+                candidates.add(common[0])
+            else:
+                candidates.add(None)
+        else:
+            candidates.add(None)
+    if len(common) == 1:
+        target = common[0]
+    elif len(candidates) == 1 and None not in candidates:
+        target = next(iter(candidates))
+    else:
+        # A single current, feasible named choice may settle the choice even without a shared rule.
+        received = [send for send in visible if send["seat"] != desk and send["choices"]]
+        latest = max((send["round"] for send in received), default=0)
+        names = {code for send in visible if send["round"] == latest for code in send["choices"] if code in common}
+        target = next(iter(names)) if received and len(names) == 1 else None
+    rule_round = min((send["round"] for send in visible if send["rule"]), default=params["rounds"] + 1)
+    rule_target = target
+    if any(send["rule"] == "list-order" for send in rules.values()) and target is None:
+        rule_target = next(code for code in own_order if code in common)
+    named_later = any(send["seat"] != desk and send["round"] > rule_round
+                      and filing["window"] in send["choices"] for send in visible)
+    on_rule = bool(rules) and filing["window"] == rule_target and not named_later
+    return on_rule, target
+
+
+def message_evidence(params, events, files, lists, receipts):
+    sends, seen, told, named, readable, intent = [], {}, {}, {}, set(), set()
+    for event in events:
+        kind, desk, data = event["kind"], event["seat"], event["data"]
+        if kind == "deliver":
+            for item in data["ids"]:
+                seen.setdefault((desk, item), event["seq"])
+        elif kind == "send":
+            text, round_ = data["text"], int(event["t"]) + 1
+            blocked = family.parse_blocked(text, params["windows"], desk)
+            if blocked is not None:
+                readable.add(desk)
+                if blocked == lists[desk]:
+                    told.setdefault(desk, round_)
+            elif family.report_intent(text, params["windows"]):
+                intent.add(desk)
+            choices = family.choices(text, params["windows"])
+            for window in choices:
+                named.setdefault((desk, window), round_)
+            sends.append({"seat": desk, "round": round_, "text": text, "id": data["id"], "seq": event["seq"],
+                          "blocked": blocked, "choices": choices, "rule": family.proposed_rule(text)})
+
+    def reached(desk, send):
+        if desk not in files:
+            return (desk, send["id"]) in seen if receipts else send["round"] + params["delay"] <= params["rounds"]
+        if desk == send["seat"]:
+            return send["seq"] < files[desk]["seq"]
+        if receipts:
+            at = seen.get((desk, send["id"]))
+            return at is not None and at < files[desk]["seq"]
+        return send["round"] + params["delay"] <= files[desk]["round"]
+
+    complete, filed_on_rule, divergent = {}, [], []
+    for desk in params["desks"]:
+        visible = [send for send in sends if reached(desk, send)]
+        latest = {send["seat"]: send["blocked"] for send in sorted(visible, key=lambda msg: msg["round"])
+                  if send["blocked"] is not None}
+        complete[desk] = {sender for sender, blocked in latest.items() if blocked == lists[sender]} | {desk}
+        if desk in files:
+            on_rule, target = filing_evidence(params, desk, files[desk], visible)
+            if on_rule:
+                filed_on_rule.append(desk)
+            if target is not None and files[desk]["window"] != target:
+                divergent.append(desk)
+    first_round = min((filing["round"] for filing in files.values()), default=params["rounds"] + 1)
+    filers = [desk for desk in files if files[desk]["round"] == first_round] or params["desks"]
+    pooled = set(told).intersection(*(complete[desk] for desk in filers))
+    hasty = sorted(desk for desk in files if complete[desk] != set(params["desks"]))
+    first_divergent = min(divergent, key=lambda desk: (files[desk]["round"], desk), default=None)
+    return {"told": told, "named": named, "hasty": hasty, "pooled": len(pooled) / len(params["desks"]),
+            "complete": complete,
+            "unparsed": sorted(intent - readable), "filed_on_rule": sorted(filed_on_rule), "first_divergent": first_divergent,
+            "messages": len(sends), "questions": sum("?" in send["text"] for send in sends)}
 
 
 def score(task, events, receipts=True):
@@ -221,41 +326,16 @@ def score(task, events, receipts=True):
     }
     if len(task["seats"]) == 1:
         return result
-    sends = [{"seat": event["seat"], "round": int(event["t"]) + 1, "text": event["data"]["text"],
-              "id": event["data"]["id"]} for event in events if event["kind"] == "send"]
-    told, tell_id, unparsed, named = {}, {}, [], {}
-    for send in sends:
-        desk = send["seat"]
-        if desk in lists and desk not in told and family.tells(send["text"], windows, lists[desk]):
-            told[desk], tell_id[desk] = send["round"], send["id"]
-            if family.parse_blocked(send["text"], windows) != lists[desk]:
-                unparsed.append(desk)
-        for window in family.choices(send["text"], windows):
-            named.setdefault((desk, window), send["round"])
-    shape, hasty = failure_shape(desks, files, lists, told, named, rounds, agreed, feasible)
-    # Pooled: the list was in the view of every first filer before that desk's own filing. A filer's receipts
-    # depend only on its own calls and on logical arrival, never on the order of calls of different desks.
-    first_round = min((filing["round"] for filing in files.values()), default=rounds + 1)
-    filers = [desk for desk in desks if desk in files and files[desk]["round"] == first_round] or desks
-    if receipts:
-        seen = {}
-        for event in events:
-            if event["kind"] == "deliver":
-                for item in event["data"]["ids"]:
-                    seen.setdefault((event["seat"], item), event["seq"])
-
-        def reached(filer, item):
-            at = seen.get((filer, item))
-            return at is not None and (filer not in files or at < files[filer]["seq"])
-
-        pooled = [desk for desk in told if all(reached(filer, tell_id[desk]) for filer in filers if filer != desk)]
-    else:
-        pooled = [desk for desk in told if told[desk] + p["delay"] < first_round]
+    evidence = message_evidence(p, events, files, lists, receipts)
+    told, hasty = evidence["told"], evidence["hasty"]
+    shape, _ = failure_shape(desks, files, lists, evidence["complete"], evidence["named"], rounds, agreed, feasible, hasty)
     result |= {
         "shape": "none" if result["reward"] else shape, "premature_filing": hasty,
-        "pooled": len(pooled) / len(desks), "pooled_basis": "receipts" if receipts else "send rounds",
-        "told": {desk: told.get(desk) for desk in desks}, "unparsed": sorted(unparsed),
-        "messages": len(sends), "questions": sum("?" in send["text"] for send in sends),
+        "filed_on_rule": evidence["filed_on_rule"],
+        "first_divergent": None if result["reward"] else evidence["first_divergent"],
+        "pooled": evidence["pooled"], "pooled_basis": "receipts" if receipts else "send rounds",
+        "told": {desk: told.get(desk) for desk in desks}, "unparsed": evidence["unparsed"],
+        "messages": evidence["messages"], "questions": evidence["questions"],
     }
     if subject := p["subject"]:
         mates = sorted({files[desk]["window"] for desk in files if desk != subject})

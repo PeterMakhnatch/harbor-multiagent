@@ -1,0 +1,37 @@
+{
+  "name": "settle-private-order-rehearsal",
+  "prereg": {
+    "commit": "e4627f4a3099d9a057b9778e4c2741aae0b088c6",
+    "doc": "flotilla/docs/seams/settle.md",
+    "section": "## Private-order oracle rehearsal"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": "/tmp/seams1125/b2-settle/careful",
+      "manifest": "/tmp/seams1125/b2-settle/careful/oracle-manifest.json",
+      "instances": [0],
+      "arms": ["team-implicit"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b2-settle/own-order",
+      "manifest": "/tmp/seams1125/b2-settle/own-order/oracle-manifest.json",
+      "instances": [0],
+      "arms": ["team-implicit"]
+    }
+  ],
+  "models": [null],
+  "agent": "oracle",
+  "make_jobs": {
+    "max_turns": 15,
+    "env": "docker",
+    "concurrency": 1,
+    "start_spacing_s": 0.0
+  },
+  "budget": {
+    "cap_usd": 0.0,
+    "reserve_per_trial_usd": 0.0,
+    "provider_floors": {},
+    "max_invalid_streak": 1
+  },
+  "order_seed": 20261125
+}
