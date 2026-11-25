@@ -8,7 +8,7 @@ FAMILY = "settle"
 TITLE = "File one cut-over window"
 SEAM = ("No desk can see another desk's choice before its own filing is final, and a message sent in one round "
         "is read in the next round.")
-VERSION = 1
+VERSION = 2
 PRIMARY = "team"
 DOSES = {"canary": (2, 4, 1), "standard": (3, 6, 2), "heavy": (5, 8, 3)}  # desks, windows, windows free for all
 LEVELS = tuple(DOSES)
@@ -17,15 +17,18 @@ ROUNDS = 4
 DELAY = 1
 TEXT_CAP = 240
 MAX_CALLS = 40
-ARMS = ("solo", "team", "hint", "team-nolast", "probe-rule-control", "probe-rule-trap",
+PRIVATE_ORDER_ARMS = ("team-ownorder", "team-implicit")
+ARMS = ("solo", "team", "hint", "team-nolast", *PRIVATE_ORDER_ARMS, "probe-rule-control", "probe-rule-trap",
         "probe-cross-control", "probe-cross-trap")
-PAIRS = (("team", "hint"), ("team", "team-nolast"), ("probe-rule-control", "probe-rule-trap"),
+PAIRS = (("team", "hint"), ("team", "team-nolast"), PRIVATE_ORDER_ARMS, ("probe-rule-control", "probe-rule-trap"),
          ("probe-cross-control", "probe-cross-trap"))
 ARM_WORDS = ("hint", "nolast", "team-nolast", "probe", "trap", "probe-rule-control", "probe-rule-trap",
-             "probe-cross-control", "probe-cross-trap", "settle")
+             "probe-cross-control", "probe-cross-trap", *PRIVATE_ORDER_ARMS, "settle")
 COMMON_WORDS = ("solo", "team")
 HINT = ("Before anyone files: every desk tells its blocked windows in round 1, and all desks file the free "
         "window that comes first in alphabetical order.")
+ORDER_FACT = "Every desk has the same windows"
+ORDER_CLAUSE = "; each desk's sheet lists them in its own order"
 LETTERS = "BCDFGHJKLMNQRSTVXZ"  # no vowels: a code never reads as a word, and the example W-AA is never a window
 EXAMPLE = "W-AA"
 BLOCK_WORDS = (r"\b(?:block\w*|cannot|can't|can not|cant|unavailable|not available|not free|not open|unable|"
@@ -206,6 +209,23 @@ def generate(seed, instance, n_seats, difficulty):
                 break
         else:
             raise ValueError("no instance found for this difficulty")
+    # The private-order pair needs a genuine tie even at canary; other doses reuse the base team's data.
+    if n_free == 1:
+        for _ in range(20_000):
+            if (part := draw(rng, seats, n_windows, 2, False)) is not None:
+                break
+        else:
+            raise ValueError("no private-order instance found")
+    else:
+        part = parts["team"]
+    for _ in range(100):
+        orders = {seat: rng.sample(part["windows"], n_windows) for seat in seats}
+        firsts = {next(code for code in order if code in part["free_for_all"]) for order in orders.values()}
+        if len(firsts) > 1 and len({tuple(order) for order in orders.values()}) == len(seats):
+            parts["ownorder"] = part | {"orders": orders}
+            break
+    else:
+        raise ValueError("no divergent private orders found")
     return {"seats": seats, "level": difficulty, "rounds": ROUNDS, "delay": DELAY, **parts}
 
 
@@ -214,7 +234,7 @@ def last_line(code):
     return f"- Your notes say this desk used {code} at its last cut-over.\n"
 
 
-def desk_text(seat, desks, windows, blocked, last, rounds, hint):
+def desk_text(seat, desks, windows, blocked, last, rounds, hint, order_fact="Every desk has this same list"):
     text = f"""# Cut-over window
 
 You are desk {seat}. The company has {len(desks)} desks: {", ".join(desks)}. It moves a shared system in one cut-over window.
@@ -222,7 +242,7 @@ Every desk files one window. The cut-over succeeds only if every desk files the 
 It fails for all desks if the desks file different windows, if a filed window is blocked for any desk, or if a desk files nothing.
 
 ## What you know
-- The windows are: {", ".join(windows)}. Every desk has this same list.
+- The windows are: {", ".join(windows)}. {order_fact}.
 - Your desk cannot use these windows (your blocked list): {", ".join(blocked)}.
 - Each desk has its own blocked list. The lists differ. A desk sees only its own list.
 {last_line(last) if last else ""}
@@ -283,7 +303,8 @@ def extension_arm(inst, arm, max_text, max_messages):
         raise ValueError("the messaging budget cannot carry one message per round")
     desks, rounds = inst["seats"], inst["rounds"]
     probe = arm.startswith("probe-")
-    part = inst["probe" if probe else "team"]
+    private_order = arm in PRIVATE_ORDER_ARMS
+    part = inst["probe" if probe else "ownorder" if private_order else "team"]
     windows, blocked = part["windows"], part["blocked"]
     if probe:
         first = part["free_for_all"][0]
@@ -295,6 +316,8 @@ def extension_arm(inst, arm, max_text, max_messages):
     params = {"level": inst["level"], "desks": desks, "windows": windows, "blocked": blocked,
               "free_for_all": part["free_for_all"], "last_time": last, "rounds": rounds, "delay": inst["delay"],
               "text_cap": TEXT_CAP, "subject": desks[0] if probe else None}
+    if private_order:
+        params["orders"] = part["orders"]
     common = {"params": params, "max_calls": MAX_CALLS, "play_timeout_sec": 1260.0, "agent_timeout_sec": 1200.0}
     if arm == "solo":
         seat = desks[0]
@@ -303,11 +326,15 @@ def extension_arm(inst, arm, max_text, max_messages):
                          "instructions": {seat: solo_text(desks, windows, blocked, last)}}
     briefings, instructions = {}, {}
     for seat in desks:
-        briefings[seat] = {"role": "desk", "desk": seat, "desks": desks, "windows": windows,
+        order = part["orders"][seat] if private_order else windows
+        briefings[seat] = {"role": "desk", "desk": seat, "desks": desks, "windows": order,
                            "blocked": blocked[seat], "rounds": rounds}
         if seat in last:
             briefings[seat]["last_time"] = last[seat]
-        instructions[seat] = desk_text(seat, desks, windows, blocked[seat], last.get(seat), rounds, arm == "hint")
+        order_fact = ORDER_FACT + (ORDER_CLAUSE if arm == "team-ownorder" else "") if private_order else (
+            "Every desk has this same list")
+        instructions[seat] = desk_text(seat, desks, order, blocked[seat], last.get(seat), rounds, arm == "hint",
+                                       order_fact)
     scripted = desks[1:] if probe else []
     policy = "proposer" if "cross" in arm else "careful"
     return common | {"messaging": True, "push": True, "briefings": briefings, "instructions": instructions,
@@ -330,6 +357,10 @@ def pair_difference(arm_a, arm_b, views_a, views_b):
             if "last_time" in own_b or b["instruction"] != a["instruction"].replace(last_line(own_a["last_time"]), "", 1):
                 findings.append(f"{seat}: more than the last-time sentence and field differs")
             b["instruction"], own_b = a["instruction"], own_b | {"last_time": own_a["last_time"]}
+        elif (arm_a, arm_b) == PRIVATE_ORDER_ARMS:
+            if a["instruction"].count(ORDER_CLAUSE) != 1 or b["instruction"] != a["instruction"].replace(ORDER_CLAUSE, "", 1):
+                findings.append(f"{seat}: more than the private-order clause differs")
+            b["instruction"] = a["instruction"]
         else:
             if own_a["last_time"] == own_b["last_time"]:
                 findings.append(f"{seat}: the last-time window does not differ")
@@ -376,12 +407,26 @@ def qa(task, views):
     windows = params["windows"]
     if EXAMPLE in windows or windows != sorted(windows):
         yield "the window list is not sorted or contains the example code"
+    if task["condition"] in PRIVATE_ORDER_ARMS:
+        orders = params.get("orders", {})
+        if (set(orders) != set(params["desks"]) or any(sorted(order) != windows for order in orders.values())
+                or len({tuple(order) for order in orders.values()}) != len(orders)):
+            yield "private orders are not distinct permutations of the common windows"
+        elif len({next(code for code in order if code in params["free_for_all"]) for order in orders.values()}) < 2:
+            yield "private orders do not have different first common windows"
     for seat, view in views.items():
         own = json.loads(view["env.SEAT_BRIEFING"])
         codes = [code for code in re.findall(r"W-[A-Z]{2}", view["instruction"]) if code != EXAMPLE]
         if own.get("role") == "all":
             continue
-        expected = [*windows, *params["blocked"][seat], *([own["last_time"]] if "last_time" in own else [])]
+        order = params.get("orders", {}).get(seat, windows)
+        expected = [*order, *params["blocked"][seat], *([own["last_time"]] if "last_time" in own else [])]
+        if own["windows"] != order:
+            yield f"{seat} reads the wrong sheet order"
+        if task["condition"] in PRIVATE_ORDER_ARMS and (
+                "Every desk has this same list" in view["instruction"]
+                or (ORDER_CLAUSE in view["instruction"]) != (task["condition"] == "team-ownorder")):
+            yield f"{seat} reads the wrong order fact"
         if set(own) - {"role", "desk", "desks", "windows", "blocked", "rounds", "last_time"}:
             yield f"{seat} has an unexpected briefing field"
         scripted = seat in task.get("scripted_seats", ())

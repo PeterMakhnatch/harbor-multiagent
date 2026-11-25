@@ -124,3 +124,28 @@ def test_receipts_distinguish_rule_filing_and_departure_from_rule(monkeypatch):
     score = play(["W-GD", "W-BR", "W-GD"], correction=True)
     assert score["reward"] == 0 and score["first_divergent"] == "p2" and score["premature_filing"] == []
     assert score["unparsed"] == []
+
+
+def test_private_order_pair_has_distinct_firsts_and_only_one_visible_clause(monkeypatch):
+    monkeypatch.setitem(__import__("sys").modules, "family", FAMILY)
+    extension = load(FLOTILLA / "world" / "ext" / "settle.py")
+    for level in FAMILY.LEVELS:
+        for i in range(100):
+            inst = FAMILY.generate(421126, i, None, level)
+            explicit, implicit = [FAMILY.extension_arm(inst, arm, 240, 4) for arm in
+                                  ("team-ownorder", "team-implicit")]
+            params = explicit["params"]
+            assert params == implicit["params"]
+            assert explicit["briefings"] == implicit["briefings"]
+            common = set(params["free_for_all"])
+            assert len(common) >= 2
+            assert len({next(code for code in order if code in common) for order in params["orders"].values()}) > 1
+            assert len({tuple(order) for order in params["orders"].values()}) == len(params["desks"])
+            world = extension.create({"params": params, "seats": params["desks"]},
+                                     SimpleNamespace(tick=0, record=lambda *_: None))
+            for desk in params["desks"]:
+                a, b = explicit["instructions"][desk], implicit["instructions"][desk]
+                assert a.replace(FAMILY.ORDER_CLAUSE, "", 1) == b
+                assert "Every desk has this same list" not in a + b
+                assert FAMILY.ORDER_FACT + FAMILY.ORDER_CLAUSE + "." in a and FAMILY.ORDER_FACT + "." in b
+                assert world.desk(desk)[1]["windows"] == explicit["briefings"][desk]["windows"] == params["orders"][desk]

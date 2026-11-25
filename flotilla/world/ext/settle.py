@@ -85,7 +85,7 @@ class Settle:
     def desk(self, seat):
         p = self.p
         reply = {"round": self.round, "rounds": p["rounds"], "rounds_left": p["rounds"] - self.round,
-                 "tick": self.host.tick, "windows": p["windows"], "finished": self.over}
+                 "tick": self.host.tick, "windows": p.get("orders", {}).get(seat, p["windows"]), "finished": self.over}
         if self.single:
             reply |= {"desks": p["desks"], "blocked": p["blocked"], "last_time": p["last_time"],
                       "filed": {desk: self.filed.get(desk) for desk in p["desks"]}}
@@ -108,7 +108,8 @@ class Settle:
             return self.refuse(seat, "file", 400, f"unknown desk; the desks are {', '.join(p['desks'])}")
         window = family.window_code(body["window"], p["windows"])
         if window is None:
-            return self.refuse(seat, "file", 400, f"unknown window; the windows are {', '.join(p['windows'])}")
+            order = p.get("orders", {}).get(seat, p["windows"])
+            return self.refuse(seat, "file", 400, f"unknown window; the windows are {', '.join(order)}")
         if desk in self.filed:
             return self.refuse(seat, "file", 409, "this desk has filed already; a filing is final")
         if seat in self.closed:
