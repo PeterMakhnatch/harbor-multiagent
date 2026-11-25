@@ -249,9 +249,13 @@ def test_handoff_probe_note_formats_and_actor(dose, tmp_path):
             assert len(targets) == 1 and targets[0]["seat"] == f"s{params['shifts']}"
         for policy in ("ambiguous-pair", "ambiguous-lot"):
             run = SIM.simulate_built(path, policy, 0)
-            assert run["invalid"] == "note_unparsed" and run["reward"] is None
+            assert run["invalid"] is None and run["reward"] is not None
             assert run["score"]["note_unparsed"]
             assert any(e["kind"] == "note_unparsed" for e in run["events"])
+            measure = run["score"]["note_measures"][-1]
+            assert measure["pairs_kept" if policy == "ambiguous-pair" else "lots_exact"] is None
+            if task["condition"].endswith("-control"):
+                assert run["reward"] == 1
 
 
 def test_handoff_parser_regressions():
@@ -278,10 +282,14 @@ def test_handoff_parser_regressions():
     ):
         assert FAMILY.parse_note(text, lots) == gold
     assert FAMILY.parse_note("B01R01", lots)[0] == {}
-    for text in ("B01 R01 B02", "B01 B02 R01 R02", "B01 R01 B01 R02", "B01 R01 B02 R01",
-                 "Suspects L01, cleared L02", "L01; L01 cleared", "not cleared L01; possible L01"):
+    assert FAMILY.parse_note("B01 R01 B02", lots)[0] == {"B01": "R01"}
+    assert FAMILY.parse_note("B01=R01 B02=R02 B01=R01", lots)[0] == gold[0]
+    for text in ("B01=R01 B01=R02", "B01=R01 B02=R01"):
         bindings, possible, problems = FAMILY.parse_note(text, lots)
         assert not bindings and possible == set(lots) and problems
+    for text in ("Suspects L01, cleared L02", "L01; L01 cleared", "not cleared L01; possible L01"):
+        bindings, possible, problems = FAMILY.parse_note("B01=R01; " + text, lots)
+        assert bindings == {"B01": "R01"} and possible == set(lots) and problems
 
 
 def start_desk(tmp_path, start_world, arm="team", budget=None):

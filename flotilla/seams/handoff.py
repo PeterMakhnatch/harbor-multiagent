@@ -31,8 +31,14 @@ EXTRA_SENTENCES = {
 }
 
 ID_TOKEN = re.compile(r"\b[BLR]\d{2}\b", re.IGNORECASE)
+PAIR_LINK = re.compile(r"""[\s"'{}[\],]*[=:/|→>\-]+[\s"'{}[\],]*(?:ref\s+)?|[\s(]+(?:ref\s+)?|"""
+                       r'\s+has carrier ref\s+|"\s*,\s*"(?:ref|reference|batch|b|r)"\s*:\s*"',
+                       re.IGNORECASE)
 NEGATIVE = re.compile(r"\b(?:cleared|ok|good|ruled\s+out|not|excluded|fine|passed)\b", re.IGNORECASE)
 POSITIVE = re.compile(r"\b(?:suspects?|possible|candidates?|remaining|bad)\b", re.IGNORECASE)
+LOT_RUN = re.compile(r"\bL\d{2}\b(?:[\s,/+]+\d{2}\b)*", re.IGNORECASE)
+OMITTED_PREFIX = re.compile(r"L prefixes omitted[^:]*:\s*(\d{2}(?:[\s,]+\d{2}\b)*)", re.IGNORECASE)
+POINTER = re.compile(r"\bbad(?:\s+lot)?\s*(?:(?:is\s+)?(?:in|one of)\s+|=\s*)B\d{2}\b", re.IGNORECASE)
 
 
 def lot_clauses(value, label=""):
@@ -54,41 +60,63 @@ def lot_clauses(value, label=""):
         yield from (f"{label} {clause}" for clause in re.split(r"[;\n.!?]", value))
 
 
-def parse_note(note, lots):
-    """Pair consecutive IDs, and report ambiguous syntax rather than choosing a binding."""
-    bindings, seen, problems = {}, set(), set()
-    tokens = [token.upper() for token in ID_TOKEN.findall(note)]
-    chain = []
-    for token in [*tokens, "L"]:
-        if token.startswith("L"):
-            if chain:
-                problems.add("unpaired_id")
-                chain.clear()
+def adjacent_pairs(note):
+    tokens = list(ID_TOKEN.finditer(note))
+    links = []
+    for first, second in pairwise(tokens):
+        a, b = first.group().upper(), second.group().upper()
+        if {a[0], b[0]} != {"B", "R"}:
             continue
-        chain.append(token)
-        if len(chain) < 2:
+        gap = note[first.end():second.start()]
+        if "\n" in gap and gap.strip() == "|\n|":
             continue
-        first, second = chain
-        chain.clear()
-        if first[0] == second[0]:
-            problems.add("unpaired_id")
+        if not PAIR_LINK.fullmatch(gap) and not re.fullmatch(r'[\s,"]+', gap):
             continue
-        if first in seen or second in seen:
-            problems.add("repeated_id")
-            continue
-        batch, ref = (first, second) if first.startswith("B") else (second, first)
-        bindings[batch] = ref
-        seen.update((batch, ref))
+        pair = (a, b) if a.startswith("B") else (b, a)
+        links.append((first.start(), second.start(), pair, bool(gap.strip(' ,"\n\t'))))
+    return links
+
+
+def read_bindings(note, open_batches=None):
+    """Prefer linked IDs over bare adjacency; ignore unrelated IDs and identical repeats."""
+    links = adjacent_pairs(note)
+    used, pairs = set(), set()
+    for left, right, pair, explicit in links:
+        if explicit:
+            pairs.add(pair)
+            used.update((left, right))
+    for left, right, pair, explicit in links:
+        if not explicit and left not in used and right not in used:
+            pairs.add(pair)
+            used.update((left, right))
+    if open_batches is not None:
+        pairs = {pair for pair in pairs if pair[0] in open_batches}
+    conflicts = {pair for pair in pairs if any(other != pair and
+                 (pair[0] == other[0] or pair[1] == other[1]) for other in pairs)}
+    return dict(sorted(pairs - conflicts)), conflicts
+
+
+def lot_tokens(text):
+    values = set()
+    for match in LOT_RUN.finditer(text):
+        values.update("L" + number for number in re.findall(r"\d{2}", match.group()))
+    for match in OMITTED_PREFIX.finditer(text):
+        values.update("L" + number for number in re.findall(r"\d{2}", match.group(1)))
+    return values
+
+
+def read_lots(note, lots):
     try:
         payload = json.loads(note)
     except (ValueError, RecursionError):
         payload = note
-    suspects, cleared = set(), set()
+    suspects, cleared, problems = set(), set(), set()
     for clause in lot_clauses(payload):
-        values = {token.upper() for token in ID_TOKEN.findall(clause) if token.upper().startswith("L")}
+        values = lot_tokens(clause) & set(lots)
         if not values:
             continue
-        if NEGATIVE.search(clause):
+        markers = re.sub(r"\b[BR]\d{2}\s+(?:ok|good|cleared|fine|passed)\b", "", clause, flags=re.IGNORECASE)
+        if NEGATIVE.search(markers):
             if POSITIVE.search(clause):
                 problems.add("mixed_lot_markers")
             cleared.update(values)
@@ -96,10 +124,31 @@ def parse_note(note, lots):
             suspects.update(values)
     if suspects & cleared:
         problems.add("conflicting_lot_markers")
-    possible = (suspects or set(lots)) & set(lots) - cleared
-    if problems:
-        return {}, set(lots), sorted(problems)
-    return bindings, possible, []
+    if problems or not (suspects or cleared):
+        return None, sorted(problems)
+    return (suspects or set(lots)) - cleared, []
+
+
+def parse_note(note, lots, open_batches=None):
+    """Read independent pair and lot evidence; do not discard one because the other is ambiguous."""
+    bindings, conflicts = read_bindings(note, open_batches)
+    possible, problems = read_lots(note, lots)
+    if conflicts:
+        problems.append("conflicting_bindings")
+    return bindings, set(lots) if possible is None else possible, problems
+
+
+def note_measures(note, lots, pending, true_lots):
+    bindings, conflicts = read_bindings(note, pending)
+    unparsed = sorted({b for b, _ in conflicts if b in pending})
+    missing = sorted(b for b, r in pending.items() if bindings.get(b) != r and b not in unparsed)
+    possible, problems = read_lots(note, lots)
+    kept = None if problems else possible is not None and true_lots <= possible
+    exact = None if problems else possible == true_lots
+    pointer = None if problems else bool(not kept and POINTER.search(note))
+    return {"pairs_kept": None if conflicts else not missing, "missing_bindings": missing,
+            "unparsed_bindings": unparsed, "lots_kept": kept, "lots_exact": exact,
+            "lots_pointer": pointer, "problems": (["conflicting_bindings"] if conflicts else []) + problems}
 
 
 def write_note(bindings, possible, style="careful", lots=None):
@@ -129,8 +178,8 @@ def write_note(bindings, possible, style="careful", lots=None):
     values = possible
     if style == "cleared":
         label, values = "Cleared", set(lots) - possible
-    if style == "ambiguous-pair" and pairs:
-        pairs.append(pairs[0])
+    if style == "ambiguous-pair" and len(order) > 1:
+        pairs.append(f"{order[0]}={bindings[order[1]]}")
     if style == "ambiguous-lot":
         label = "Suspects cleared"
     return "Pending " + joiner.join(pairs) + f"; {label} " + " ".join(sorted(values))

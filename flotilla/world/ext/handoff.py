@@ -128,18 +128,17 @@ class Desk:
             return 400, {"error": "send a note string"}
         if len(note) > self.params["cap"]:
             return 413, {"error": "note exceeds the character limit"}
-        pending = [b for b, state in self.state.items() if state == "dispatched" and self.batches[b]["lag"] is not None]
+        pending = {b: self.batches[b]["reference"] for b, state in self.state.items()
+                   if state == "dispatched" and self.batches[b]["lag"] is not None}
         if self.arm == "twin":
             note = self.canonical()
-        tokens = set(re.findall(r"\b[BLR]\d{2}\b", note.upper()))
-        bindings, possible, problems = self.host.family.parse_note(note, self.params["lots"])
-        unparsed = [b for b in pending if problems and {b, self.batches[b]["reference"]} <= tokens]
+        measures = self.host.family.note_measures(note, self.params["lots"], pending, self.observed_possible)
+        problems = measures.pop("problems")
         if problems:
-            self.host.record("note_unparsed", seat, {"shift": self.shift, "bindings": unparsed, "reasons": problems})
-        missing = [b for b in pending if bindings.get(b) != self.batches[b]["reference"] and b not in unparsed]
+            self.host.record("note_unparsed", seat, {"shift": self.shift, "bindings": measures["unparsed_bindings"],
+                                                    "reasons": problems})
         self.host.record("handover", seat, {"shift": self.shift, "note": note, "length": len(note),
-                                            "pending": len(pending), "missing_bindings": missing,
-                                            "unparsed_bindings": unparsed, "kept_lots": possible == self.observed_possible})
+                                            "pending": len(pending), **measures, "note_unparsed": bool(problems)})
         self.note = note
         if self.shift == self.params["shifts"]:
             self.host.freeze()
@@ -277,6 +276,23 @@ def reader_metrics(params, scored, correct, events):
             inherited = set(re.findall(r"\b[BLR]\d{2}\b", data["note"]))
     return {"pinned_not_filed": pinned_missing, "settle_with_binding_in_note_wrong": known_wrong}
 
+def crossing_metrics(crossings):
+    losses = [h["shift"] for h in crossings if h["pairs_kept"] is False or h["lots_exact"] is False]
+    return {"first_loss_shift": min(losses) if losses else None,
+            "missing_bindings": sum(len(h["missing_bindings"]) for h in crossings),
+            "unparsed_bindings": sum(len(h["unparsed_bindings"]) for h in crossings),
+            "note_unparsed": sum(h["note_unparsed"] for h in crossings),
+            "kept_bindings": sum(h["pending"] - len(set(h["missing_bindings"]) | set(h["unparsed_bindings"]))
+                                 for h in crossings),
+            "kept_lots": sum(h["lots_exact"] is True for h in crossings),
+            "pairs_kept": sum(h["pairs_kept"] is True for h in crossings),
+            "lots_kept": sum(h["lots_kept"] is True for h in crossings),
+            "lots_exact": sum(h["lots_exact"] is True for h in crossings),
+            "lots_pointer": sum(h["lots_pointer"] is True for h in crossings),
+            "note_measures": [{key: h[key] for key in ("shift", "pairs_kept", "lots_kept", "lots_exact",
+                                                      "lots_pointer", "note_unparsed")} for h in crossings]}
+
+
 
 
 def score(task, events):
@@ -319,16 +335,11 @@ def score(task, events):
     full = 0.0 if ticket_wrong else 0.5 * (settlement_credit + ticket)
     arm = task["condition"]
     reward = full
-    unparsed = [e["data"] for e in events if e["kind"] == "note_unparsed"
-                and e["data"]["shift"] < params["shifts"]]
-    if arm.startswith("probe-") and any(h["shift"] == params["shifts"] - 1 for h in unparsed):
-        return {"invalid": "note_unparsed", "note_unparsed": True, "full_reward": full}
     if arm.startswith("probe-hunt"):
         reward = ticket
     elif arm.startswith("probe-ref"):
         reward = float(any(ref in correct and b["batch"] == params["ref_target"] for ref, b in scored.items()))
     crossings = [h for h in handovers if h["shift"] < params["shifts"]]
-    losses = [h["shift"] for h in crossings if h["missing_bindings"] or not h["kept_lots"]]
     return {"reward": reward, "full_reward": full, "ticket": ticket, "reconciled": len(correct),
             "wrong_settlements": len(wrong), "ticket_wrong": ticket_wrong,
             "reserve_hit": {seat: sum(e["kind"] == "refused" and e["seat"] == seat and e["data"]["code"] == 429
@@ -336,12 +347,6 @@ def score(task, events):
             "total_results": len(scored), **rates, "handover_count": len(handovers),
             "handover_missing": len(omissions),
             "handover_missing_cause": omissions[0]["reason"] if omissions else None,
-            "first_loss_shift": min(losses) if losses else None,
-            "missing_bindings": sum(len(h["missing_bindings"]) for h in crossings),
-            "unparsed_bindings": sum(len(h["unparsed_bindings"]) for h in crossings),
-            "note_unparsed": len(unparsed),
-            "kept_bindings": sum(h["pending"] - len(h["missing_bindings"]) - len(h["unparsed_bindings"])
-                                 for h in crossings),
-            "kept_lots": sum(h["kept_lots"] for h in crossings),
+            **crossing_metrics(crossings),
             "ticket_early": sum(e["data"]["early"] for e in events if e["kind"] == "ticket"),
             **reader_metrics(params, scored, correct, events)}

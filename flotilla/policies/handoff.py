@@ -60,7 +60,7 @@ def work(name, client, own, memory, family):
     elif name in NO_NOTE:
         bindings, possible = {}, set(lots)
     else:
-        bindings, possible, _ = family.parse_note(desk["note"], lots)
+        bindings, possible, _ = family.parse_note(desk["note"], lots, {b["batch"] for b in desk["open"]})
     local = set(lots)
     if memory is None and name not in NO_NOTE:
         record = check(*(yield from client.get("/log")))
