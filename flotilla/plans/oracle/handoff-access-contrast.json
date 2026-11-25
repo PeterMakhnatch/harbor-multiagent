@@ -1,0 +1,28 @@
+{
+  "name": "handoff-access-contrast",
+  "prereg": {
+    "commit": "712e7d1f75cdca4237453ae1f439360929cba066",
+    "doc": "flotilla/docs/seams/handoff.md",
+    "section": "### Negative control on the final build"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": ".flotilla-local/pointer-access-20261125/careful",
+      "manifest": ".flotilla-local/pointer-access-20261125/careful/manifest.json",
+      "instances": [300],
+      "arms": ["team", "team-fullrecord"]
+    },
+    {
+      "tasks_dir": ".flotilla-local/pointer-access-20261125/pointer",
+      "manifest": ".flotilla-local/pointer-access-20261125/pointer/manifest.json",
+      "instances": [300],
+      "arms": ["team", "team-fullrecord"]
+    }
+  ],
+  "models": [null],
+  "agent": "oracle",
+  "make_jobs": {"max_turns": 100, "env": "docker", "concurrency": 1, "start_spacing_s": 0.0},
+  "budget": {"cap_usd": 0.0, "reserve_per_trial_usd": 0.0, "provider_floors": {}, "max_invalid_streak": 2},
+  "order_seed": 20261125,
+  "notes": "Model-free negative control: same world parameters, two note policies, with and without the full record."
+}
