@@ -181,6 +181,10 @@ def test_scripted_probe_and_noop(tmp_path, monkeypatch):
     assert good["seats"]["p2"]["mode"] == "external"
     assert all(info["exit_code"] == 0 for info in good["seats"].values())
     assert good["model"] == "fake-model" and good["harness"] == "fake seat.py"
+    assert good["seats"]["p2"]["harness"] == "fake seat.py"
+    assert good["seats"]["p2"]["model"] == "fake-model"
+    assert good["seats"]["p1"]["harness"] == "policy.py"
+    assert good["seats"]["p1"]["model"] is None
     assert good["seat_failures"] == {}
     receiver = good["seats"]["p2"]
     assert receiver["world_calls"] > 0 and receiver["first_read"] < receiver["first_submit"]
@@ -196,6 +200,27 @@ def test_scripted_probe_and_noop(tmp_path, monkeypatch):
     good_log = (good_out / "seats" / "p2" / "seat.log").read_text()
     bad_log = (bad_out / "seats" / "p2" / "seat.log").read_text()
     assert good_log.split("token-sha256 ")[1].splitlines()[0] != bad_log.split("token-sha256 ")[1].splitlines()[0]
+
+
+def test_mixed_seat_commands_and_models(tmp_path):
+    task = build(tmp_path, "talk")
+    second = tmp_path / "other seat.py"
+    second.write_text(FAKE_SEAT)
+    override = (f"p2=/usr/bin/env {shlex.quote(sys.executable)} {shlex.quote(str(second))} "
+                "{instruction} {seat} {workdir} {log} "
+                f"{shlex.quote(str(task / 'solution' / 'policy.py'))} careful")
+    out, result = play(tmp_path, task, extra=("--seat-cmd", override, "--model-label", "default-model",
+                                             "--model-label", "p2=other-model"))
+    _, summary = assert_evidence(task, out, result, 1)
+    assert result["harness"] == {"p1": "fake seat.py", "p2": "other seat.py"}
+    assert result["model"] == {"p1": "default-model", "p2": "other-model"}
+    for seat in ("p1", "p2"):
+        assert result["seats"][seat]["harness"] == result["harness"][seat]
+        assert result["seats"][seat]["model"] == result["model"][seat]
+    assert "Model: other-model; harness: other seat.py" in summary
+    assert str(second) in result["seats"]["p2"]["command"]
+    invalid = play(tmp_path, task, extra=("--model-label", "p9=bad"), name="bad-override", check=False)
+    assert invalid.returncode == 2 and "unknown or non-external seat p9" in invalid.stderr
 
 
 def test_selected_seat_uses_careful_not_built_naive(tmp_path):

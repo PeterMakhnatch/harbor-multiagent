@@ -122,6 +122,8 @@ class SeatRun:
     argv: list[str]
     after: tuple[str, ...]
     mapping: dict[str, str]
+    harness: str
+    model: str | None
     process: subprocess.Popen | None = None
     started: float | None = None
     ended: float | None = None
@@ -152,6 +154,7 @@ class SeatRun:
         first_submit = next((r["seq"] for r in requests if r["method"] == "POST"
                              and r["path"] in ("/submit", "/commit")), None)
         return {"mode": self.mode, "command": self.command, "exit_code": self.exit_code,
+                "harness": self.harness, "model": self.model,
                 "seconds": None if self.started is None else self.ended - self.started,
                 "started_sec": self.started, "ended_sec": self.ended, "timed_out": self.timed_out,
                 "error": self.error, "start_after": list(self.after), "workdir": str(self.workdir),
@@ -253,7 +256,7 @@ def host_preface(mapping: dict[str, str]) -> bytes:
 
 def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
                  output: Path, after: tuple[str, ...], token: str, url: str,
-                 pass_env: tuple[str, ...], profile: Path | None, scripts: Path) -> SeatRun:
+                 pass_env: tuple[str, ...], profile: Path | None, scripts: Path, model: str | None) -> SeatRun:
     workdir = root / "work"
     workdir.mkdir()
     copy_seat_files(task, seat, workdir)
@@ -269,6 +272,7 @@ def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
     if mode == "external":
         values = {"instruction": str(prompt), "seat": seat, "workdir": str(workdir), "log": str(native_log)}
         command = PLACEHOLDER.sub(lambda m: shlex.quote(values[m[1]]), template)
+        harness = harness_name(template)
         argv = ["/usr/bin/env", "/bin/bash", "-c", command]
         if profile is not None:
             argv = sandbox_command(argv, profile, root, scripts)
@@ -276,7 +280,8 @@ def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
     else:
         argv = policy_command(task, seat, mode, root)
         command = shlex.join(argv)
-    return SeatRun(seat, mode, root, output, workdir, env, command, argv, after, mapping)
+        harness = Path(argv[-1]).name
+    return SeatRun(seat, mode, root, output, workdir, env, command, argv, after, mapping, harness, model)
 
 
 @contextlib.contextmanager
@@ -598,6 +603,7 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
         started, ended = (f"{info[key]:.3f}" if info[key] is not None else "not started"
                           for key in ("started_sec", "ended_sec"))
         lines += [f"## {seat} ({info['mode']})", "",
+                  f"Model: {info['model']}; harness: {info['harness']}",
                   f"Started: {started}; ended: {ended}; exit: {info['exit_code']}; "
                   f"world calls: {info['world_calls']}; 4xx: {info['http_4xx']}", "",
                   *(evidence or ["- No seat events."]), "", "### World requests (arrival order)", "",
@@ -611,9 +617,37 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
 
 def harness_name(template: str) -> str:
     args = shlex.split(template)
-    if Path(args[0]).name in ("bash", "sh", "zsh", "python", "python3", "python3.12") and len(args) > 1:
-        return Path(args[1]).name
+    for arg in args:
+        if Path(arg).suffix in (".sh", ".py", ".zsh", ".bash"):
+            return Path(arg).name
     return Path(args[0]).name
+
+
+def seat_values(values: str | list[str] | None, seats: set[str], name: str, required: bool = False) -> dict:
+    default = None
+    overrides = {}
+    for value in [values] if isinstance(values, str) else values or []:
+        prefix, equals, rest = value.partition("=")
+        if equals and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", prefix):
+            if prefix not in seats:
+                raise ValueError(f"{name}: unknown or non-external seat {prefix}")
+            if prefix in overrides:
+                raise ValueError(f"{name}: duplicate override for {prefix}")
+            overrides[prefix] = rest
+        else:
+            if default is not None:
+                raise ValueError(f"{name}: duplicate default")
+            default = value
+    resolved = {seat: overrides.get(seat, default) for seat in sorted(seats)}
+    for seat, value in resolved.items():
+        if (required and value is None) or (value is not None and not value.strip()):
+            raise ValueError(f"{name}: missing value for {seat}")
+    return resolved
+
+
+def common_or_by_seat(values: dict) -> str | dict | None:
+    distinct = set(values.values())
+    return next(iter(distinct)) if len(distinct) == 1 else values if distinct else None
 
 
 def seat_failures(info: dict) -> list[str]:
@@ -629,9 +663,9 @@ def seat_failures(info: dict) -> list[str]:
     return failures
 
 
-def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: float | None,
+def playtest(task_dir: Path, templates: str | list[str], selected: set[str] | None, timeout: float | None,
              max_parallel: int, out: Path, *, pass_env: tuple[str, ...] = (),
-             profile: Path | None = None, model_label: str | None = None,
+             profile: Path | None = None, model_label: str | list[str] | None = None,
              seat_timeout: float | None = None, stall_sec: float = 120, scripts: Path = SEAT_SCRIPTS) -> dict:
     if qa.yaml is None:
         raise ValueError("PyYAML is required; use uvx --quiet --python 3.12 --with pyyaml python flotilla/playtest.py")
@@ -644,9 +678,11 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
     selected = subjects if selected is None else selected
     if selected - subjects:
         raise ValueError(f"unknown or scripted external seat(s): {sorted(selected - subjects)}")
+    commands = seat_values(templates, selected, "--seat-cmd", required=True)
+    models = seat_values(model_label, selected, "--model-label")
     timeout = float(config.get("agent", {}).get("timeout_sec", 900)) if timeout is None else timeout
-    if not math.isfinite(timeout) or timeout <= 0 or max_parallel <= 0 or not template.strip():
-        raise ValueError("timeout and max-parallel must be positive; seat command must not be empty")
+    if not math.isfinite(timeout) or timeout <= 0 or max_parallel <= 0:
+        raise ValueError("timeout and max-parallel must be positive")
     if any(not math.isfinite(value) or value <= 0 for value in (seat_timeout, stall_sec) if value is not None):
         raise ValueError("seat-timeout and stall-sec must be positive")
     if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) for name in pass_env):
@@ -669,8 +705,9 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
                     seat_root = Path(stack.enter_context(tempfile.TemporaryDirectory(
                         prefix=".playtest-seat-", dir=Path.home()))).resolve()
                     mode = "external" if seat in selected else "careful" if seat in subjects else "scripted"
-                    seats.append(prepare_seat(task, seat, mode, seat_root, template, out / "seats" / seat,
-                                              after[seat], tokens[seat], url, pass_env, profile, scripts))
+                    seats.append(prepare_seat(task, seat, mode, seat_root, commands.get(seat, ""), out / "seats" / seat,
+                                              after[seat], tokens[seat], url, pass_env, profile, scripts,
+                                              models.get(seat)))
                 requests_stream = stack.enter_context((out / "requests.jsonl").open())
                 responses_stream = stack.enter_context((out / "responses.jsonl").open())
                 events_stream = stack.enter_context((out / "artifacts/logs/world/events.jsonl").open())
@@ -687,8 +724,9 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
         result = {"task": str(task.path), "reward": reward, "score": score, "timed_out": timed_out,
                   "valid": reason is None, "invalid_reason": reason, **world_causes(out),
                   "stop_reason": stop_reason,
-                  "sandbox_profile": str(profile) if profile else None, "model": model_label,
-                  "harness": harness_name(template), "seat_failures": failures, "seats": seat_results}
+                  "sandbox_profile": str(profile) if profile else None, "model": common_or_by_seat(models),
+                  "harness": common_or_by_seat({s.seat: s.harness for s in seats if s.mode == "external"}),
+                  "seat_failures": failures, "seats": seat_results}
         (out / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         timeline(out, result, audit, requests)
         return result
@@ -697,7 +735,8 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, epilog="Trusted host commands only; sandbox is optional.")
     parser.add_argument("--task", type=Path, required=True, help="built task folder")
-    parser.add_argument("--seat-cmd", required=True, help="shell template; {instruction}, {seat}, {workdir}, {log}")
+    parser.add_argument("--seat-cmd", required=True, action="append",
+                        help="default or SEAT=template; repeatable; {instruction}, {seat}, {workdir}, {log}")
     parser.add_argument("--seats", help="comma-separated external seats (default: all non-scripted seats)")
     parser.add_argument("--timeout-sec", type=float, help="total seat play time (default: built task timeout)")
     parser.add_argument("--seat-timeout", type=float, help="maximum seconds per seat, from its own start")
@@ -707,7 +746,7 @@ def main() -> None:
                         help="host variable to pass to a seat (repeatable; comma-separated names also accepted)")
     parser.add_argument("--sandbox-profile", type=Path, help="macOS sandbox-exec profile for external seats")
     parser.add_argument("--seat-scripts", type=Path, default=SEAT_SCRIPTS, help="readable seat scripts directory")
-    parser.add_argument("--model-label", help="model name to record in result.json")
+    parser.add_argument("--model-label", action="append", help="default or SEAT=model name; repeatable")
     parser.add_argument("--out", type=Path, required=True, help="new or empty output folder")
     args = parser.parse_args()
     try:
