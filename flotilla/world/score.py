@@ -90,29 +90,36 @@ def score_game_task(task: dict[str, Any], game: Any) -> None:
 
 
 def extension_score(task: dict[str, Any], events: list[dict[str, Any]], root: Path) -> dict[str, Any]:
-    for event in events:
-        if event["kind"] in ("extension_error", "play_timeout", "simulation_stalled"):
-            return {"invalid": event["kind"]}
-    name = task["extension"]
-    if not isinstance(name, str) or not name.isidentifier():
-        raise ValueError("invalid extension name")
-    if (root / "family.py").is_file():
-        load_family(root / "family.py")
-    extension = load_family(root / "ext" / f"{name}.py", "world_extension_score")
-    result = extension.score(task, events)
+    if any(event["kind"] == "extension_error" for event in events):
+        return {"invalid": "extension_error"}
+    deadline = next((e for e in events if e["kind"] in ("play_timeout", "simulation_stalled", "play_incomplete")), None)
+    fields = {"stalled_seats": deadline["data"].get("stalled_seats", [])} if deadline else {}
+    outcome = next((e["data"]["result"] for e in events if e["kind"] == "deadline_score"), None)
+    if outcome is not None:
+        result = outcome
+    elif deadline and deadline["kind"] != "play_incomplete":
+        return {"invalid": deadline["kind"], **fields}
+    else:
+        name = task["extension"]
+        if not isinstance(name, str) or not name.isidentifier():
+            raise ValueError("invalid extension name")
+        if (root / "family.py").is_file():
+            load_family(root / "family.py")
+        extension = load_family(root / "ext" / f"{name}.py", "world_extension_score")
+        result = extension.score(task, events)
     if not isinstance(result, dict):
         raise TypeError("extension score must be an object")
     json.dumps(result, allow_nan=False)
     if "invalid" in result:
         if not isinstance(result["invalid"], str) or not result["invalid"] or "reward" in result:
             raise ValueError("invalid score must have a reason and no reward")
-        return result
+        return result | fields
     if type(result.get("reward")) not in (int, float):
         raise ValueError("extension reward must be numeric")
     reward = float(result["reward"])
     if not 0 <= reward <= 1:
         raise ValueError(f"extension scorer returned {reward}, outside [0, 1]")
-    return result | {"reward": reward}
+    return result | fields | {"reward": reward}
 
 
 def score_extension_task(task: dict[str, Any]) -> None:

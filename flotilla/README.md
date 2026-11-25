@@ -282,8 +282,19 @@ The simulator and seat runner use identical draws. These policies measure grader
 not model performance. Use a separate output root for each policy.
 The option does not change the model briefing or scripted teammate policies.
 Require zero QA failures and a local, zero-cost oracle rehearsal before a model run.
-For staged seats, set `start_after` in the extension arm. Set `--play-timeout` to cover the whole chain;
-use separate jobs for different turn caps. The kit does not receive runner-end signals.
+For staged seats, set `start_after` in the extension arm. Specify `agent_timeout_sec` (a number or
+seat map) and `play_timeout_sec` for the chain; QA requires the effective staged limits plus 60 s.
+Harbor currently applies the maximum requested agent limit to every staged seat.
+Use separate jobs for different turn caps. A successor's first authenticated call records
+`seat_end` for its predecessors and invokes `on_seat_end(seat)` during open play. A waiting successor
+gets `reason: "predecessor_ended"` from `/await?until=active` instead of waiting for a timeout.
+
+Use `pending(seat)` and `on_deadline(stalled_seats)` to score omitted duties as valid results with
+flags. Without the deadline hook, deadlines and exhausted simulations stay invalid. Infrastructure
+faults always remain invalid. `/await`, `/whoami` and `/health` are free of the `max_calls` budget;
+an over-budget refusal names `max_calls` and its limit. `on_retired_call` can replay an already
+completed extension request from a retired seat without any state change. `augment_reply` can
+attach fields and post-write receipt IDs to successful `/await` and `/messages` replies.
 
 ### Make an eval card
 

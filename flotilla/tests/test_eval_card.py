@@ -20,6 +20,13 @@ def card(tmp_path, family, *options):
     return result, data, checks, matrix
 
 
+def test_exported_card_identity(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(FLOTILLA))
+    module = load(FLOTILLA / "eval_card.py", "card_export_test")
+    monkeypatch.setattr(module, "ROOT", tmp_path)
+    assert module.kit_commit() == "unknown"
+
+
 def test_fixture_card_sweep(tmp_path):
     result, data, checks, matrix = card(tmp_path, "kit_fixture", "--levels", "canary,standard,heavy")
     assert result.returncode == 0, data["checks"]
