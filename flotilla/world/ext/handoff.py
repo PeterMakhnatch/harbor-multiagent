@@ -1,6 +1,9 @@
 """Deterministic dispatch referee. Settlement acceptance never discloses correctness."""
 
+import json
+import os
 import re
+from pathlib import Path
 from typing import ClassVar
 
 
@@ -14,6 +17,7 @@ class Desk:
 
     def __init__(self, task, host):
         self.host = host
+        self.task = task
         self.params = task["params"]
         self.arm = task["condition"]
         self.seats = (tuple(f"s{i}" for i in range(1, self.params["shifts"] + 1))
@@ -149,9 +153,33 @@ class Desk:
                 self.host.activate(self.seats[self.shift - 1])
         return 200, {"ok": True}
 
+    def pending(self, seat):
+        return self.host.status[seat] == "active"
+
+    def mark_missing(self, seat, reason):
+        self.host.record("handover_missing", seat, {"shift": self.shift, "reason": reason})
+
     def on_budget(self, seat):
-        self.host.record("handover_missing", seat, {"shift": self.shift, "reason": "call_budget"})
+        self.mark_missing(seat, "call_budget")
         self.host.freeze()
+
+    def on_seat_end(self, seat):
+        if self.pending(seat):
+            self.mark_missing(seat, "seat_end")
+            self.host.freeze()
+
+    def on_deadline(self, stalled_seats):
+        for seat in stalled_seats:
+            if self.pending(seat):
+                self.mark_missing(seat, "deadline")
+        # The live world persists every reply receipt before the deadline.
+        # A simulator scheduler interruption is not a seat's omission.
+        path = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world")) / "events.jsonl"
+        if path.is_file():
+            events = [json.loads(line) for line in path.read_text().splitlines()]
+            if events and events[-1]["kind"] == "handover_missing":
+                return score(self.task, events)
+        return None
 
     def perform(self, seat, path, body):
         if path == "/desk":
@@ -260,12 +288,12 @@ def score(task, events):
         return {"invalid": "desk reply lacks a delivery receipt"}
     params = task["params"]
     handovers = [e["data"] for e in events if e["kind"] == "handover"]
-    if len(handovers) != params["shifts"]:
-        return {"invalid": "handoff_missing", "handover_count": len(handovers),
-                "handoff_missing": params["shifts"] - len(handovers)}
+    omissions = [e["data"] for e in events if e["kind"] == "handover_missing"]
     for event in events:
-        if event["kind"] in ("extension_error", "play_timeout", "simulation_stalled"):
+        if event["kind"] in ("extension_error", "simulation_stalled"):
             return {"invalid": event["kind"]}
+    if len(handovers) != params["shifts"] and not omissions:
+        return {"invalid": "incomplete chain without an omission event"}
     scored = {b["reference"]: b for b in params["batches"] if b["lag"] is not None}
     correct = set()
     tickets = []
@@ -300,7 +328,8 @@ def score(task, events):
     losses = [h["shift"] for h in crossings if h["missing_bindings"] or not h["kept_lots"]]
     return {"reward": reward, "full_reward": full, "ticket": ticket, "reconciled": len(correct),
             "total_results": len(scored), **rates, "handover_count": len(handovers),
-            "handover_missing": sum(e["kind"] == "handover_missing" for e in events),
+            "handover_missing": len(omissions),
+            "handover_missing_cause": omissions[0]["reason"] if omissions else None,
             "first_loss_shift": min(losses) if losses else None,
             "missing_bindings": sum(len(h["missing_bindings"]) for h in crossings),
             "unparsed_bindings": sum(len(h["unparsed_bindings"]) for h in crossings),

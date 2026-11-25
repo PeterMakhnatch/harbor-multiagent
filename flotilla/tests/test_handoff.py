@@ -157,8 +157,8 @@ def test_handoff_sweep(dose, tmp_path):
                 for schedule in range(SCHEDULES):
                     run = SIM.simulate_built(path, policy, schedule)
                     if policy == "nop":
-                        assert run["invalid"] == "handoff_missing" and run["reward"] is None
-                        assert "missing_bindings" not in run["score"]
+                        assert run["invalid"] is None and run["reward"] == 0
+                        assert run["score"]["handover_missing"] == 1
                         continue
                     assert run["invalid"] is None and not run["stalled"]
                     reward, score = run["reward"], run["score"]
@@ -333,12 +333,14 @@ def test_handoff_reserved_calls(tmp_path, start_world):
 def test_handoff_budget_and_invalid_evidence():
     for policy in ("exhaust", "nop"):
         run = SIM.simulate("handoff", "team", 0, {"s2": policy}, SEED, 4, difficulty="canary")
-        assert run["invalid"] == "handoff_missing" and run["reward"] is None
+        assert run["invalid"] is None and run["reward"] > 0
         assert run["score"]["handover_count"] == 1
-        assert "missing_bindings" not in run["score"]
+        assert run["score"]["handover_missing"] == 1
+        assert run["score"]["handover_missing_cause"] == ("call_budget" if policy == "exhaust" else "seat_end")
     for arm in ("probe-hunt-control", "probe-ref-control", "probe-hunt-trap", "probe-ref-trap"):
         run = SIM.simulate("handoff", arm, 0, "nop", SEED, 4, difficulty="canary")
-        assert run["invalid"] == "handoff_missing" and run["reward"] is None
+        assert run["invalid"] is None and run["reward"] == 0
+        assert run["score"]["handover_missing"] == 1
     stalled = SIM.simulate("handoff", "team", 0, {"s1": "stall"}, SEED, 4, difficulty="canary")
     assert stalled["invalid"] and stalled["stalled"] and stalled["reward"] is None
     task = task_for(FAMILY.generate(SEED, 0, 3, "canary"), "team", "canary")

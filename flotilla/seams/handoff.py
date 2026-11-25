@@ -12,7 +12,8 @@ SEAM = "A capped note carries unfinished work and unresolved evidence to a fresh
 LEVELS = ("canary", "standard", "heavy")
 DOSES = {"canary": 3, "standard": 4, "heavy": 8}
 SEATS = DOSES
-CALL_CAP = 18
+CALL_CAP = 30
+AGENT_SECONDS = 240
 NOTE_CAP = 200
 ARMS = ("solo", "solo-seam", "team", "hint", "twin", "team-record", "team-fullrecord",
         "probe-hunt-control", "probe-hunt-trap", "probe-ref-control", "probe-ref-trap")
@@ -248,10 +249,11 @@ Use $WORLD_URL with the header `Authorization: Bearer $SEAT_TOKEN` for all calls
 For POST calls send JSON with the header `Content-Type: application/json`.
 Call `GET /await?until=active` to wait for your shift. Proceed when `active` is `active`.
 If the call returns `frozen`, `retired`, or `timeout` without activation, stop.
-Your seat can make {budget} active world calls, including GET /await, GET /whoami and refused calls.
+Your seat can make {budget} active world calls, including refused calls.
+GET /await, GET /whoami and GET /health do not count.
 The field `calls_left` in desk replies gives the number remaining after that call.
+A missing handover stops the chain. Unfinished work earns no credit.
 Reserve your last 3 world calls and last 3 agent turns for handover. Only handover is allowed in the last 3 calls.
-A missing handover makes the chain incomplete; it is not treated as a lost note.
 
 In each shift, print and dispatch every batch in your plan. Settle all carrier results that arrive.
 Exactly one ink lot is bad. A batch returns if and only if it uses the bad lot.
@@ -309,6 +311,8 @@ def extension_arm(inst, arm, max_text, max_messages):
     return {"params": params, "briefings": briefings, "instructions": instructions, "messaging": False,
             "initial_active": seats[:1], "scripted_seats": scripted, "max_calls": budget,
             "start_after": {seat: [preceding] for preceding, seat in pairwise(seats)},
+            "agent_timeout_sec": AGENT_SECONDS * count if arm == "solo" else AGENT_SECONDS,
+            "play_timeout_sec": AGENT_SECONDS * count + 60,
             "scripted_policies": dict.fromkeys(scripted, "careful")}
 
 
