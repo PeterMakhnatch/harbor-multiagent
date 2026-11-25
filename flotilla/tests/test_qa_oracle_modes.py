@@ -110,6 +110,7 @@ def test_a_nested_folder_needs_list_and_enter(tmp_path):
     solution = write_task(task, 0o022)
     (solution / "lib").mkdir(mode=0o755)
     (solution / "lib" / "helper.py").write_text("\n")
+    (solution / "lib" / "helper.py").chmod(0o644)
     (solution / "lib").chmod(0o751)
     assert set(named(access(task))) == {"solution/lib"}
 
