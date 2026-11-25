@@ -57,6 +57,7 @@ import functools
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import random
 import secrets
@@ -352,7 +353,7 @@ def streak_of(plan: dict) -> int:
 def repo_of(path: Path) -> Path:
     for start in (path.parent, Path.cwd()):
         result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"], cwd=start, capture_output=True, text=True)
+            ["git", "rev-parse", "--show-toplevel"], cwd=start, capture_output=True, text=True, check=False)
         if result.returncode == 0:
             return Path(result.stdout.strip())
     raise SystemExit("refused: plan is not in a git checkout")
@@ -361,24 +362,24 @@ def repo_of(path: Path) -> Path:
 def assert_committed(plan_path: Path, repo: Path) -> None:
     rel = plan_path.resolve().relative_to(repo.resolve())
     tracked = subprocess.run(
-        ["git", "ls-files", "--error-unmatch", "--", str(rel)], cwd=repo, capture_output=True, text=True)
+        ["git", "ls-files", "--error-unmatch", "--", str(rel)], cwd=repo, capture_output=True, text=True, check=False)
     if tracked.returncode != 0:
         raise SystemExit(f"refused: {rel} is not committed")
-    diff = subprocess.run(["git", "diff", "--quiet", "HEAD", "--", str(rel)], cwd=repo)
+    diff = subprocess.run(["git", "diff", "--quiet", "HEAD", "--", str(rel)], cwd=repo, check=False)
     if diff.returncode != 0:
         raise SystemExit(f"refused: {rel} differs from HEAD")
 
 
 def assert_prereg(plan: dict, repo: Path) -> None:
     commit = plan["prereg"]["commit"]
-    exists = subprocess.run(["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=repo, capture_output=True)
+    exists = subprocess.run(["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=repo, capture_output=True, check=False)
     if exists.returncode != 0:
         raise SystemExit(f"refused: prereg commit {commit} does not exist")
-    ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", commit, "HEAD"], cwd=repo)
+    ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", commit, "HEAD"], cwd=repo, check=False)
     if ancestor.returncode != 0:
         raise SystemExit(f"refused: prereg commit {commit} is not an ancestor of HEAD")
     shown = subprocess.run(
-        ["git", "show", f"{commit}:{plan['prereg']['doc']}"], cwd=repo, capture_output=True, text=True)
+        ["git", "show", f"{commit}:{plan['prereg']['doc']}"], cwd=repo, capture_output=True, text=True, check=False)
     if shown.returncode != 0 or plan["prereg"]["section"] not in shown.stdout:
         raise SystemExit(f"refused: prereg section {plan['prereg']['section']!r} is not in {commit}:{plan['prereg']['doc']}")
 
@@ -496,7 +497,11 @@ def check_named_stages(plan: dict) -> None:
         raise SystemExit("refused: named stages need distinct models")
     previous_cap = 0
     total_cap = plan["budget"]["cap_usd"]
+    if type(total_cap) not in (int, float) or not math.isfinite(total_cap) or total_cap < 0:
+        raise SystemExit("refused: total cap_usd must be finite and nonnegative")
     for spec in plan["stages"]:
+        if not isinstance(spec, dict):
+            raise SystemExit("refused: named stage must be an object")
         refuse_unknown(spec, frozenset({"name", "cells", "gate", "cap_usd"}), "named stage")
         name, cells = spec.get("name"), spec.get("cells")
         if not isinstance(name, str) or not name or name in names or not isinstance(cells, list) or not cells:
@@ -521,7 +526,9 @@ def check_named_stages(plan: dict) -> None:
             for field, allowed in (("arms", arms_of(task_set)), ("instances", task_set["instances"]),
                                    ("models", plan["models"])):
                 values = row[field]
-                if not isinstance(values, list) or not values or len(set(values)) != len(values) or not set(values) <= set(allowed):
+                if (not isinstance(values, list) or not values
+                        or any(type(value) not in (int, str, type(None)) for value in values)
+                        or len(set(values)) != len(values) or not set(values) <= set(allowed)):
                     raise SystemExit(f"refused: named stage {name} has invalid {field}")
             if not isinstance(row["level"], str) or not row["level"]:
                 raise SystemExit("refused: named stage cell needs a level")
@@ -538,7 +545,7 @@ def check_named_gate(spec: dict) -> None:
     kind = gate.get("type")
     fields = {"none": {"type"}, "min_success": {"type", "controls"},
               "effect": {"type", "tests", "looks", "minimum", "alpha"}}
-    if kind not in fields or set(gate) != fields[kind]:
+    if not isinstance(kind, str) or kind not in fields or set(gate) != fields[kind]:
         raise SystemExit("refused: unknown or incomplete named stage gate")
     if kind == "none":
         return
@@ -548,14 +555,24 @@ def check_named_gate(spec: dict) -> None:
             rule.effect_disposition([], gate["minimum"])
         except (TypeError, ValueError) as exc:
             raise SystemExit(str(exc)) from None
-    seen = set()
-    for test in gate["controls" if kind == "min_success" else "tests"]:
+    seen, comparisons = set(), set()
+    tests = gate["controls" if kind == "min_success" else "tests"]
+    if not isinstance(tests, list) or not tests:
+        raise SystemExit("refused: gate needs a nonempty test list")
+    for test in tests:
         expected = {"task_set", "arm", "k"} if kind == "min_success" else {"task_set", "arms"}
-        if set(test) != expected:
+        if not isinstance(test, dict) or set(test) != expected:
             raise SystemExit("refused: malformed gate test")
         arms = [test["arm"]] if kind == "min_success" else test["arms"]
-        if len(arms) != (1 if kind == "min_success" else 2) or len(set(arms)) != len(arms):
+        if (not isinstance(arms, list) or any(not isinstance(arm, str) for arm in arms)
+                or len(arms) != (1 if kind == "min_success" else 2) or len(set(arms)) != len(arms)):
             raise SystemExit("refused: gate requires distinct arms")
+        if not _whole(test["task_set"]):
+            raise SystemExit("refused: gate task_set must be an integer")
+        comparison = test["task_set"], frozenset(arms)
+        if comparison in comparisons:
+            raise SystemExit("refused: repeated gate test")
+        comparisons.add(comparison)
         matching = [row for row in spec["cells"] if row["task_set"] == test["task_set"] and set(arms) <= set(row["arms"])]
         if not matching:
             raise SystemExit("refused: gate arms must be selected within this stage")
@@ -1084,7 +1101,7 @@ def smoke_charge(cell: dict, result: dict | None) -> dict:
 
 def run_process(command: list[str], log_path: Path, env: dict[str, str], cwd: Path) -> int:
     with log_path.open("w") as handle:
-        return subprocess.run(command, cwd=cwd, env=env, stdout=handle, stderr=subprocess.STDOUT).returncode
+        return subprocess.run(command, cwd=cwd, env=env, stdout=handle, stderr=subprocess.STDOUT, check=False).returncode
 
 
 def new_job(name: str, jobs_dir: Path, namer) -> str:
@@ -1200,7 +1217,7 @@ def read_balance(sources, provider: str, sleep) -> tuple[Balance | None, BaseExc
         try:
             value = sources.balance(provider)
             return (value if isinstance(value, Balance) else Balance(float(value))), None
-        except (Exception, SystemExit) as exc:
+        except (Exception, SystemExit) as exc:  # noqa: BLE001 - all balance read failures must stop admission
             last = exc
             if attempt == len(BALANCE_BACKOFF):
                 return None, exc
@@ -1456,8 +1473,30 @@ class Outcomes:
                 self.extensions.add(index)
             elif index in tested and (self.tasks.get(Path(task).name) or {}).get("family") != "probe":
                 raise SystemExit(f"refused: a staged test reads probe or extension outcomes; task set {index} has neither")
+        if isinstance(plan["stages"], list):
+            for stage in plan["stages"]:
+                for row in stage["cells"]:
+                    for instance in row["instances"]:
+                        for arm in row["arms"]:
+                            data = extension_task(paths[row["task_set"], instance, arm])
+                            if data and data["difficulty"] != row["level"]:
+                                raise SystemExit(f"refused: task set {row['task_set']} does not match the stage level")
+                if stage["gate"]["type"] == "effect":
+                    for test in stage["gate"]["tests"]:
+                        row = next(row for row in stage["cells"] if row["task_set"] == test["task_set"])
+                        self.check_pairs(test["task_set"], row["instances"], test["arms"])
         self.jobs_dir = jobs_dir
         self.rows: dict[str, dict | None] = {}
+
+    def check_pairs(self, index, instances, arms):
+        if index not in self.extensions:
+            return
+        for instance in instances:
+            a, b = (extension_task(self.paths[index, instance, arm]) for arm in arms)
+            if not a or not b or any(a[key] != b[key] for key in ("family", "seed", "difficulty", "seats")):
+                raise SystemExit(f"refused: task set {index} has unmatched extension instances")
+            if any(a["versions"].get(key) != b["versions"].get(key) for key in ("family", "world", "extension")):
+                raise SystemExit(f"refused: task set {index} has unmatched extension versions")
 
     def row(self, task_set: int, job: str) -> dict | None:
         if job not in self.rows:
@@ -1811,7 +1850,7 @@ def staged_of(plan, order):
 def stage_lines(plan: dict, staged: Staged, most: int, fewest: int) -> list[str]:
     spec = plan["stages"]
     if isinstance(spec, list):
-        return [f"stages: named; each stage retries invalid cells once; gates use valid primary outcomes",
+        return ["stages: named; each stage retries invalid cells once; gates use valid primary outcomes",
                 *(f"  stage {row['name']}: {sum(cell['stage'] == i for cell in staged.order)} cells, {row['gate']['type']}, "
                   f"cumulative model cap ${row.get('cap_usd', plan['budget']['cap_usd']):.2f}"
                   for i, row in enumerate(spec)),

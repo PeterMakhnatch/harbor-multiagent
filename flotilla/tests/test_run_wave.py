@@ -497,7 +497,8 @@ def forecast_block(out: str) -> list[str]:
 
 
 def test_help_and_example_dry_run(tmp_path, monkeypatch, capsys):
-    help_run = subprocess.run([sys.executable, str(FLOTILLA / "run_wave.py"), "--help"], capture_output=True, text=True)
+    help_run = subprocess.run([sys.executable, str(FLOTILLA / "run_wave.py"), "--help"],
+                              capture_output=True, text=True, check=False)
     assert help_run.returncode == 0 and "dry-run" in help_run.stdout
     assert "--smoke" in help_run.stdout and "--history-jobs" in help_run.stdout
     offline = Sources({}, lambda *_args: 10.0)
@@ -778,7 +779,6 @@ def test_a_seat_on_the_wrong_model_is_invalid(tmp_path):
     config = json.loads(next((tmp_path / "cross" / "run" / "configs").glob("*.json")).read_text())
     assert [row["model_name"] for row in config["participants"]] == [DEEPSEEK, OPENROUTER]
     assert all(row["kwargs"]["max_turns"] == 4 for row in config["participants"])
-    matched = {order[0]["key"]: spec_for("ok")}
     again = RUN.run(path, run_dir=tmp_path / "cross" / "run", jobs_dir=tmp_path / "cross" / "jobs",
                     harbor=tmp_path / "cross" / "harbor", wrapper=tmp_path / "cross" / "wrapper",
                     sources=Sources({}, lambda *_args: 10.0), base_env=env, namer=lambda _n: "000200",
@@ -2224,3 +2224,19 @@ def test_named_operator_pause_and_caps(tmp_path):
     blocked = Wave(tmp_path / "blocked", cap_plan, wins)
     assert blocked.run()[-1]["reason"] == "cap"
     assert not blocked.starts()
+
+
+def test_named_stage_selection_is_explicit_and_refuses_overlaps(tmp_path):
+    plan = named_plan()
+    plan["stages"][0]["cells"][0]["models"] = [M1]
+    plan["stages"][2]["cells"][0]["instances"] = [8]
+    path = tmp_path / "named.json"
+    path.write_text(json.dumps(plan))
+    parsed = RUN.load_plan(path)
+    cells = RUN.order_of(parsed)
+    assert [(cell["stage"], cell["model"]) for cell in cells[:3]] == [(0, M1)] * 3
+    assert {(cell["arm"], cell["instance"]) for cell in cells if cell["stage"] == 2} == {(PROBE_ARMS[1], 8)}
+    assert len(cells) == 3 + 16 + 2
+    plan["stages"][2]["cells"][0]["instances"] = [3]
+    path.write_text(json.dumps(plan))
+    assert "repeats a cell" in refusal(lambda: RUN.load_plan(path))
