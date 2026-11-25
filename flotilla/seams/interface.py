@@ -98,8 +98,8 @@ def generate(seed, instance, n_seats, difficulty):
                          "target": on_hand + in_transit + need_cases * case, "on_hand": on_hand,
                          "in_transit": in_transit})
         rng.shuffle(rows)
-        groups.append({"name": name, "desk": seats[1 + index % (n_seats - 1)], "support": supported,
-                       "saved": saved, "rows": rows})
+        groups.append({"name": name, "desk": seats[1 + index % (n_seats - 1)],
+                       "support": [list(c) for c in supported], "saved": list(saved), "rows": rows})
     target = rng.choice(names)
     form, unit = buyer
     separator = next(s for s in "/:-" if s in form)
@@ -108,8 +108,8 @@ def generate(seed, instance, n_seats, difficulty):
         a, b = form.split(separator)
         key_trap = (separator.join((b, a)), unit)
     unit_trap = (form, "case" if unit == "each" else "each")
-    return {"seats": seats, "difficulty": difficulty, "groups": groups, "buyer": buyer, "target": target,
-            "key_trap": key_trap, "unit_trap": unit_trap,
+    return {"seats": seats, "difficulty": difficulty, "groups": groups, "buyer": list(buyer), "target": target,
+            "key_trap": list(key_trap), "unit_trap": list(unit_trap),
             "stream": make_events(rng, groups, target, steps, corrections)}
 
 
