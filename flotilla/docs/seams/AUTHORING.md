@@ -88,6 +88,31 @@ with findings ranked BLOCKER, MAJOR or MINOR; each finding has the evidence, the
 The builder then resolves every BLOCKER and MAJOR finding and adds a deterministic simulation check that fails on
 the first build. The reviewers run their players again on the new export.
 
+## The live playtest (step 6)
+
+`flotilla/playtest.py` runs a built task on the host with a real command-line assistant in each model seat,
+under a sandbox profile, with the task's own world and verifier. It uses the assistant's subscription, not a
+paid API key. A playtest is not an experiment: n is small and the harness is the assistant's own CLI. It
+answers 4 questions before any paid run: can a strong assistant do the work from the briefing alone; where
+does it lose reward and why; do the family's measures see that loss; what breaks in the tools.
+
+18. Where a scripted seat must understand a model seat, give them a typed call. Keep free text between live
+    seats. A scripted seat that cannot read a direct message asks back; it never stays silent and never guesses.
+19. Write every call in full at the place where the seat needs it, with a real value. A placeholder next to a
+    literal word is read as a placeholder: 8 of 20 live seats sent `until=<round number>` for
+    `until=tick&after=...`, and 2 of them looped on the error until the world froze.
+20. The seat's shell must work like an ordinary shell (`python3`, here-documents, a writable temp folder). A
+    broken tool changes how an assistant works, and so it changes what the task measures. Run
+    `playtest.py --check-seat` before a session.
+21. Read the seat logs for slips that cost no reward. Then decide whether the task should score them. Two
+    families got their real dose this way: a relay that renumbers or reorders the rules in its note (`digest`),
+    and a seat's own script that hides the reply in which an update arrives (`commit`).
+22. One seat's refusal or tool misuse can end a whole team. Record it per trial as a valid flagged result with
+    its cause, and report the share of teams lost to each cause next to the reward.
+23. Freeze the tool and the tasks for a session (`git archive` to a scratch folder) and record the commit.
+24. A family that 2 frontier assistants pass in every live trial at `standard` and `heavy` is at the ceiling
+    for that class. Keep it as a canary, or move the load to where the logs showed slips. Do not add a trick.
+
 ## What the first reviews found (2026-11-25)
 
 | Family | Finding | Rule |
