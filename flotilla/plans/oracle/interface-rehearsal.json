@@ -1,0 +1,49 @@
+{
+ "name": "interface-rehearsal",
+ "prereg": {
+  "commit": "3cf92b6f56127a94fa17a3078377291ec2be366b",
+  "doc": "flotilla/docs/seams/interface.md",
+  "section": "## Oracle rehearsal (pre-registration)"
+ },
+ "task_sets": [
+  {
+   "tasks_dir": "/tmp/seams1125/b-interface/oracle-careful",
+   "manifest": "/tmp/seams1125/b-interface/oracle-careful/manifest.json",
+   "instances": [0],
+   "arms": ["team"]
+  },
+  {
+   "tasks_dir": "/tmp/seams1125/b-interface/oracle-careful",
+   "manifest": "/tmp/seams1125/b-interface/oracle-careful/manifest.json",
+   "instances": [0],
+   "arms": ["probe-control", "probe-trap-key"]
+  },
+  {
+   "tasks_dir": "/tmp/seams1125/b-interface/oracle-naive",
+   "manifest": "/tmp/seams1125/b-interface/oracle-naive/manifest.json",
+   "instances": [0],
+   "arms": ["team"]
+  },
+  {
+   "tasks_dir": "/tmp/seams1125/b-interface/oracle-naive",
+   "manifest": "/tmp/seams1125/b-interface/oracle-naive/manifest.json",
+   "instances": [0],
+   "arms": ["probe-control", "probe-trap-key"]
+  }
+ ],
+ "models": [null],
+ "agent": "oracle",
+ "make_jobs": {
+  "max_turns": 15,
+  "env": "docker",
+  "concurrency": 1,
+  "start_spacing_s": 0.0
+ },
+ "budget": {
+  "cap_usd": 0.0,
+  "reserve_per_trial_usd": 0.0,
+  "provider_floors": {},
+  "max_invalid_streak": 1
+ },
+ "order_seed": 20261125
+}
