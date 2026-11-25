@@ -7,6 +7,9 @@ from itertools import combinations
 
 FAMILY = "interface"
 TITLE = "Replenishment batch"
+VERSION = 2
+SEAM = "The buyer must learn a freely chosen catalog convention from another context before its order is final."
+LEVELS = ("canary", "standard", "heavy")
 SEATS = {"canary": 3, "standard": 3, "heavy": 3}
 ARMS = ("solo", "solo-seam", "team", "team-fullrecord", "team-nosaved", "hint", "probe-control",
         "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint")
@@ -20,6 +23,8 @@ HINT = "Before fixing an order, obtain the desk's actual key form and unit from 
 FORMS = ("SITE/ITEM", "ITEM/SITE", "SITE:ITEM", "ITEM:SITE", "SITE-ITEM", "ITEM-SITE")
 CONVENTIONS = tuple((form, unit) for form in FORMS for unit in ("each", "case"))
 DOSES = {level: (3, 3, 3, 5, 4, 1) for level in SEATS}
+COMMON_WORDS = ("solo", "team")
+INFORMED_GUESS_CEILING = {"canary": 1 / 6, "standard": 1 / 3, "heavy": 1 / 3}
 HIDDEN = {"canary": 0, "standard": 1, "heavy": 3}
 SUPPORTS = tuple(choices for choices in combinations(CONVENTIONS, 4)
                  if len({form[0] for form, _ in choices}) == 2
@@ -330,6 +335,17 @@ def pair_difference(first, second, views_a, views_b):
         return ["missing protocol sentence"]
     normalized["p1"]["instruction"] = instruction.removesuffix(suffix)
     return [] if normalized == views_a else ["more than the protocol sentence differs"]
+
+
+def chance_baseline(task_json, policy):
+    if policy != "blind":
+        return None
+    return 1.0 if task_json["condition"] in ("solo", "team-fullrecord") else 1 / 12
+
+
+def leak_values(task_json):
+    return sorted({key_for(row, convention) for group in task_json["params"]["groups"]
+                   for row in group["rows"] for convention in group["support"]})
 
 
 def qa(task, views):
