@@ -17,7 +17,9 @@ SEED = 7236499753218553
 COUNT = int(os.environ.get("HANDOFF_SWEEP_INSTANCES", "1"))
 SCHEDULES = 5 if COUNT >= 200 else 2
 LAPSES = ("lapse-10", "lapse-20", "lapse-30", "lapse-50")
-STYLES = ("reverse", "colon", "slash", "lines", "ref-first", "json", "arrow", "ref-eq", "cleared", "paren")
+STYLES = ("reverse", "colon", "slash", "lines", "ref-first", "json", "arrow", "ref-eq", "cleared", "paren",
+          "dash", "ref-colon", "comma", "table", "bare-paren", "json-list", "json-unknown",
+          "candidates", "suspect-lots", "possible-bad", "remaining", "bad-one-of")
 
 
 def task_for(inst, arm, dose):
@@ -30,7 +32,7 @@ def task_for(inst, arm, dose):
 def expected(arm, policy, dose):
     if policy == "careful":
         return 1.0
-    if policy == "lone" and arm == "team":
+    if policy in ("lone", "blind") and arm == "team":
         return {"canary": 1/3, "standard": 5/16, "heavy": 9/32}[dose]
     if policy != "naive":
         return None
@@ -130,6 +132,16 @@ def test_handoff_generator(dose):
     assert len(fingerprints) == 200
 
 
+def test_handoff_briefing_is_content_free():
+    inst = FAMILY.generate(SEED, 0, 3, "canary")
+    for arm in FAMILY.ARMS:
+        instructions = FAMILY.extension_arm(inst, arm, 600, 32)["instructions"]
+        for text in instructions.values():
+            assert "Write the note as free text." in text
+            assert "For ID pairs" not in text and "For lot-ID lists" not in text
+            assert (FAMILY.EXTRA_SENTENCES["hint"] in text) == (arm == "hint")
+
+
 @pytest.mark.parametrize("dose", FAMILY.LEVELS)
 def test_handoff_sweep(dose, tmp_path):
     tally = defaultdict(list)
@@ -147,8 +159,8 @@ def test_handoff_sweep(dose, tmp_path):
                 for schedule in range(SCHEDULES):
                     run = SIM.simulate_built(path, policy, schedule)
                     if policy == "nop":
-                        assert run["invalid"] == "handoff_missing" and run["reward"] is None
-                        assert "missing_bindings" not in run["score"]
+                        assert run["invalid"] is None and run["reward"] == 0
+                        assert run["score"]["handover_missing"] == 1
                         continue
                     assert run["invalid"] is None and not run["stalled"]
                     reward, score = run["reward"], run["score"]
@@ -170,6 +182,9 @@ def test_handoff_sweep(dose, tmp_path):
                         if arm != "solo":
                             max_requests = max(max_requests, max(run["requests"].values()))
                             assert max_requests <= 13
+                            counted = sum(e["kind"] == "extension_call" for e in run["events"] if
+                                          e["seat"] == f"s{task['params']['shifts']}")
+                            assert counted <= 0.75 * FAMILY.CALL_CAP
                     if policy == "blind" and arm == "team":
                         chance.append(FAMILY.chance_baseline(task, policy))
                     if policy in LAPSES and arm in ("solo", "team-fullrecord"):
@@ -187,6 +202,35 @@ def test_handoff_sweep(dose, tmp_path):
         assert abs(statistics.mean(chance) - statistics.mean(tally["team", "blind"])) < 0.05
 
 
+
+@pytest.mark.parametrize("dose", FAMILY.LEVELS)
+def test_handoff_extra_calls(dose, tmp_path):
+    paths = SIM.BUILD.build("handoff", [0], FAMILY.DOSES[dose], dose, SEED,
+                            ["team", "team-fullrecord"], tmp_path)
+    for path in paths:
+        run = SIM.simulate_built(path, "extra", 1)
+        assert run["invalid"] is None and run["reward"] == 1
+        assert max(run["score"]["reserve_hit"].values()) == 0
+        for seat in run["requests"]:
+            assert sum(e["kind"] == "refused" and e["seat"] == seat for e in run["events"]) == 3
+
+
+@pytest.mark.parametrize("dose", FAMILY.LEVELS)
+def test_handoff_no_note_guess_ceiling(dose, tmp_path):
+    paths = SIM.BUILD.build("handoff", list(range(24)), FAMILY.DOSES[dose], dose, SEED, ["team"], tmp_path)
+    results = defaultdict(list)
+    for path in paths:
+        task = json.loads((path / "environment/task.json").read_text())
+        for policy in ("naive", "blind", "guess", "guess-fixed", "guess-each"):
+            run = SIM.simulate_built(path, policy, 0)
+            assert run["invalid"] is None
+            results[policy].append(run["reward"])
+            if policy == "blind":
+                assert run["reward"] == FAMILY.chance_baseline(task, "blind")
+    means = {name: statistics.mean(values) for name, values in results.items()}
+    print(f"{dose} no-note policies: {means}")
+    assert means["naive"] > means["blind"] >= max(means[name] for name in ("guess", "guess-fixed", "guess-each"))
+
 @pytest.mark.parametrize("dose", FAMILY.LEVELS)
 def test_handoff_probe_note_formats_and_actor(dose, tmp_path):
     arms = tuple(a for a in FAMILY.ARMS if a.startswith("probe-"))
@@ -203,11 +247,16 @@ def test_handoff_probe_note_formats_and_actor(dose, tmp_path):
                 targets = [e for e in run["events"]
                            if e["kind"] == "settled" and e["data"]["batch"] == params["ref_target"]]
             assert len(targets) == 1 and targets[0]["seat"] == f"s{params['shifts']}"
+        for policy in ("ambiguous-pair", "ambiguous-lot"):
+            run = SIM.simulate_built(path, policy, 0)
+            assert run["invalid"] == "note_unparsed" and run["reward"] is None
+            assert run["score"]["note_unparsed"]
+            assert any(e["kind"] == "note_unparsed" for e in run["events"])
 
 
 def test_handoff_parser_regressions():
     lots = ["L01", "L02", "L03"]
-    gold = {"B01": "R01", "B02": "R02"}, {"L01"}
+    gold = {"B01": "R01", "B02": "R02"}, {"L01"}, []
     for text in (
         '{"pending":{"B01":"R01","B02":"R02"},"suspects":["L01"]}',
         "B01 -> R01; B02 -> R02; Suspects L01",
@@ -215,9 +264,24 @@ def test_handoff_parser_regressions():
         "B01 (ref R01); B02 (ref R02); Suspects L01",
         "Batch B01 has carrier ref R01; B02=R02; Suspects L01; ruled out L02 L03",
         "R01 B01 R02 B02; Cleared L02 L03",
+        "Pending B01 → R01 B02 → R02; Candidates: L01",
+        "B01 - R01 B02 - R02; Suspect lots: L01",
+        "B01: ref R01; B02: ref R02; Possible bad lots: L01",
+        "B01 (R01) B02 (R02); Remaining candidates: L01",
+        "B01, R01 B02, R02; Bad lot one of: L01",
+        "|Batch|Ref|\n|B01|R01|\n|R02|B02|\nL01",
+        '[{"batch":"B01","ref":"R01"},{"reference":"R02","batch":"B02"},{"unknown":["L01"]}]',
+        '{"open":{"B01":"R01","B02":"R02"},"other":["L01"]}',
+        "B01=R01 B02=R02; L02 ok; L03 passed",
+        "B01=R01 B02=R02; L02 good; L03 fine",
+        "B01=R01 B02=R02; not L02; L03 excluded",
     ):
         assert FAMILY.parse_note(text, lots) == gold
     assert FAMILY.parse_note("B01R01", lots)[0] == {}
+    for text in ("B01 R01 B02", "B01 B02 R01 R02", "B01 R01 B01 R02", "B01 R01 B02 R01",
+                 "Suspects L01, cleared L02", "L01; L01 cleared", "not cleared L01; possible L01"):
+        bindings, possible, problems = FAMILY.parse_note(text, lots)
+        assert not bindings and possible == set(lots) and problems
 
 
 def start_desk(tmp_path, start_world, arm="team", budget=None):
@@ -304,6 +368,7 @@ def test_handoff_early_ticket_and_settlement(tmp_path, start_world):
         assert post(seat, "/handover", {"note": ""})[0] == 200
     score = EXT.score(task, world.events())
     assert score["ticket"] == 0 and score["ticket_early"] == 1 and score["reconciled"] == 1
+    assert score["wrong_settlements"] == 1 and score["full_reward"] == 0
 
 
 def test_handoff_reserved_calls(tmp_path, start_world):
@@ -313,6 +378,8 @@ def test_handoff_reserved_calls(tmp_path, start_world):
         code, reply = get("/desk")
         assert code == 200
     assert reply["calls_left"] == 3
+    for path in ("/whoami", "/await?until=active", "/health") * 2:
+        assert get(path)[0] == 200
     code, reply = get("/desk")
     assert code == 429 and reply["calls_left"] == 2
     code, reply = world.seat("s1", "POST", "/handover", {"note": "é" * task["params"]["cap"]})
@@ -323,18 +390,31 @@ def test_handoff_reserved_calls(tmp_path, start_world):
 def test_handoff_budget_and_invalid_evidence():
     for policy in ("exhaust", "nop"):
         run = SIM.simulate("handoff", "team", 0, {"s2": policy}, SEED, 4, difficulty="canary")
-        assert run["invalid"] == "handoff_missing" and run["reward"] is None
+        assert run["invalid"] is None and run["reward"] > 0
         assert run["score"]["handover_count"] == 1
-        assert "missing_bindings" not in run["score"]
+        assert run["score"]["handover_missing"] == 1
+        assert run["score"]["handover_missing_cause"] == ("call_budget" if policy == "exhaust" else "seat_end")
     for arm in ("probe-hunt-control", "probe-ref-control", "probe-hunt-trap", "probe-ref-trap"):
         run = SIM.simulate("handoff", arm, 0, "nop", SEED, 4, difficulty="canary")
-        assert run["invalid"] == "handoff_missing" and run["reward"] is None
+        assert run["invalid"] is None and run["reward"] == 0
+        assert run["score"]["handover_missing"] == 1
     stalled = SIM.simulate("handoff", "team", 0, {"s1": "stall"}, SEED, 4, difficulty="canary")
     assert stalled["invalid"] and stalled["stalled"] and stalled["reward"] is None
     task = task_for(FAMILY.generate(SEED, 0, 3, "canary"), "team", "canary")
     complete = SIM.simulate("handoff", "team", 0, "careful", SEED, 4, difficulty="canary")["events"]
     missing = next(e for e in complete if e["kind"] == "delivered")
     assert EXT.score(task, [e for e in complete if e is not missing]) == {"invalid": "desk reply lacks a delivery receipt"}
+
+
+def test_handoff_live_deadline_scores_unfinished_work(tmp_path, start_world):
+    task, world = start_desk(tmp_path, start_world)
+    assert world.seat("s1", "GET", "/desk")[0] == 200
+    assert world.request("POST", "/admin/freeze", token=world.admin, body={})[0] == 200
+    events = world.events()
+    outcome = next(e["data"]["result"] for e in events if e["kind"] == "deadline_score")
+    assert outcome == EXT.score(task, events)
+    assert outcome["reward"] == 0 and outcome["handover_missing"] == 1
+    assert outcome["handover_missing_cause"] == "deadline"
 
 
 def test_handoff_canary_qa(tmp_path):

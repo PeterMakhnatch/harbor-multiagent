@@ -4,9 +4,14 @@ import hashlib
 
 
 def supports(name, variant):
-    return name in ("careful", "naive", "lone", "blind", "reverse", "colon", "slash", "lines", "ref-first",
-                    "json", "arrow", "ref-eq", "cleared", "paren", "exhaust", "stall",
+    return name in ("careful", "naive", *NO_NOTE, "reverse", "colon", "slash", "lines", "ref-first",
+                    "json", "arrow", "dash", "ref-colon", "comma", "table", "ref-eq", "cleared", "paren",
+                    "bare-paren", "json-list", "json-unknown", "candidates", "suspect-lots", "possible-bad",
+                    "remaining", "bad-one-of", "ambiguous-pair", "ambiguous-lot", "exhaust", "stall", "extra",
                     "lapse-10", "lapse-20", "lapse-30", "lapse-50")
+
+
+NO_NOTE = ("lone", "blind", "guess", "guess-fixed", "guess-each")
 
 
 
@@ -42,16 +47,22 @@ def feasible_lots(possible, unknown_lots, statuses):
 
 
 def work(name, client, own, memory, family):
+    if name == "extra":
+        for _ in range(3):
+            check(*(yield from client.get("/desk")))
+            status, _ = yield from client.post("/print", {"batch": "unknown"})
+            if status != 409:
+                raise RuntimeError("invalid print was not refused")
     desk = check(*(yield from client.get("/desk")))
     lots = desk["lots"]
     if memory is not None:
         bindings, possible = memory
-    elif name in ("lone", "blind"):
+    elif name in NO_NOTE:
         bindings, possible = {}, set(lots)
     else:
-        bindings, possible = family.parse_note(desk["note"], lots)
+        bindings, possible, _ = family.parse_note(desk["note"], lots)
     local = set(lots)
-    if memory is None and name not in ("lone", "blind"):
+    if memory is None and name not in NO_NOTE:
         record = check(*(yield from client.get("/log")))
         if any(call["shift"] < desk["shift"] for call in record["calls"]):
             bindings, possible = record_state(record["calls"], lots, family)
@@ -80,18 +91,19 @@ def work(name, client, own, memory, family):
             local = family.narrow(local, available[batch], status)
             items.append(settlement(ref, batch, status))
     selected = None
-    if name == "blind" and desk["shift"] == desk["shifts"]:
+    if name == "guess-each" or (name in ("guess", "guess-fixed") and desk["shift"] == desk["shifts"]):
         unknown_refs = sorted(set(inbox) - set(by_ref))
         unknown_batches = sorted(pending - set(bindings))
         salt = ":".join(sorted(fresh.values()) + unknown_refs)
         possible = feasible_lots(possible, [available[b] for b in unknown_batches],
                                  [inbox[r] for r in unknown_refs])
         if possible:
-            selected = shuffled(possible, "ticket:" + salt)[0]
+            selected = min(possible) if name == "guess-fixed" else shuffled(possible, "ticket:" + salt)[0]
             for status in ("returned", "delivered"):
                 refs = [ref for ref in unknown_refs if inbox[ref] == status]
                 eligible = [b for b in unknown_batches if (selected in available[b]) == (status == "returned")]
-                for ref, batch in zip(refs, shuffled(eligible, status + ":" + salt)):
+                ordered = eligible if name == "guess-fixed" else shuffled(eligible, status + ":" + salt)
+                for ref, batch in zip(refs, ordered):
                     items.append(settlement(ref, batch, status))
     if name == "reverse":
         items.reverse()
@@ -100,8 +112,8 @@ def work(name, client, own, memory, family):
         for item in items:
             bindings.pop(item["batch"], None)
     if desk["ticket"] is None:
-        if name == "blind":
-            if selected is not None:
+        if name in ("guess", "guess-fixed", "guess-each"):
+            if selected is not None and desk["shift"] == desk["shifts"]:
                 check(*(yield from client.post("/ticket", {"lot": selected})))
         elif len(possible) == 1:
             check(*(yield from client.post("/ticket", {"lot": next(iter(possible))})))
@@ -114,7 +126,7 @@ def work(name, client, own, memory, family):
         record = check(*(yield from client.get("/log")))
         if any(call["shift"] < desk["shift"] for call in record["calls"]):
             _, suspects = record_state(record["calls"], lots, family)
-    elif name in ("lone", "blind"):
+    elif name in NO_NOTE:
         keep, suspects = {}, set()
     else:
         keep, suspects = bindings, possible

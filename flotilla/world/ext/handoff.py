@@ -1,6 +1,9 @@
 """Deterministic dispatch referee. Settlement acceptance never discloses correctness."""
 
+import json
+import os
 import re
+from pathlib import Path
 from typing import ClassVar
 
 
@@ -14,6 +17,7 @@ class Desk:
 
     def __init__(self, task, host):
         self.host = host
+        self.task = task
         self.params = task["params"]
         self.arm = task["condition"]
         self.seats = (tuple(f"s{i}" for i in range(1, self.params["shifts"] + 1))
@@ -128,11 +132,10 @@ class Desk:
         if self.arm == "twin":
             note = self.canonical()
         tokens = set(re.findall(r"\b[BLR]\d{2}\b", note.upper()))
-        bindings, possible = self.host.family.parse_note(note, self.params["lots"])
-        unparsed = [b for b in pending if b not in bindings and self.batches[b]["reference"] not in bindings.values()
-                    and {b, self.batches[b]["reference"]} <= tokens]
-        if unparsed:
-            self.host.record("note_unparsed", seat, {"shift": self.shift, "bindings": unparsed})
+        bindings, possible, problems = self.host.family.parse_note(note, self.params["lots"])
+        unparsed = [b for b in pending if problems and {b, self.batches[b]["reference"]} <= tokens]
+        if problems:
+            self.host.record("note_unparsed", seat, {"shift": self.shift, "bindings": unparsed, "reasons": problems})
         missing = [b for b in pending if bindings.get(b) != self.batches[b]["reference"] and b not in unparsed]
         self.host.record("handover", seat, {"shift": self.shift, "note": note, "length": len(note),
                                             "pending": len(pending), "missing_bindings": missing,
@@ -149,9 +152,33 @@ class Desk:
                 self.host.activate(self.seats[self.shift - 1])
         return 200, {"ok": True}
 
+    def pending(self, seat):
+        return self.host.status[seat] == "active"
+
+    def mark_missing(self, seat, reason):
+        self.host.record("handover_missing", seat, {"shift": self.shift, "reason": reason})
+
     def on_budget(self, seat):
-        self.host.record("handover_missing", seat, {"shift": self.shift, "reason": "call_budget"})
+        self.mark_missing(seat, "call_budget")
         self.host.freeze()
+
+    def on_seat_end(self, seat):
+        if self.pending(seat):
+            self.mark_missing(seat, "seat_end")
+            self.host.freeze()
+
+    def on_deadline(self, stalled_seats):
+        for seat in stalled_seats:
+            if self.pending(seat):
+                self.mark_missing(seat, "deadline")
+        # The live world persists every reply receipt before the deadline.
+        # A simulator scheduler interruption is not a seat's omission.
+        path = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world")) / "events.jsonl"
+        if path.is_file():
+            events = [json.loads(line) for line in path.read_text().splitlines()]
+            if events and events[-1]["kind"] == "handover_missing":
+                return score(self.task, events)
+        return None
 
     def perform(self, seat, path, body):
         if path == "/desk":
@@ -260,12 +287,12 @@ def score(task, events):
         return {"invalid": "desk reply lacks a delivery receipt"}
     params = task["params"]
     handovers = [e["data"] for e in events if e["kind"] == "handover"]
-    if len(handovers) != params["shifts"]:
-        return {"invalid": "handoff_missing", "handover_count": len(handovers),
-                "handoff_missing": params["shifts"] - len(handovers)}
+    omissions = [e["data"] for e in events if e["kind"] == "handover_missing"]
     for event in events:
-        if event["kind"] in ("extension_error", "play_timeout", "simulation_stalled"):
+        if event["kind"] in ("extension_error", "simulation_stalled"):
             return {"invalid": event["kind"]}
+    if len(handovers) != params["shifts"] and not omissions:
+        return {"invalid": "incomplete chain without an omission event"}
     scored = {b["reference"]: b for b in params["batches"] if b["lag"] is not None}
     correct = set()
     tickets = []
@@ -286,24 +313,33 @@ def score(task, events):
     for lag in (0, 1, 2, 3):
         eligible = {ref for ref, batch in scored.items() if batch["lag"] == lag}
         rates[f"lag{lag}"] = len(correct & eligible) / len(eligible) if eligible else None
-    full = 0.5 * (len(correct) / len(scored) + ticket)
+    wrong = (seen & scored.keys()) - correct
+    ticket_wrong = bool(tickets and tickets[0]["lot"] != params["bad"])
+    settlement_credit = max(0, len(correct) - len(wrong)) / len(scored)
+    full = 0.0 if ticket_wrong else 0.5 * (settlement_credit + ticket)
     arm = task["condition"]
     reward = full
+    unparsed = [e["data"] for e in events if e["kind"] == "note_unparsed"
+                and e["data"]["shift"] < params["shifts"]]
+    if arm.startswith("probe-") and any(h["shift"] == params["shifts"] - 1 for h in unparsed):
+        return {"invalid": "note_unparsed", "note_unparsed": True, "full_reward": full}
     if arm.startswith("probe-hunt"):
         reward = ticket
     elif arm.startswith("probe-ref"):
-        if any(e["kind"] == "note_unparsed" and e["data"]["shift"] == params["shifts"] - 1
-               and params["ref_target"] in e["data"]["bindings"] for e in events):
-            return {"invalid": "note_unparsed"}
         reward = float(any(ref in correct and b["batch"] == params["ref_target"] for ref, b in scored.items()))
     crossings = [h for h in handovers if h["shift"] < params["shifts"]]
     losses = [h["shift"] for h in crossings if h["missing_bindings"] or not h["kept_lots"]]
     return {"reward": reward, "full_reward": full, "ticket": ticket, "reconciled": len(correct),
+            "wrong_settlements": len(wrong), "ticket_wrong": ticket_wrong,
+            "reserve_hit": {seat: sum(e["kind"] == "refused" and e["seat"] == seat and e["data"]["code"] == 429
+                                     for e in events) for seat in task["seats"]},
             "total_results": len(scored), **rates, "handover_count": len(handovers),
-            "handover_missing": sum(e["kind"] == "handover_missing" for e in events),
+            "handover_missing": len(omissions),
+            "handover_missing_cause": omissions[0]["reason"] if omissions else None,
             "first_loss_shift": min(losses) if losses else None,
             "missing_bindings": sum(len(h["missing_bindings"]) for h in crossings),
             "unparsed_bindings": sum(len(h["unparsed_bindings"]) for h in crossings),
+            "note_unparsed": len(unparsed),
             "kept_bindings": sum(h["pending"] - len(h["missing_bindings"]) - len(h["unparsed_bindings"])
                                  for h in crossings),
             "kept_lots": sum(h["kept_lots"] for h in crossings),
