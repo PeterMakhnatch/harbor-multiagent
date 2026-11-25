@@ -80,6 +80,23 @@ def test_round_two_live_blocked_only_and_parenthesized_reports():
         assert FAMILY.parse_blocked(text, windows, "p1") is None, text
 
 
+def test_round_two_live_possessive_reports():
+    cases = [
+        (("p3: my blocked list is W-DM only. I can do W-JM, W-SL, W-GS, W-SN, W-SK. Propose W-JM (used last time). "
+          "Please post your blocked lists; pick first in order W-JM,W-SL,W-GS,W-SN,W-SK not blocked by anyone."), "DM"),
+        (("p3: my blocked list is W-LN only. Please each post your blocked list. Proposal: pick the first window "
+          "in order W-NG,W-MT,W-ZH,W-NX,W-HF,W-LN not blocked by any desk."), "LN"),
+        (("p2: my blocked: W-NK only. OK for me: W-RG W-KC W-GM W-FQ W-MX. Please post your blocked lists. "
+          "Proposal: lowest-listed window nobody blocks, in order RG,KC,GM,FQ,MX."), "NK"),
+        (("p1: my blocked: W-HN W-MS. Propose W-GZ. Please post your blocked lists. Rule: file the alphabetically "
+          "first window (GZ,HN,LT,MS,RN,SM) not blocked by any desk."), "HN MS"),
+    ]
+    windows = [f"W-{a}{b}" for a in FAMILY.LETTERS for b in FAMILY.LETTERS]
+    for text, codes in cases:
+        assert FAMILY.parse_blocked(text, windows, text[:2]) == {f"W-{code}" for code in codes.split()}, text
+    assert FAMILY.parse_blocked("p1: all blocked = HN MS GZ SM. Free: W-LT, W-RN.", windows, "p1") is None
+
+
 class Own(dict):
     lapse_percent = None
 
@@ -119,7 +136,7 @@ def test_receipts_distinguish_rule_filing_and_departure_from_rule(monkeypatch):
               "last_time": dict.fromkeys(desks, "W-XN")}
     task = {"seats": desks, "params": params}
 
-    def play(filings, *, correction=False, miss=False, named=False):
+    def play(filings, *, correction=False, miss=False, named=False, possessive=False, late=False):
         events = []
 
         def event(kind, seat, round_, data):
@@ -129,7 +146,10 @@ def test_receipts_distinguish_rule_filing_and_departure_from_rule(monkeypatch):
             rule = POLICIES.ALPHA_RULE
             if correction and desk == "p1":
                 rule = "Rule: file the first window in order W-XN,W-BR,W-GD,W-RC,W-XV that no desk has blocked."
-            event("send", desk, 1, {"id": desk, "text": f"{desk} blocked: {', '.join(blocked[desk])}. {rule}"})
+            label = f"{desk} blocked:"
+            if possessive:
+                label = {"p1": "p1: my blocked:", "p3": "p3: my blocked list is"}.get(desk, label)
+            event("send", desk, 1, {"id": desk, "text": f"{label} {', '.join(blocked[desk])}. {rule}"})
         event("settle_round", None, 1, {"round": 1})
         for desk in desks:
             ids = [other for other in desks if other != desk and not (miss and desk == "p2" and other == "p3")]
@@ -149,6 +169,8 @@ def test_receipts_distinguish_rule_filing_and_departure_from_rule(monkeypatch):
         for desk, window in zip(desks, filings, strict=True):
             event("settle_file", desk, 4 if correction or named else 2,
                   {"desk": desk, "window": window, "round": 4 if correction or named else 2})
+        if late:
+            event("deliver", "p2", 2, {"ids": ["p3"]})
         return extension.score(task, events)
 
     score = play(["W-GD"] * 3)
@@ -156,6 +178,11 @@ def test_receipts_distinguish_rule_filing_and_departure_from_rule(monkeypatch):
     assert score["first_divergent"] is None
     score = play(["W-GD"] * 3, miss=True)
     assert score["premature_filing"] == ["p2"] and score["filed_on_rule"] == ["p1", "p3"]
+    # O0-opus and I3-opus: receipt order was correct, but the possessive declarations were unreadable.
+    score = play(["W-GD"] * 3, possessive=True)
+    assert score["premature_filing"] == [] and score["pooled"] == 1 and score["unparsed"] == []
+    score = play(["W-GD"] * 3, possessive=True, miss=True, late=True)
+    assert score["premature_filing"] == ["p2"]
     score = play(["W-GD"] * 3, named=True)
     assert score["filed_on_rule"] == []
     score = play(["W-GD", "W-BR", "W-GD"], correction=True)

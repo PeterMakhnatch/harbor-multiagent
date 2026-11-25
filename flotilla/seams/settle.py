@@ -39,8 +39,9 @@ LIST_CODES = rf"{LIST_CODE}(?:(?:\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or)\s+|\s+)
 CORRECTION = r"^\s*(?:(?i:correction|update|updated list)\s*:\s*)?"
 REPORT_PREFIX = rf"{CORRECTION}(?:(?i:p\d+|I|we|my desk|our desk)\s*:?\s*)?"
 REPORT_SUFFIX = r"(?i:(?:\s+(?:only|for (?:me|us|my desk|our desk)))*)\s*"
+BLOCK_LEAD = rf"(?:(?:my|our)\s+)?{BLOCK_WORDS}"
 BLOCK_DECLARATION = (
-    rf"(?i:{BLOCK_WORDS}(?:\s+(?:use|do|these windows|windows|list|for us|for me|only))*)"
+    rf"(?i:{BLOCK_LEAD}(?:\s+(?:use|do|these windows|windows|list|for us|for me|only))*(?:\s+(?:is|are))?)"
     rf"\s*[:=]?\s*(?P<codes>{LIST_CODES}){REPORT_SUFFIX}")
 BLOCK_REPORT = re.compile(rf"{REPORT_PREFIX}{BLOCK_DECLARATION}")
 BLOCK_PAREN = re.compile(
@@ -99,7 +100,7 @@ def parse_blocked(text, windows, sender=None):
         desk = re.match(rf"{CORRECTION}(p\d+)\b", sentence, re.IGNORECASE)
         if sender and desk and desk[1].lower() != sender:
             continue
-        if re.search(r"\b(?:union|overall|common|all lists|full lists)\b", sentence, re.IGNORECASE):
+        if re.search(r"\b(?:union|overall|common|all lists|full lists|all blocked)\b", sentence, re.IGNORECASE):
             aggregate = True
         report = BLOCK_REPORT.fullmatch(sentence) or BLOCK_REVERSE.fullmatch(sentence) or BLOCK_PAREN.fullmatch(sentence)
         if report:
@@ -122,7 +123,7 @@ def tells(text, windows, blocked):
 
 def report_intent(text, windows):
     """An apparent own list declaration with at least one code but unsupported syntax."""
-    prefix = re.compile(rf"{REPORT_PREFIX}(?i:{BLOCK_WORDS}|{FREE_WORDS})")
+    prefix = re.compile(rf"{REPORT_PREFIX}(?i:{BLOCK_LEAD}|{FREE_WORDS})")
     return any(not sentence.endswith("?") and prefix.match(sentence) and mentions(sentence, windows)
                and not re.search(r"\b(?:order|first|last|common|overall|union|everyone|any desk|all desks)\b",
                                  sentence, re.IGNORECASE)
