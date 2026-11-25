@@ -482,12 +482,13 @@ def load_extension() -> None:
     PUSH_SEATS = SEATS if PUSH else []
     EXTENSION = module.create(task, HOST)
     for route, methods in EXTENSION.routes.items():
-        if (not route.startswith("/") or route.startswith("/admin/") or route in ROUTES
+        if (not route.startswith("/") or route.startswith("/admin/") or route in ROUTES or route == "/await"
                 or "?" in route or not methods or not set(methods) <= {"GET", "POST"}):
             raise ValueError(f"invalid extension route {route}")
         EXTENSION_ROUTES[route] = tuple(methods)
     del ROUTES["/submit"]
     ROUTES.update(EXTENSION_ROUTES)
+    ROUTES["/await"] = ("GET",)
     STATE["extension"] = {"name": name}
 
 
@@ -1018,7 +1019,7 @@ class World(BaseHTTPRequestHandler):
         if method not in methods:
             self._probe(seat, method, path, 405)
             return
-        if HOST is not None and seat != "admin" and path != "/whoami":
+        if HOST is not None and seat != "admin" and path not in ("/whoami", "/await"):
             with LOCK:
                 if STATE["frozen"] or HOST.status[seat] != "active":
                     record("late" if STATE["frozen"] else "inactive", seat, {"path": path})
@@ -1046,6 +1047,8 @@ class World(BaseHTTPRequestHandler):
                 self._reply(200, view)
             elif path == "/wait":
                 self._wait(seat)
+            elif path == "/await":
+                self._await(seat)
             else:  # /admin/state
                 with LOCK:
                     record("state", seat)
@@ -1317,6 +1320,42 @@ class World(BaseHTTPRequestHandler):
             self._deliver_reply(status, reply, seat, "gate")
         else:
             self._reply(status, reply)
+
+    def _await(self, seat: str) -> None:
+        query = parse_qs(urlsplit(self.path).query)
+        until, after = query.get("until", ["active"]), query.get("after", ["0"])
+        if (len(until) != 1 or until[0] not in ("active", "message", "tick")
+                or len(after) != 1 or not after[0].isdigit() or len(after[0]) > 12):
+            self._invalid(seat, "GET", "/await", 400, "bad wait", "use until=active|message|tick and after=N")
+            return
+        self._await_wait(seat, until[0], int(after[0]), time.monotonic() + WAIT_SECONDS)
+
+    def _await_poll(self, seat: str, until: str, after: int, deadline: float) -> bool:
+        with LOCK:
+            expire()
+            if STATE["frozen"]:
+                reason = "frozen"
+            elif HOST.status[seat] == "retired":
+                reason = "retired"
+            elif until == "active" and HOST.status[seat] == "active":
+                reason = "active"
+            elif until == "tick" and HOST.tick > after:
+                reason = "tick"
+            elif until == "message" and _unread(seat):
+                reason = "message"
+            elif time.monotonic() >= deadline:
+                reason = "timeout"
+            else:
+                return False
+            record("await", seat, {"until": until, "after": after, "reason": reason})
+            view = {"active": HOST.status[seat], "tick": HOST.tick, "frozen": STATE["frozen"], "reason": reason}
+            self._reply(200, view)
+            return True
+
+    def _await_wait(self, seat: str, until: str, after: int, deadline: float) -> None:
+        while not self._await_poll(seat, until, after, deadline):
+            time.sleep(0.05)
+
 
     def _wait(self, seat: str) -> None:
         query = parse_qs(urlsplit(self.path).query).get("round", [""])[0]

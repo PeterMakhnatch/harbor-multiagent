@@ -168,7 +168,7 @@ def http_request(request: Request) -> Reply:
     wire = urllib.request.Request(os.environ.get("WORLD_URL", "http://world:8080") + request.path,
                                   data=data, method=request.method, headers=headers)
     try:
-        with urllib.request.urlopen(wire, timeout=15) as response:
+        with urllib.request.urlopen(wire, timeout=75 if request.path.startswith("/await?") else 15) as response:
             return response.status, json.load(response)
     except urllib.error.HTTPError as exc:
         with exc:

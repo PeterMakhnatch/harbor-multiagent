@@ -76,6 +76,11 @@ def memory_handler(world: Any) -> type:
             self.client_address = ("127.0.0.2", 0)
             self.close_connection = False
             self.response = None
+            self.pending_await = None
+
+        def _await_wait(self, seat, until, after, deadline):
+            if not self._await_poll(seat, until, after, deadline):
+                self.pending_await = (seat, until, after, deadline)
 
         def _write(self, status: int, data: bytes, content_type: str, headers: dict | None = None) -> bool:
             self.response = (status, json.loads(data) if content_type == "application/json" else data.decode())
@@ -101,6 +106,7 @@ class Simulation:
         self.handler = memory_handler(world)
         self.tokens = {seat: token for token, seat in world.TOKENS.items()} | {"admin": world.ADMIN}
         self.requests = dict.fromkeys(world.SEATS, 0)
+        self.parked: dict[str, Any] = {}
         world.start_world()
 
     def record(self, event: dict[str, Any]) -> None:
@@ -113,12 +119,17 @@ class Simulation:
             raise AssertionError("invalid event shape")
         self.events.append(json.loads(json.dumps(event, sort_keys=True, allow_nan=False)))
 
-    def request(self, seat: str, request: Any) -> tuple[int, Any]:
+    def request(self, seat: str, request: Any) -> tuple[int, Any] | None:
         self.clock.step()
         frozen = self.world.STATE["frozen"]
         accepted = len(self.world.STATE["submissions"])
         handler = self.handler(self.tokens[seat], request)
         handler._handle(request.method)
+        if seat != "admin":
+            self.requests[seat] += 1
+        if handler.pending_await is not None:
+            self.parked[seat] = handler
+            return None
         if handler.response is None:
             raise AssertionError(f"no reply to {request.method} {request.path}")
         status, reply = handler.response
@@ -128,20 +139,24 @@ class Simulation:
             raise AssertionError("world accepted a move after freeze")
         if frozen and len(self.world.STATE["submissions"]) != accepted:
             raise AssertionError("world recorded a late submission")
-        if seat != "admin":
-            self.requests[seat] += 1
         return status, reply
 
     def run(self, policies: dict[str, Any]) -> None:
         ready_at = dict.fromkeys(policies, 0.0)
         replies = dict.fromkeys(policies)
         for _ in range(MAX_STEPS):
-            if not ready_at:
+            for seat, handler in list(self.parked.items()):
+                if handler._await_poll(*handler.pending_await):
+                    replies[seat] = handler.response
+                    ready_at[seat] = self.clock.value
+                    del self.parked[seat]
+            if not ready_at and not self.parked:
                 return
             ready = sorted(s for s, at in ready_at.items() if at <= self.clock.value)
             if not ready:
-                self.clock.value = min(ready_at.values())
-                ready = sorted(s for s, at in ready_at.items() if at <= self.clock.value)
+                deadlines = [handler.pending_await[-1] for handler in self.parked.values()]
+                self.clock.value = min([*ready_at.values(), *deadlines])
+                continue
             seat = self.random.choice(ready)
             try:
                 step = policies[seat].send(replies[seat])
@@ -150,6 +165,8 @@ class Simulation:
                 continue
             if isinstance(step, POLICY.Request):
                 replies[seat] = self.request(seat, step)
+                if seat in self.parked:
+                    del ready_at[seat]
             elif isinstance(step, POLICY.Sleep):
                 replies[seat] = None
                 ready_at[seat] = self.clock.value + step.seconds
