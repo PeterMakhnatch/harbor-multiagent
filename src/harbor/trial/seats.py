@@ -4,8 +4,8 @@ A multi-agent task is an ordinary single-environment task whose Compose file
 has a service per agent, each named by an ``[agents.<service>]`` table in
 task.toml. We call that service the agent's seat. The trial starts the project
 as any Compose task, installs every participant's agent into its seat at once,
-starts them together under the task's agent timeout, and ends play when every
-agent under test has ended. It then collects every seat alike, gives ``main``
+and starts them together or according to their start_after dependencies.
+It then collects every seat alike, gives ``main``
 the seats' logs at /logs/seats, and runs the shared verifier once with every
 container still up.
 """
@@ -293,12 +293,16 @@ class SeatsTrial(SingleStepTrial):
         await self._stop_agent_environment()
 
     async def _play(self) -> None:
-        """Start every seat at once. Play ends when every agent under test has
-        ended or the agent timeout ([agent] timeout_sec) runs out; the runs
-        still going are then cancelled, as Trial cancels a single agent at its
-        timeout. Nothing in the containers is killed, and they stay up. A seat
-        error other than its agent exiting non-zero aborts play and fails the
-        trial, as it fails a single-agent trial."""
+        """Use staged execution only when the task declares dependencies.
+
+        Otherwise start every seat at once and stop when the agents under test
+        finish or the shared timeout expires. Other than a non-zero exit, a
+        seat error aborts concurrent play.
+        """
+        if any(config.start_after for config in self.task.config.agents.values()):
+            await self._play_staged()
+            return
+
         timeout_sec = self._agent_timeout_sec
         async with _seat_tasks() as group:
             tasks = {
@@ -321,26 +325,49 @@ class SeatsTrial(SingleStepTrial):
                     )
                 tasks[seat.name].cancel()
 
-    async def _play_seat(self, seat: Seat) -> None:
-        """Mirrors Trial._run_agent_phase for one seat, without a timeout of
-        its own."""
+    async def _play_staged(self) -> None:
+        """Wait for all seats, including supporting agents, in dependency order."""
+        finished = {seat.name: asyncio.Event() for seat in self.seats}
+        async with _seat_tasks() as group:
+            for seat in self.seats:
+                group.create_task(self._play_staged_seat(seat, finished))
+
+    async def _play_staged_seat(
+        self, seat: Seat, finished: dict[str, asyncio.Event]
+    ) -> None:
+        for predecessor in self.task.config.agents[seat.name].start_after:
+            await finished[predecessor].wait()
+        try:
+            await self._play_seat(seat, staged=True)
+        finally:
+            finished[seat.name].set()
+
+    async def _play_seat(self, seat: Seat, *, staged: bool = False) -> None:
+        """Run one seat, applying its own timeout only for staged trials."""
         context = AgentContext()
         execution = TimingInfo(started_at=self._now())
         seat.result.agent_result = context
         seat.result.agent_execution = execution
+        deadline = asyncio.timeout(self._agent_timeout_sec if staged else None)
         try:
-            with seat.environment.scoped_exec_env(seat.agent.extra_env):
-                with self._log_context("agent", seat.environment):
-                    await seat.agent.run(
-                        instruction=seat.instruction,
-                        environment=seat.environment,
-                        context=context,
-                    )
+            async with deadline:
+                with seat.environment.scoped_exec_env(seat.agent.extra_env):
+                    with self._log_context("agent", seat.environment):
+                        await seat.agent.run(
+                            instruction=seat.instruction,
+                            environment=seat.environment,
+                            context=context,
+                        )
         except NonZeroAgentExitCodeError as exc:
             seat.result.exception_info = ExceptionInfo.from_exception(exc)
         except Exception as exc:
+            if isinstance(exc, TimeoutError) and deadline.expired():
+                exc = AgentTimeoutError(
+                    f"Agent execution timed out after {self._agent_timeout_sec} seconds"
+                )
             seat.result.exception_info = ExceptionInfo.from_exception(exc)
-            raise
+            if not staged:
+                raise
         finally:
             execution.finished_at = self._now()
 
