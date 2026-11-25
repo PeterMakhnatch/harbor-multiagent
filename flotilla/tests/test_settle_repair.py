@@ -64,9 +64,11 @@ def test_scripted_desk_holds_and_replaces_reports():
     assert "p1" in question and "?" in question and filing is None
     hear("p1", "p1 blocked: W-QV, W-GD.", 1)
     assert desk.target() == "W-XN"
-    hear("p1", "p1: blocked W-QV only. Rule: use the first window in order W-XN,W-BR,W-GD,W-RC,W-XV that no desk has blocked.", 2)
+    hear("p1", "Correction: p1 blocked W-QV only. Rule: use the first window in order W-XN,W-BR,W-GD,W-RC,W-XV that no desk has blocked.", 2)
     assert desk.lists["p1"] == {"W-QV"}
     assert desk.decide(4) == (None, "W-GD")
+    hear("p1", "OK W-GD.", 2)
+    assert desk.lists["p1"] == {"W-QV"}
     assert not desk.allowed("W-BR")
     hear("p1", "p1 blocked: W-GD,W-QV,W-XN.", 3)
     assert desk.decide(4)[1] is None
@@ -124,6 +126,9 @@ def test_receipts_distinguish_rule_filing_and_departure_from_rule(monkeypatch):
     score = play(["W-GD", "W-BR", "W-GD"], correction=True)
     assert score["reward"] == 0 and score["first_divergent"] == "p2" and score["premature_filing"] == []
     assert score["unparsed"] == []
+    score = play(["W-GD", "W-BR", "W-GD"], correction=True, miss=True)
+    assert score["shape"] == "unpooled" and score["premature_filing"] == ["p2"]
+    assert score["first_divergent"] is None
 
 
 def test_private_order_pair_has_distinct_firsts_and_only_one_visible_clause(monkeypatch):

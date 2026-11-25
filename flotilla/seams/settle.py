@@ -33,16 +33,17 @@ LETTERS = "BCDFGHJKLMNQRSTVXZ"  # no vowels: a code never reads as a word, and t
 EXAMPLE = "W-AA"
 BLOCK_WORDS = (r"\b(?:block\w*|cannot|can't|can not|cant|unavailable|not available|not free|not open|unable|"
                r"off[- ]limits|excluded?|forbidden|closed|ruled out|no[- ]go)\b")
-FREE_WORDS = r"\b(?:free|can|ok|okay|open|available|usable|works?|fine|possible)\b"
+FREE_WORDS = r"\b(?:free|can use|open|available|usable|possible)\b"
 LIST_CODE = r"(?:[Ww][-_ ]?[A-Za-z]{2}|[A-Z]{2})"
-LIST_CODES = rf"{LIST_CODE}(?:(?:\s*,\s*|\s+(?:and|or)\s+|\s+){LIST_CODE})*"
-REPORT_PREFIX = r"^\s*(?:(?i:p\d+|I|we|my desk|our desk)\s*:?\s*)?"
+LIST_CODES = rf"{LIST_CODE}(?:(?:\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or)\s+|\s+){LIST_CODE})*"
+CORRECTION = r"^\s*(?:(?i:correction|update|updated list)\s*:\s*)?"
+REPORT_PREFIX = rf"{CORRECTION}(?:(?i:p\d+|I|we|my desk|our desk)\s*:?\s*)?"
 REPORT_SUFFIX = r"(?i:(?:\s+(?:only|for (?:me|us|my desk|our desk)))*)\s*$"
 BLOCK_REPORT = re.compile(
     rf"{REPORT_PREFIX}(?i:{BLOCK_WORDS})(?:\s+(?:use|do|these windows|windows|list|for us|for me))*"
     rf"\s*[:=]?\s*(?P<codes>{LIST_CODES}){REPORT_SUFFIX}")
 BLOCK_REVERSE = re.compile(
-    rf"^\s*(?P<codes>{LIST_CODES})\s+(?i:(?:are\s+)?{BLOCK_WORDS}){REPORT_SUFFIX}")
+    rf"{CORRECTION}(?P<codes>{LIST_CODES})\s+(?i:(?:(?:are|is)\s+)?{BLOCK_WORDS}){REPORT_SUFFIX}")
 FREE_REPORT = re.compile(
     rf"{REPORT_PREFIX}(?i:(?:are\s+)?{FREE_WORDS})(?:\s+(?:use|on|these windows|windows))*"
     rf"\s*[:=]?\s*(?P<codes>{LIST_CODES}){REPORT_SUFFIX}")
@@ -91,7 +92,7 @@ def parse_blocked(text, windows, sender=None):
     for sentence in re.findall(r"[^.;!?\n]+[?]?", text):
         if sentence.endswith("?"):
             continue
-        desk = re.match(r"\s*(p\d+)\b", sentence, re.IGNORECASE)
+        desk = re.match(rf"{CORRECTION}(p\d+)\b", sentence, re.IGNORECASE)
         if sender and desk and desk[1].lower() != sender:
             continue
         if re.search(r"\b(?:union|overall|common|all lists|full lists)\b", sentence, re.IGNORECASE):
@@ -118,22 +119,21 @@ def tells(text, windows, blocked):
 def report_intent(text, windows):
     """An apparent own list declaration with at least one code but unsupported syntax."""
     prefix = re.compile(rf"{REPORT_PREFIX}(?i:{BLOCK_WORDS}|{FREE_WORDS})")
-    return any(prefix.match(sentence) and mentions(sentence, windows)
+    return any(not sentence.endswith("?") and prefix.match(sentence) and mentions(sentence, windows)
                and not re.search(r"\b(?:order|first|last|common|overall|union|everyone|any desk|all desks)\b",
                                  sentence, re.IGNORECASE)
-               for sentence in sentences(text))
+               for sentence in re.findall(r"[^.;!?\n]+[?]?", text))
 
 
 def proposed_rule(text):
     """Recognize the order rules seen in play, not messages that merely name a window."""
     for sentence in reversed(sentences(text)):
         lower = sentence.lower()
-        if not re.search(r"\b(?:rule|first|last|lowest|order)\b", lower):
-            continue
-        if re.search(r"alphabet|lexicograph", lower):
-            return "alpha-last" if re.search(r"\blast\b", lower) else "alpha"
+        if re.search(r"alphabet|lexicograph", lower) and re.search(
+                r"\b(?:rule|first|last|order|smallest|earliest|lowest|minimum|largest|highest|maximum)\b", lower):
+            return "alpha-last" if re.search(r"\b(?:last|largest|highest|maximum)\b", lower) else "alpha"
         if re.search(r"\b(?:first|order)\b", lower) and re.search(r"\b(?:list|order|sheet)\b", lower):
-            return "list-order"
+            return "desk-order" if re.search(r"\bp\d+'s\b", lower) else "list-order"
         if "last-time window of the lowest desk" in lower:
             return "lowest-last"
     return None
@@ -142,12 +142,12 @@ def proposed_rule(text):
 def choices(text, windows):
     """Windows named as a choice, not merely in a report or background note."""
     found = []
-    for sentence in sentences(text):
+    for sentence in re.findall(r"[^.;!?\n]+[?]?", text):
         codes = mentions(sentence, windows)
-        if (len(codes) == 1 and codes[0] not in found
+        if (not sentence.endswith("?") and len(codes) == 1 and codes[0] not in found
                 and re.search(r"\b(?:propos\w*|pick|choos\w*|file\w*|take|confirm\w*|agree\w*|first|keep|prefer|select\w*)\b",
                               sentence, re.IGNORECASE)
-                and not re.search(BLOCK_WORDS, sentence, re.IGNORECASE)):
+                and not report_intent(sentence, windows)):
             found.append(codes[0])
     return found
 

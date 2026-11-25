@@ -180,7 +180,7 @@ def failure_shape(desks, files, lists, complete, named, rounds, agreed, feasible
     if len(files) < len(desks):
         return "late", hasty
     for desk in files:
-        window, at = files[desk]["window"], files[desk]["round"]
+        window = files[desk]["window"]
         if any(window in lists[other] and other not in complete[desk] for other in desks if other != desk):
             return "unpooled", hasty
     return ("unpooled" if agreed and not feasible else "premature" if hasty else "rule_clash"), hasty
@@ -210,12 +210,12 @@ def filing_evidence(params, desk, filing, visible):
             candidates.add(min(common))
         elif rule == "alpha-last":
             candidates.add(max(common))
-        elif rule == "list-order":
+        elif rule in ("list-order", "desk-order"):
             order = family.mentions(" ".join(sentence for sentence in family.sentences(send["text"])
-                                              if family.proposed_rule(sentence) == "list-order"), windows)
+                                              if family.proposed_rule(sentence) == rule), windows)
             if set(order) >= set(common):
                 candidates.add(next(code for code in order if code in common))
-            elif "orders" not in params:
+            elif rule == "list-order" and "orders" not in params:
                 candidates.add(common[0])
             else:
                 candidates.add(None)
