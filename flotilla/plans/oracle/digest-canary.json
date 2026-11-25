@@ -1,32 +1,32 @@
 {
-  "name": "digest-rehearsal",
+  "name": "digest-rehearsal-v2",
   "prereg": {
-    "commit": "099cc9a189556d96a64f6f616babf7a2113fce9b",
+    "commit": "df3c3fb9f3dfc114d7586bf198084156946d1b6f",
     "doc": "flotilla/docs/seams/digest.md",
     "section": "## Local oracle rehearsal preregistration"
   },
   "task_sets": [
     {
-      "tasks_dir": "/tmp/seams1125/b-digest/tasks-careful",
-      "manifest": "/tmp/seams1125/b-digest/tasks-careful/manifest.json",
+      "tasks_dir": "/tmp/seams1125/b2-digest/tasks-careful",
+      "manifest": "/tmp/seams1125/b2-digest/tasks-careful/manifest.json",
       "instances": [0],
-      "arms": ["team"]
+      "arms": ["team", "team-fullrecord"]
     },
     {
-      "tasks_dir": "/tmp/seams1125/b-digest/tasks-careful",
-      "manifest": "/tmp/seams1125/b-digest/tasks-careful/manifest.json",
+      "tasks_dir": "/tmp/seams1125/b2-digest/tasks-careful",
+      "manifest": "/tmp/seams1125/b2-digest/tasks-careful/manifest.json",
       "instances": [0],
       "arms": ["probe-writer-trap", "probe-writer-control"]
     },
     {
-      "tasks_dir": "/tmp/seams1125/b-digest/tasks-naive",
-      "manifest": "/tmp/seams1125/b-digest/tasks-naive/manifest.json",
+      "tasks_dir": "/tmp/seams1125/b2-digest/tasks-naive",
+      "manifest": "/tmp/seams1125/b2-digest/tasks-naive/manifest.json",
       "instances": [0],
-      "arms": ["team"]
+      "arms": ["team", "team-fullrecord"]
     },
     {
-      "tasks_dir": "/tmp/seams1125/b-digest/tasks-naive",
-      "manifest": "/tmp/seams1125/b-digest/tasks-naive/manifest.json",
+      "tasks_dir": "/tmp/seams1125/b2-digest/tasks-naive",
+      "manifest": "/tmp/seams1125/b2-digest/tasks-naive/manifest.json",
       "instances": [0],
       "arms": ["probe-writer-trap", "probe-writer-control"]
     }
@@ -34,7 +34,7 @@
   "agent": "oracle",
   "models": [null],
   "make_jobs": {
-    "max_turns": 15,
+    "max_turns": 80,
     "env": "docker",
     "concurrency": 1,
     "start_spacing_s": 0.0

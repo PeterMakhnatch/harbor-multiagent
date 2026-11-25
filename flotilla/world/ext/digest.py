@@ -22,6 +22,28 @@ class Digest:
         self.notes = {}
         self.history = []
         self.work_seen = set()
+        self.sealed = {}
+
+    def pending(self, seat):
+        return self.host.status[seat] == "active" and (
+            not self.done(seat) or (seat != self.seats[-1] and seat not in self.sealed))
+
+    def on_budget(self, seat):
+        if self.pending(seat):
+            self.host.record("shift_omission", seat, {"reason": "call_budget"})
+            self.host.freeze()
+
+    def on_seat_end(self, seat):
+        if self.pending(seat):
+            self.host.record("shift_omission", seat, {"reason": "seat_end"})
+            self.host.freeze()
+
+    def on_retired_call(self, seat, method, path, body, query):
+        if method == "POST" and path == "/note/seal" and seat in self.sealed:
+            text, reply = self.sealed[seat]
+            if body == {"text": text}:
+                return 201, reply
+        return None
 
     def done(self, seat):
         return len(self.actions[seat]) == len(self.rows[seat])
@@ -108,6 +130,7 @@ class Digest:
             return 413, size
         if not self.done(seat):
             return 409, {"error": "finish your jobs before sealing"}
+        self.sealed[seat] = (text, size)
         self.handover(seat, text, size)
         return 201, size
 
@@ -156,6 +179,7 @@ def score(task, events):
             copies += data["copy_forward"]
     accuracy, totals, correct = {}, Counter(), Counter()
     omissions = extras = 0
+    unfinished = {}
     final = task["seats"][-1]
     for seat, rows in task["params"]["batches"].items():
         good = 0
@@ -170,6 +194,7 @@ def score(task, events):
                 omissions += bool(missing)
                 extras += len(set(before) - set(row["checks"]))
         accuracy[seat] = good / len(rows) if rows else None
+        unfinished[seat] = sum((seat, row["job"]["id"]) not in moves for row in rows)
     cells = {cell: correct[cell] / total for cell, total in totals.items()}
     depths = {depth: sum(v for c, v in cells.items() if c.endswith(f".{depth}")) /
               sum(c.endswith(f".{depth}") for c in cells) for depth in range(4)
@@ -181,5 +206,6 @@ def score(task, events):
     return {"reward": sum(cells.values()) / len(cells), "exact": all(v == 1 for v in cells.values()),
             "cells": cells, "depth_accuracy": depths, "rule_survival": rules, "check_omissions": omissions,
             "extra_checks": extras, "notes_fraction": note_sizes, "handover_missing": missing,
+            "unfinished_jobs": unfinished,
             "unparsed": sum(bool(e["data"].get("bad_lines")) for e in events if e["kind"] == "note_seal"),
             "copy_forward": copies, "shift_accuracy": accuracy, "job_accuracy": accuracy[final]}

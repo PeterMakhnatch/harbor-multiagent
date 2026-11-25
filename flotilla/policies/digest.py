@@ -29,8 +29,7 @@ def decode(family, own, reply, name):
             home, rules = family.parse_note(text, own.get("format") == "card")
         except (ValueError, IndexError, KeyError, AttributeError, TypeError):
             home, rules = {}, []
-    if "amendment" in own and name not in ("copy", "append", "naive") or (
-            "amendment" in own and own.get("fullrecord")):
+    if "amendment" in own and (name not in ("copy", "append", "naive") or own.get("fullrecord")):
         _, amendments = family.parse_manual(own["amendment"])
         rules = family.merge_amendments(rules, amendments)
     return home, rules
@@ -126,11 +125,10 @@ def play(name, client, own, family):
         actions = []
         for job in reply["jobs"]:
             active_rules = rules
-            if own["role"] == "worker" and "manual" not in own and not own.get("fullrecord") and not own.get("format"):
-                if count >= 12 and name in ("naive", "naive_reader"):
-                    active_rules = main_only(rules)
-                elif count >= 12 and own.lapse_percent is not None and own.lapse(own.lapse_percent, ["read", job["id"]]):
-                    active_rules = main_only(rules)
+            if (own["role"] == "worker" and "manual" not in own and not own.get("fullrecord")
+                    and not own.get("format") and count >= 12 and (name in ("naive", "naive_reader") or (
+                        own.lapse_percent is not None and own.lapse(own.lapse_percent, ["read", job["id"]])))):
+                active_rules = main_only(rules)
             actions.append((yield from solve_job(family, client, job, home, active_rules, name)))
             count += 1
         status, _ = yield from client.post("/act", {"actions": actions})

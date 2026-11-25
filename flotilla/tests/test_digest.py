@@ -104,6 +104,7 @@ def test_simulation_sweep(dose, tmp_path):
                     assert SIM.simulate_built(path, {task["seats"][-1]: f"constant-{outcome}"}, 0)["reward"] <= .2 + 1e-9
                 result = SIM.simulate_built(path, {task["seats"][0]: "nop"}, 0)
                 assert result["reward"] == 0 and result["score"]["handover_missing"]
+                assert any(e["kind"] == "shift_omission" for e in result["events"])
 
 
 def test_qa_canary(tmp_path):
@@ -132,7 +133,6 @@ def test_partial_card_and_ascii(tmp_path, start_world):
     task = json.loads(task_file.read_text())
     world = start_world("probe-writer-trap", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task_file))
     world.ordered = True
-    assert world.seat("p2", "GET", "/work")[0] == 409
     limit = task["params"]["cap"]
     assert world.seat("p1", "POST", "/note/check", {"text": "é"})[0] == 400
     assert world.seat("p1", "POST", "/note/seal", {"text": "a" * (limit + 1)})[0] == 413
@@ -145,6 +145,9 @@ def test_partial_card_and_ascii(tmp_path, start_world):
     rows = {r["job"]["id"]: r for r in task["params"]["batches"]["p1"]}
     act_page(world, "p1", page, rows)
     assert world.seat("p1", "POST", "/note/seal", {"text": text})[0] == 201
+    assert world.seat("p1", "POST", "/note/seal", {"text": text})[0] == 201
+    assert world.seat("p1", "POST", "/note/seal", {"text": text + "x"})[0] == 409
+    assert sum(e["kind"] == "note_seal" for e in world.events()) == 1
     assert world.seat("p1", "GET", "/work")[0] == 409
     _, page = world.seat("p2", "GET", "/work")
     assert page["note"] == text and world.events()[-1]["kind"] == "delivered"
@@ -194,6 +197,7 @@ def test_play_deadline_is_invalid(tmp_path, start_world):
     world = start_world("team", tuple(task["seats"]), FLOTILLA_TASK_JSON=str(task_file),
                         FLOTILLA_WAIT_SECONDS="1", FLOTILLA_PLAY_SECONDS="0.1")
     world.ordered = True
-    status, reply = world.seat("p2", "GET", "/await?until=active")
+    status, reply = world.seat("p1", "GET", "/await?until=tick&after=0")
     assert status == 200 and reply["reason"] == "frozen"
-    assert SIM.SCORE.extension_score(task, world.events(), env) == {"invalid": "play_timeout"}
+    result = SIM.SCORE.extension_score(task, world.events(), env)
+    assert result["invalid"] == "play_timeout" and "p1" in result["stalled_seats"]

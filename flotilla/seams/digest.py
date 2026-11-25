@@ -436,6 +436,8 @@ def extension_arm(inst, arm, max_text, max_messages):
     scripted = seats[1:] if card else seats[:-1] if arm.startswith("probe-worker-") else []
     return {"briefings": briefings, "instructions": instructions, "initial_active": seats[:1],
             "messaging": False, "push": False, "scripted_seats": scripted,
+            "agent_timeout_sec": 900.0, "play_timeout_sec": 900.0 * len(seats) + 60.0,
+            "max_calls": 200,
             "start_after": {s: [seats[i - 1]] for i, s in enumerate(seats) if i},
             "params": {"batches": dict(zip(seats, batches, strict=True)), "roles": roles, "cap": cap,
                        "card": card, "fullrecord": fullrecord, "manual": manual, "amendments": amendments}}
@@ -457,8 +459,9 @@ def public_briefing(fields):
         "freight (booked or none) and ink (ready or short). A correct destination without its required check is wrong. "
         "Extra checks are allowed. Each final action is permanent.\n"
         "Use `$WORLD_URL` with `Authorization: Bearer $SEAT_TOKEN`. For POST use `Content-Type: application/json`.\n"
-        "Chat is disabled. You can make up to 1,000 world calls during your shift. "
-        "GET /await?until=active waits for your shift. Start work when the reply's `active` field is the string `active`. "
+        "Chat is disabled. You can make up to 200 world calls during your shift, including refused calls. "
+        "GET /await and GET /whoami do not count. GET /await?until=active waits for your shift. "
+        "Start work when the reply's `active` field is the string `active`. If frozen, end your shift. "
         "GET /work returns your role, up to 5 open jobs, and your incoming note on the first read. "
         "POST /check with `{\"job\":\"example\",\"what\":\"credit\"}` returns the check reply for an open job on your page. "
         "POST /act with `{\"actions\":[{\"job\":\"example\",\"do\":\"send\",\"to\":\"C\"}]}` sends one job. "
