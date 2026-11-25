@@ -41,6 +41,8 @@ NEGATIVE = re.compile(r"\b(?:cleared|ok|good|ruled\s+out|not|excluded|fine|passe
 POSITIVE = re.compile(r"\b(?:suspects?|possible|candidates?|remaining|bad)\b", re.IGNORECASE)
 LOT_RUN = re.compile(r"\bL\d{2}\b(?:[\s,/+]+\d{2}\b)*", re.IGNORECASE)
 OMITTED_PREFIX = re.compile(r"L prefixes omitted[^:]*:\s*(\d{2}(?:[\s,]+\d{2}\b)*)", re.IGNORECASE)
+PREFIX_DECLARED = re.compile(r"\bL[- ]?prefix", re.IGNORECASE)
+BARE_RUN = re.compile(r"(?<![A-Za-z\d])\d{2}(?:[\s,]+\d{2}(?!\d))+")
 POINTER = re.compile(r"\bbad(?:\s+lot)?\s*(?:(?:is\s+)?(?:in|one of)\s+|=\s*)B\d{2}\b", re.IGNORECASE)
 
 
@@ -99,12 +101,16 @@ def read_bindings(note, open_batches=None):
     return dict(sorted(pairs - conflicts)), conflicts
 
 
-def lot_tokens(text):
+def lot_tokens(text, bare=False):
+    """Lot IDs in a text. With `bare`, the note declared its L prefix once ("(L prefix): 01 04 06")."""
     values = set()
     for match in LOT_RUN.finditer(text):
         values.update("L" + number for number in re.findall(r"\d{2}", match.group()))
     for match in OMITTED_PREFIX.finditer(text):
         values.update("L" + number for number in re.findall(r"\d{2}", match.group(1)))
+    if bare:
+        for match in BARE_RUN.finditer(text):
+            values.update("L" + number for number in re.findall(r"\d{2}", match.group()))
     return values
 
 
@@ -115,7 +121,7 @@ def read_lots(note, lots):
         payload = note
     suspects, cleared, problems = set(), set(), set()
     for clause in lot_clauses(payload):
-        values = lot_tokens(clause) & set(lots)
+        values = lot_tokens(clause, bare=bool(PREFIX_DECLARED.search(str(note)))) & set(lots)
         if not values:
             continue
         markers = re.sub(r"\b[BR]\d{2}\s+(?:ok|good|cleared|fine|passed)\b", "", clause, flags=re.IGNORECASE)

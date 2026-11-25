@@ -434,3 +434,13 @@ def test_handoff_canary_qa(tmp_path):
     findings, tasks = QA.check(paths)
     assert len(tasks) == len(FAMILY.ARMS)
     assert not [f for f in findings if f.level == "FAIL"]
+
+
+def test_handoff_reads_bare_lot_numbers_under_a_declared_prefix():
+    """Live notes: "Bad lot is one of: 00 08 15 ... (L-prefix)" lists lots; it kept them and was scored as a loss."""
+    lots = [f"L{i:02d}" for i in range(100)]
+    note = "S1: refs R50=B23, R81=B34 (open). Bad lot is one of: 00 08 15 22 (L-prefix). No ticket yet."
+    assert FAMILY.read_lots(note, lots) == ({"L00", "L08", "L15", "L22"}, [])
+    note = "Open refs R74=B72 R75=B56. Candidates (L prefix): 01 04 06. No ticket."
+    assert FAMILY.read_lots(note, lots) == ({"L01", "L04", "L06"}, [])
+    assert FAMILY.read_lots("Open refs R74=B72 R75=B56. 01 04 06 are done.", lots)[0] is None
