@@ -15,13 +15,18 @@ SEATS = DOSES
 CALL_CAP = 30
 AGENT_SECONDS = 240
 NOTE_CAP = 200
-ARMS = ("solo", "solo-seam", "team", "team-implicit", "hint", "twin", "team-record", "team-fullrecord",
-        "probe-hunt-control", "probe-hunt-trap", "probe-ref-control", "probe-ref-trap")
+ARMS = ("solo", "solo-seam", "team", "team-implicit", "team-implicit-all", "hint", "twin", "team-record",
+        "team-fullrecord", "probe-hunt-control", "probe-hunt-trap", "probe-ref-control", "probe-ref-trap")
 TWINS = (("probe-hunt-control", "probe-hunt-trap"), ("probe-ref-control", "probe-ref-trap"))
 PAIRS = tuple(("team", arm) for arm in ("solo-seam", "hint", "twin", "team-record", "team-fullrecord",
-                                        "team-implicit"))
-# `team-implicit` is `team` without this one fact: the writer must infer what the next shift cannot see.
+                                        "team-implicit", "team-implicit-all"))
+# The 3 facts about what the desk keeps. `team-implicit` is `team` without the first; `team-implicit-all` is `team`
+# without all 3. The writer must then infer from its own desk view what the next shift cannot see.
 SETTLED_FACT = "Once a batch is settled, it leaves the desk; no later shift can see its lot list on the desk."
+STORE_FACT = "The desk does not store these references."
+PAST_FACT = "The desk does not keep past results or past lot clearances."
+UNSTATED = {"team-implicit": ("\n" + SETTLED_FACT,),
+            "team-implicit-all": ("\n" + SETTLED_FACT, " " + STORE_FACT, "\n" + PAST_FACT)}
 COMMON_WORDS = ("team",)
 ARM_WORDS = ("handoff", *(arm for arm in ARMS if arm not in COMMON_WORDS))
 TEAM_SENTENCE = "A different operator works each shift."
@@ -393,10 +398,7 @@ def extension_arm(inst, arm, max_text, max_messages):
     count = params["shifts"]
     seats = inst["seats"][:1 if arm == "solo" else count]
     budget = CALL_CAP * (count if arm == "solo" else 1)
-    common = COMMON.format(shifts=count, cap=params["cap"], budget=budget)
-    assert common.count(SETTLED_FACT + "\n") == 1
-    if arm == "team-implicit":
-        common = common.replace(SETTLED_FACT + "\n", "", 1)
+    common = without_facts(COMMON.format(shifts=count, cap=params["cap"], budget=budget), arm)
     instructions, briefings = {}, {}
     for index, seat in enumerate(seats, 1):
         if arm == "solo":
@@ -418,16 +420,26 @@ def extension_arm(inst, arm, max_text, max_messages):
             "scripted_policies": dict.fromkeys(scripted, "careful")}
 
 
+def without_facts(text, arm):
+    """The briefing of an implicit arm: the base text minus that arm's desk facts, each present exactly once."""
+    for piece in UNSTATED.get(arm, ()):
+        if text.count(piece) != 1:
+            raise ValueError("a desk fact is missing from the base text or repeated")
+        text = text.replace(piece, "", 1)
+    return text
+
+
 def pair_difference(first, second, views_a, views_b):
     if first != "team" or second not in {b for _, b in PAIRS}:
         yield "unknown pair"
         return
     normalized = {seat: dict(view) for seat, view in views_b.items()}
     for seat, view in normalized.items():
-        if second == "team-implicit":
-            expected = views_a[seat]["instruction"].replace(SETTLED_FACT + "\n", "", 1)
-            if SETTLED_FACT in view["instruction"] or view["instruction"] != expected:
-                yield f"{seat} differs by more than the settled-batch sentence"
+        if second in UNSTATED:
+            expected = without_facts(views_a[seat]["instruction"], second)
+            if any(piece.strip() in view["instruction"] for piece in UNSTATED[second]) or (
+                    view["instruction"] != expected):
+                yield f"{seat} differs by more than the unstated desk facts"
             else:
                 view["instruction"] = views_a[seat]["instruction"]
             continue

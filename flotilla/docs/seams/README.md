@@ -21,7 +21,7 @@ Two smaller models (GPT-6 Luna, Claude Haiku 5.5) played a part of them.
 | Family | Seam | Frontier result (wins / playtests) | Smaller models | Status |
 |---|---|---|---|---|
 | `handoff` | A capped shift note to a fresh context | At `standard`: `team` (fact stated) Opus 17 of 17, Sol 3 of 3; `hint` 8 of 8; **`team-implicit`: Opus 15 of 25, Sol 15 of 16** | 0 of 6; 5 of 6 losses at the seam | Candidate measure for a frontier pilot (`team` / `team-implicit` / `hint` / `team-fullrecord`) |
-| `digest` | A chain of capped notes with replacement rules | 34 of 34 (base and order levels) | 0 of 8; 73 of 90 wrong jobs at the seam | Canary for frontier models; a measure for smaller models. Twin `team-implicit`: see the family page |
+| `digest` | A chain of capped notes with replacement rules | 52 of 52 (base levels, order levels, and the twin `team-implicit` 16 of 16) | 0 of 8; 73 of 90 wrong jobs at the seam | Canary for frontier models in every arm; a measure for smaller models |
 | `commit` | A notice that arrives before an irreversible booking | 51 of 52 (base and bulk levels) | 5 of 6 | Canary |
 | `tell` | A fact that matters only to another desk | 28 of 28 | Luna 1 of 2, Haiku 1 of 1 | Canary for frontier models |
 | `interface` | A setting that only another desk knows | 8 of 8 live teams; 28 of 28 pair runs, 0 premature orders | Luna 0 of 1, Haiku 1 of 1 | Canary. The pair `probe-wait` does not yet measure waiting (see the family page) |
