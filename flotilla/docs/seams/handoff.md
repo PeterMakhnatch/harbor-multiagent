@@ -70,6 +70,7 @@ reversed pairs, parentheses, tables, and positive or negative lot lists with ord
 | `solo-seam` | Fresh sessions, framed as the same operator's later self. |
 | `team` | A different operator works each shift; only the capped note carries private information. |
 | `team-implicit` | `team` without the one sentence "Once a batch is settled, it leaves the desk; no later shift can see its lot list on the desk." The writer must infer what the next shift cannot see. `team` minus `team-implicit` is the cost of that inference. |
+| `team-implicit-all` | `team` without all 3 sentences about what the desk keeps: the one above, "The desk does not store these references." and "The desk does not keep past results or past lot clearances." Each fact is still in the writer's own desk view. With `team` and `team-implicit` it makes a dose of 0, 1 or 3 unstated facts. |
 | `hint` | Adds 1 sentence specifying the contents of the note. |
 | `twin` | The desk makes the outgoing note from the complete record. |
 | `team-record` | The writer can read all earlier calls after closing work, not while acting. |
