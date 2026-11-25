@@ -1,0 +1,37 @@
+{
+  "name": "tell-careful-rehearsal",
+  "prereg": {
+    "commit": "94d80fecb69ba2c336a4437a4c5d4860f6f261a4",
+    "doc": "flotilla/docs/seams/tell.md",
+    "section": "## Zero-cost oracle rehearsal"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": "/tmp/seams1125/b-tell/careful",
+      "manifest": "/tmp/seams1125/b-tell/careful/manifest.json",
+      "instances": [0],
+      "arms": ["team"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b-tell/careful",
+      "manifest": "/tmp/seams1125/b-tell/careful/manifest.json",
+      "instances": [0],
+      "arms": ["probe-trap", "probe-control"]
+    }
+  ],
+  "models": [null],
+  "agent": "oracle",
+  "make_jobs": {
+    "max_turns": 30,
+    "env": "docker",
+    "concurrency": 1,
+    "start_spacing_s": 0.0
+  },
+  "budget": {
+    "cap_usd": 0.0,
+    "reserve_per_trial_usd": 0.0,
+    "provider_floors": {},
+    "max_invalid_streak": 1
+  },
+  "order_seed": 20261125
+}
