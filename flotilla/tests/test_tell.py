@@ -96,7 +96,7 @@ def invariants(result, params):
 
 
 def sweep_cell(args):
-    level, instance, full = args
+    level, instance, full, cartesian = args
     rows = []
     with TemporaryDirectory(prefix="tell-test-") as directory:
         paths = BUILD.build("tell", [instance], 3, level, SEED, ARMS, Path(directory), policy="careful")
@@ -107,8 +107,15 @@ def sweep_cell(args):
             policies.extend(f"lapse-{percent}" for percent in (10, 20, 30, 50))
             if arm in ("team", "probe-trap"):
                 policies.extend(("fixed", "default"))
+            if full and not cartesian and instance >= 5 and arm not in ("team", "probe-trap"):
+                policies = ["careful", "naive"]
+                if arm in ("solo", "probe-control"):
+                    policies.extend(("nop", "after"))
+                if arm == "auto":
+                    policies.extend(("nop", "random"))
             for name in policies:
-                schedules = range(5) if name in ("careful", "naive") else range(1)
+                schedules = (range(5) if name in ("careful", "naive") and (instance < 5 or cartesian or not full)
+                             else (instance % 5,))
                 for schedule in schedules:
                     result = SIM.simulate_built(path, name, schedule)
                     invariants(result, params)
@@ -126,7 +133,10 @@ def sweep_cell(args):
                         assert result["score"]["receiver_applied"] == (name in ("careful", "after"))
                     if instance == 0 and name == "careful" and schedule == 0:
                         assert result == SIM.simulate_built(path, name, schedule)
-                    baseline = FAMILY.chance_baseline(task.task_json, name) if name == "random" else None
+                    baseline = None
+                    if name == "random":
+                        assert reward == FAMILY.chance_baseline(task.task_json, name)
+                        baseline = FAMILY.chance_probability(task.task_json)
                     rows.append((level, arm, name, reward, baseline, result["requests"], result["score"]["told_in_time"]))
             if arm == "team" and (instance < 8 or not full):
                 for seat in task.seats:
@@ -137,9 +147,10 @@ def sweep_cell(args):
 
 @pytest.mark.parametrize("level", LEVELS)
 def test_policy_sweep(level):
-    full = os.environ.get("TELL_FULL_SWEEP") == "1"
+    cartesian = os.environ.get("TELL_CARTESIAN_SWEEP") == "1"
+    full = cartesian or os.environ.get("TELL_FULL_SWEEP") == "1"
     count = 200 if full else 2
-    samples = [(level, instance, full) for instance in range(count)]
+    samples = [(level, instance, full, cartesian) for instance in range(count)]
     groups = defaultdict(list)
     if full:
         with ProcessPoolExecutor(max_workers=4) as pool:
@@ -155,13 +166,22 @@ def test_policy_sweep(level):
                     max_requests[arm][seat] = max(max_requests[arm][seat], calls)
     for (dose, arm, name), values in sorted(groups.items()):
         mean = sum(reward for reward, _, _ in values) / len(values)
-        if full and name == "random":
+        if full and name == "random" and len(values) >= 200:
             expected = sum(baseline for _, baseline, _ in values) / len(values)
             assert abs(mean - expected) <= 0.10, (dose, arm, name, mean, expected)
         exposed = [told for _, _, told in values if told is not None]
         measure = f" told={sum(exposed) / len(exposed):.4f} n_exposed={len(exposed)}" if exposed else ""
         print(f"{dose:8} {arm:20} {name:10} n={len(values):4} reward={mean:.4f}{measure}")
     print(f"{level}: max careful calls {dict(max_requests)}")
+
+
+@pytest.mark.parametrize("level", LEVELS)
+def test_delayed_receiving_keeps_dispatch_awake(tmp_path, level):
+    (path,) = BUILD.build("tell", [0], 3, level, SEED, ("probe-trap",), tmp_path)
+    for schedule in range(5):
+        result = SIM.simulate_built(path, {"p1": "delayed-careful"}, schedule)
+        assert result["reward"] == 1 and result["score"]["told_in_time"]
+        assert any(e["kind"] == "await" and e["data"]["reason"] == "timeout" for e in result["events"])
 
 
 def test_built_static_views(tmp_path):

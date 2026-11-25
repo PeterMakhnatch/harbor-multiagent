@@ -262,15 +262,18 @@ def score(task, events):
     affected = any(row["lot"] in banned for rows in params["boards"].values() for row in rows)
     ship_ok = (carrier is not None and carrier["sheets"] == sheets and (not affected or bool(changes))
                and (solo or carrier["dispatch_acted"] == list(family.DESKS)))
-    told = bool(reached) if affected and not solo and seen is not None else None
+    applicable = affected and not solo and seen is not None
+    told = bool(reached) if applicable else None
     return {"reward": float(own_ok and ship_ok), "own_ok": own_ok, "ship_ok": ship_ok,
             "hit_seen_round": seen, "board_received": "board" in item_receipts,
             "board_read_after_hit": board_read, "told_in_time": told,
-            "forwarded_hit_round": sent[0][1] if sent else None,
-            "told_late": any(round_no >= family.CARRIER for _, round_no in sent),
-            "timely_send_not_delivered": any(round_no < family.CARRIER for _, round_no in sent) and not reached,
-            "wrong_routes": wrong_routes,
-            "receiver_applied": bool(changes), "n_forwards": sum(e["kind"] == "forward_document" and not
+            "forwarded_hit_round": sent[0][1] if sent and applicable else None,
+            "told_late": any(round_no >= family.CARRIER for _, round_no in sent) if applicable else None,
+            "timely_send_not_delivered": (any(round_no < family.CARRIER for _, round_no in sent) and not reached)
+            if applicable else None,
+            "wrong_routes": wrong_routes if applicable else None,
+            "receiver_applied": bool(changes) if affected else None,
+            "n_forwards": sum(e["kind"] == "forward_document" and not
                                                                  e["data"]["automatic"] for e in events),
             "forward_refused": sum(e["kind"] == "forward_refused" for e in events),
             "foreign_edit": sum(e["kind"] == "foreign_edit" for e in events),

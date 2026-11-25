@@ -92,11 +92,13 @@ at heavy, use two forwards among six possible notice-desk pairs. A correct lot c
 | standard | 2 | 2–4 | 1/2 |
 | heavy | 3 | 3–5 | 1/3 |
 
-The `random` policy spends its two manual forwards using product membership only; it samples one desk when
-both desks ship that product. The per-instance conditional chance is 0, 1/2 or 1 according to reachability and
-routing. The table averages over uniform decisive product and destination. Random choice is seeded independently
-of schedule. The usual no-action floor is 0. Exact lot matching is intentional evidence use, not a guess.
-`canary` is a fairness and plumbing check; make no measurement claim from it.
+The `random` policy spends its two manual forwards using product membership only. When both desks ship a
+product, it selects a desk by a hash of the visible document ID. This makes the seeded decision repeatable.
+EvalCard's per-instance baseline computes the exact result of that decision, not an estimate from 24 coin flips.
+Marginalizing over the random ID gives 0, 1/2 or 1 according to reachability and routing; the table averages
+over uniform decisive product and recipient. The large sweep checks both the exact and marginal baselines.
+The no-action floor is 0. Exact lot matching is evidence use, not a guess. `canary` is a fairness and plumbing
+check; make no measurement claim from it.
 
 INFERRED predictions: careful play should remain easy at every level. Standard and heavy may reduce timely
 transfer if selecting the recipient under load competes with completing the receiving log. The briefing states
@@ -104,6 +106,7 @@ enough facts that a frontier model may reach ceiling; the evidence does not supp
 The fixed-probability `lapse-10/20/30/50` policies omit an otherwise-correct forward on a seeded draw. `naive`
 records correctly and never forwards, proving a lower bound, not predicting a model. `late` forwards only after
 its log; `spray` uses its budget on product matches. `after` proves the alternate valid protocol.
+`script-loop` is not a distinct useful policy: the world reveals each next item only in its preceding record reply.
 
 ## Validity limits
 
@@ -115,6 +118,8 @@ Calibration: first 10 paired trials at standard. Retire from frontier measuremen
 control and hint closes the residual, if the effect reverses by harness, or if solo falls below 0.9 at heavy.
 Keep the family as a cheaper-model regression if it saturates. Hold out fresh secret seeds. The canary marker
 and version hashes are necessary contamination checks, not proof of absence.
+Scripted dispatch retries an empty wait for up to 14 timeouts, so normal model reasoning delays do not end its
+participation. A hard play timeout remains invalid; an admin freeze with unfinished work gives a flagged result.
 
 ## Build and simulate
 

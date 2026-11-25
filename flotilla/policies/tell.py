@@ -6,20 +6,25 @@ import re
 
 def supports(name, variant):
     return (name in ("careful", "naive", "after", "late", "spray", "random", "fixed", "default",
-                     "lone", "follow", "ignore", "product")
+                     "lone", "follow", "ignore", "product", "delayed-careful")
             or re.fullmatch(r"lapse-(?:0|[1-9][0-9]?|100)", name) is not None)
+
+
+def wait_for(client, path):
+    messages = []
+    for _ in range(14):
+        _, reply = yield from client.get(path)
+        messages.extend(reply.get("new_messages", []))
+        if reply.get("reason") != "timeout":
+            break
+    return reply | {"new_messages": messages}
 
 
 def next_round(client, reply):
     if not reply.get("acted"):
         return True
-    for _ in range(3):
-        _, wait = yield from client.get(f"/await?until=tick&after={reply['round'] - 1}")
-        if wait.get("frozen") or wait.get("active") == "retired":
-            return False
-        if wait["tick"] >= reply["round"]:
-            return True
-    return False
+    wait = yield from wait_for(client, f"/await?until=tick&after={reply['round'] - 1}")
+    return not wait.get("frozen") and wait.get("active") != "retired" and wait["tick"] >= reply["round"]
 
 
 def target(boards, document):
@@ -56,8 +61,7 @@ def receive(name, client, own, family):
                     choices = (family.guess_forward(boards, document, used, shared_used) if name != "spray"
                                else family.matching_desks(boards, document["product"]) if used < family.FORWARDS else [])
                     if choices:
-                        choose_last = name != "default" and len(choices) == 2 and own.lapse(50, document["item"])
-                        destination = choices[-1] if choose_last else choices[0]
+                        destination = family.guess_destination(choices, document, fixed=name == "default")
                         shared_used |= len(choices) == 2
                         action = "/forward", {"item": document["item"], "to": destination}
                 else:
@@ -107,7 +111,7 @@ def dispatch(name, client, own, family):
         if reply.get("carrier_left") or reply.get("frozen") or reply.get("active") == "retired":
             return
         if reply.get("acted"):
-            _, wait = yield from client.get(f"/await?until=tick&after={reply['round'] - 1}")
+            wait = yield from wait_for(client, f"/await?until=tick&after={reply['round'] - 1}")
             pending.extend(notices(wait))
             if wait.get("reason") == "timeout" or wait.get("active") == "retired" or wait.get("frozen"):
                 return
@@ -135,13 +139,16 @@ def dispatch(name, client, own, family):
             return
         if reply.get("new_messages") and not reply.get("acted"):
             continue
-        _, reply = yield from client.get("/await?until=message")
+        reply = yield from wait_for(client, "/await?until=message")
         pending.extend(notices(reply))
         if reply.get("reason") == "timeout":
             return
 
 
 def play(name, client, own, family):
+    if name == "delayed-careful":
+        yield from client.sleep(65)
+        name = "careful"
     if own["role"] == "dispatch":
         yield from dispatch(name, client, own, family)
     else:

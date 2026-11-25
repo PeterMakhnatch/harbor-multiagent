@@ -1,12 +1,13 @@
 """A receiving desk and two dispatch desks share responsibility for a shipment."""
 
+import hashlib
 import random
 import string
 
 FAMILY = "tell"
 TITLE = "Warehouse receiving and dispatch"
 SEAM = "A receiving desk must route its private supplier notice to the desk whose carrier needs it."
-VERSION = 1
+VERSION = 2
 LEVELS = ("canary", "standard", "heavy")
 SEATS = 3
 ARMS = ("solo", "solo-control", "team", "team-control", "probe-trap", "probe-control",
@@ -233,7 +234,15 @@ def guess_forward(boards, item, used, shared_used):
     return desks if used < FORWARDS and not (reserve and len(desks) == 2 and shared_used) else []
 
 
-def chance_baseline(task_json, policy):
+def guess_destination(desks, document, fixed=False):
+    if not desks:
+        return None
+    index = int.from_bytes(hashlib.sha256(document["item"].encode()).digest(), "big") % len(desks)
+    return desks[0 if fixed else index]
+
+
+def chance_probability(task_json, *, marginal=True, fixed=False):
+    """Conditional chance for routing choices, or exact outcome of the seeded ID policy."""
     params = task_json["params"]
     if len(task_json["seats"]) == 1 or task_json["condition"].endswith("-control"):
         return 1.0
@@ -245,8 +254,16 @@ def chance_baseline(task_json, policy):
         if index == params["hit"]:
             if params["automatic"] and index + 1 + used + bool(desks) < CARRIER:
                 return 1.0
-            return 1 / len(desks) if desks and index + 1 + used < CARRIER else 0.0
+            if not desks or index + 1 + used >= CARRIER:
+                return 0.0
+            if marginal:
+                return 1 / len(desks)
+            return float(guess_destination(desks, document, fixed) == params["receiver"])
         if desks:
             used += 1
             shared_used |= len(desks) == 2
     raise ValueError("missing decisive document")
+
+
+def chance_baseline(task_json, policy):
+    return chance_probability(task_json, marginal=False, fixed=policy == "default")
