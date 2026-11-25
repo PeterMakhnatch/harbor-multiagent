@@ -79,7 +79,16 @@ def assert_evidence(task, out, result, expected):
     summary = (out / "summary.md").read_text()
     for seat, info in result["seats"].items():
         logs = out / "seats" / seat
-        assert (logs / "prompt.md").read_bytes() == PREFACE + (task / "instructions" / f"{seat}.md").read_bytes()
+        instruction = task / "instructions" / f"{seat}.md"
+        prompt_bytes = (logs / "prompt.md").read_bytes()
+        assert prompt_bytes.startswith(PREFACE) and prompt_bytes.endswith(instruction.read_bytes())
+        mapping = info["mapping"]
+        assert mapping["host_workdir"] == info["workdir"]
+        assert mapping["container_workdir"] == "/home/player"
+        assert mapping["container_world_url"] == "http://world:8080"
+        assert mapping["host_world_url"].startswith("http://127.0.0.1:")
+        assert f"{mapping['container_workdir']} maps to {mapping['host_workdir']}".encode() in prompt_bytes
+        assert f"{mapping['container_world_url']} maps to {mapping['host_world_url']}".encode() in prompt_bytes
         assert (logs / "seat.log").is_file() and (logs / "command.log").is_file()
         assert not Path(info["workdir"]).exists()
         assert f"## {seat} ({info['mode']})" in summary

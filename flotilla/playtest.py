@@ -27,9 +27,9 @@ from typing import Any
 
 import qa
 
-PREFACE = (b"You are working in a sandbox directory.\n"
-           b"Work only inside it; use shell commands.\n"
-           b"Stop when you are done.\n")
+PREFACE = ("You are working in a sandbox directory.\n"
+           "Work only inside it; use shell commands.\n"
+           "Stop when you are done.\n")
 PLACEHOLDER = re.compile(r"\{(instruction|seat|workdir|log)\}")
 PATH_MENTION = re.compile(
     r"(?<![\w:/])(?:\"((?:/|~/|\.\.?/)[^\"\r\n]+)\"|'((?:/|~/|\.\.?/)[^'\r\n]+)'"
@@ -67,6 +67,7 @@ class SeatRun:
     command: str
     argv: list[str]
     after: tuple[str, ...]
+    mapping: dict[str, str]
     process: subprocess.Popen | None = None
     started: float | None = None
     ended: float | None = None
@@ -95,7 +96,8 @@ class SeatRun:
         return {"mode": self.mode, "command": self.command, "exit_code": self.exit_code,
                 "seconds": None if self.started is None else self.ended - self.started,
                 "started_sec": self.started, "ended_sec": self.ended, "timed_out": self.timed_out,
-                "error": self.error, "start_after": list(self.after), "workdir": str(self.workdir)}
+                "error": self.error, "start_after": list(self.after), "workdir": str(self.workdir),
+                "mapping": self.mapping}
 
 
 def stop_process(process: subprocess.Popen) -> None:
@@ -148,19 +150,34 @@ def policy_command(task: qa.Task, seat: str, mode: str, root: Path) -> list[str]
     return [sys.executable, "-B", str(solution / "oracle.py")]
 
 
+def host_mapping(task: qa.Task, seat: str, workdir: Path, url: str) -> dict[str, str]:
+    return {"container_workdir": task.services[seat]["working_dir"], "host_workdir": str(workdir),
+            "container_world_url": task.env(seat)["WORLD_URL"], "host_world_url": url,
+            "workdir_env": "PWD", "world_url_env": "WORLD_URL"}
+
+
+def host_preface(mapping: dict[str, str]) -> bytes:
+    return (PREFACE
+            + "You are on the host, not in a container. In the instructions below:\n"
+            + f"- {mapping['container_workdir']} maps to {mapping['host_workdir']} (initial $PWD).\n"
+            + f"- {mapping['container_world_url']} maps to {mapping['host_world_url']} ($WORLD_URL).\n"
+            + "Use $SEAT, $SEAT_TOKEN and $SEAT_BRIEFING as stated in the instructions.\n\n").encode()
+
+
 def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
-                 output: Path, after: tuple[str, ...], token: str) -> SeatRun:
+                 output: Path, after: tuple[str, ...], token: str, url: str) -> SeatRun:
     workdir = root / "work"
     workdir.mkdir()
     copy_seat_files(task, seat, workdir)
     prompt = root / "prompt.md"
-    prompt.write_bytes(PREFACE + (task.path / "instructions" / f"{seat}.md").read_bytes())
+    mapping = host_mapping(task, seat, workdir, url)
+    prompt.write_bytes(host_preface(mapping) + (task.path / "instructions" / f"{seat}.md").read_bytes())
     output.mkdir(parents=True)
     shutil.copyfile(prompt, output / "prompt.md")
     (output / "seat.log").touch()
     native_log = root / "command.log"
     native_log.touch()
-    env = host_env() | task.env(seat) | {"SEAT_TOKEN": token, "PWD": str(workdir)}
+    env = host_env() | task.env(seat) | {"SEAT_TOKEN": token, "PWD": str(workdir), "WORLD_URL": url}
     if mode == "external":
         values = {"instruction": str(prompt), "seat": seat, "workdir": str(workdir), "log": str(native_log)}
         command = PLACEHOLDER.sub(lambda m: shlex.quote(values[m[1]]), template)
@@ -168,7 +185,7 @@ def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
     else:
         argv = policy_command(task, seat, mode, root)
         command = shlex.join(argv)
-    return SeatRun(seat, mode, root, output, workdir, env, command, argv, after)
+    return SeatRun(seat, mode, root, output, workdir, env, command, argv, after, mapping)
 
 
 @contextlib.contextmanager
@@ -342,15 +359,13 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
     with contextlib.ExitStack() as stack:
         root = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="playtest-world-"))).resolve()
         seats = []
-        for seat in task.seats:
-            seat_root = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="seat-"))).resolve()
-            mode = "external" if seat in selected else "careful" if seat in subjects else "scripted"
-            seats.append(prepare_seat(task, seat, mode, seat_root, template, out / "seats" / seat,
-                                      after[seat], tokens[seat]))
         try:
             with world_server(task, out, root, tokens, timeout) as (url, env):
-                for seat in seats:
-                    seat.env["WORLD_URL"] = url
+                for seat in task.seats:
+                    seat_root = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="seat-"))).resolve()
+                    mode = "external" if seat in selected else "careful" if seat in subjects else "scripted"
+                    seats.append(prepare_seat(task, seat, mode, seat_root, template, out / "seats" / seat,
+                                              after[seat], tokens[seat], url))
                 timed_out = run_seats(seats, timeout, max_parallel)
                 reward, score = verify(task, out, url, env, float(config.get("verifier", {}).get("timeout_sec", 120)))
         finally:
