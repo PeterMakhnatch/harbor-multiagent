@@ -28,6 +28,8 @@ from urllib.parse import parse_qs
 
 import qa
 
+SEAT_SCRIPTS = Path(__file__).resolve().parent / "playtest_seats"
+SEAT_PATH = "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 PREFACE = ("You are working in a sandbox directory.\n"
            "Work only inside it; use shell commands.\n"
            "Stop when you are done.\n")
@@ -174,16 +176,16 @@ def host_env() -> dict[str, str]:
 def seat_env(task: qa.Task, seat: str, root: Path, pass_env: tuple[str, ...]) -> dict[str, str]:
     tmp = root / "tmp"
     tmp.mkdir(mode=0o700)
-    names = ("PATH", "HOME", *pass_env)
+    names = ("HOME", "USER", *pass_env)
     return ({name: os.environ[name] for name in names if name in os.environ}
-            | {"PATH": os.environ.get("PATH", os.defpath), "HOME": str(Path.home())}
+            | {"PATH": SEAT_PATH, "HOME": str(Path.home())}
             | task.env(seat) | {"TMPDIR": str(tmp)})
 
 
-def sandbox_command(argv: list[str], profile: Path, root: Path) -> list[str]:
+def sandbox_command(argv: list[str], profile: Path, root: Path, scripts: Path = SEAT_SCRIPTS) -> list[str]:
     return ["/usr/bin/sandbox-exec", "-f", str(profile), "-D", f"SEATROOT={root}",
             "-D", f"HOSTHOME={Path.home().resolve()}", "-D", f"HOSTTMP={Path(tempfile.gettempdir()).resolve()}",
-            "-D", f"SEATSCRIPTS={Path(__file__).resolve().parent / 'playtest_seats'}", *argv]
+            "-D", f"SEATSCRIPTS={scripts.resolve()}", *argv]
 
 
 def sandbox_profile(path: Path | None) -> Path | None:
@@ -251,7 +253,7 @@ def host_preface(mapping: dict[str, str]) -> bytes:
 
 def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
                  output: Path, after: tuple[str, ...], token: str, url: str,
-                 pass_env: tuple[str, ...], profile: Path | None) -> SeatRun:
+                 pass_env: tuple[str, ...], profile: Path | None, scripts: Path) -> SeatRun:
     workdir = root / "work"
     workdir.mkdir()
     copy_seat_files(task, seat, workdir)
@@ -267,9 +269,9 @@ def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
     if mode == "external":
         values = {"instruction": str(prompt), "seat": seat, "workdir": str(workdir), "log": str(native_log)}
         command = PLACEHOLDER.sub(lambda m: shlex.quote(values[m[1]]), template)
-        argv = ["/bin/bash", "-c", command]
+        argv = ["/usr/bin/env", "/bin/bash", "-c", command]
         if profile is not None:
-            argv = sandbox_command(argv, profile, root)
+            argv = sandbox_command(argv, profile, root, scripts)
             env["PLAYTEST_SANDBOX"] = str(profile)
     else:
         argv = policy_command(task, seat, mode, root)
@@ -630,7 +632,7 @@ def seat_failures(info: dict) -> list[str]:
 def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: float | None,
              max_parallel: int, out: Path, *, pass_env: tuple[str, ...] = (),
              profile: Path | None = None, model_label: str | None = None,
-             seat_timeout: float | None = None, stall_sec: float = 120) -> dict:
+             seat_timeout: float | None = None, stall_sec: float = 120, scripts: Path = SEAT_SCRIPTS) -> dict:
     if qa.yaml is None:
         raise ValueError("PyYAML is required; use uvx --quiet --python 3.12 --with pyyaml python flotilla/playtest.py")
     task = qa.load_task(task_dir.resolve())
@@ -650,6 +652,9 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
     if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) for name in pass_env):
         raise ValueError("--pass-env requires environment variable names")
     profile = sandbox_profile(profile)
+    scripts = scripts.resolve()
+    if not scripts.is_dir():
+        raise ValueError(f"seat scripts directory not found: {scripts}")
     if out.exists() and (not out.is_dir() or any(out.iterdir())):
         raise ValueError(f"output must be a new or empty directory: {out}")
     out = out.resolve()
@@ -665,7 +670,7 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
                         prefix=".playtest-seat-", dir=Path.home()))).resolve()
                     mode = "external" if seat in selected else "careful" if seat in subjects else "scripted"
                     seats.append(prepare_seat(task, seat, mode, seat_root, template, out / "seats" / seat,
-                                              after[seat], tokens[seat], url, pass_env, profile))
+                                              after[seat], tokens[seat], url, pass_env, profile, scripts))
                 requests_stream = stack.enter_context((out / "requests.jsonl").open())
                 responses_stream = stack.enter_context((out / "responses.jsonl").open())
                 events_stream = stack.enter_context((out / "artifacts/logs/world/events.jsonl").open())
@@ -701,6 +706,7 @@ def main() -> None:
     parser.add_argument("--pass-env", action="append", default=[], metavar="NAME",
                         help="host variable to pass to a seat (repeatable; comma-separated names also accepted)")
     parser.add_argument("--sandbox-profile", type=Path, help="macOS sandbox-exec profile for external seats")
+    parser.add_argument("--seat-scripts", type=Path, default=SEAT_SCRIPTS, help="readable seat scripts directory")
     parser.add_argument("--model-label", help="model name to record in result.json")
     parser.add_argument("--out", type=Path, required=True, help="new or empty output folder")
     args = parser.parse_args()
@@ -709,7 +715,7 @@ def main() -> None:
         passed = tuple(name.strip() for group in args.pass_env for name in group.split(","))
         result = playtest(args.task, args.seat_cmd, selected, args.timeout_sec, args.max_parallel, args.out,
                           pass_env=passed, profile=args.sandbox_profile, model_label=args.model_label,
-                          seat_timeout=args.seat_timeout, stall_sec=args.stall_sec)
+                          seat_timeout=args.seat_timeout, stall_sec=args.stall_sec, scripts=args.seat_scripts)
     except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         parser.exit(2, f"playtest: {exc}\n")
     print(f"Reward: {result['reward']}; results: {args.out / 'result.json'}")

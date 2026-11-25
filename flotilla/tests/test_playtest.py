@@ -37,8 +37,10 @@ assert Path(workdir).parent.parent == Path.home().resolve()
 assert 'PLAYTEST_SECRET' not in os.environ
 if mode == 'env':
     assert os.environ['PLAYTEST_KEEP'] == 'allowed'
+    assert os.environ['USER'] == 'fake-login'
+    assert os.environ['PATH'] == '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin'
     allowed = {
-        'PATH', 'HOME', 'TMPDIR', 'SEAT', 'SEAT_TOKEN', 'SEAT_BRIEFING', 'WORLD_URL',
+        'PATH', 'HOME', 'USER', 'TMPDIR', 'SEAT', 'SEAT_TOKEN', 'SEAT_BRIEFING', 'WORLD_URL',
         'PWD', 'SHLVL', '_', 'LC_CTYPE', '__CF_USER_TEXT_ENCODING', 'PLAYTEST_KEEP'
     }
     assert not (unexpected := set(os.environ) - allowed), unexpected
@@ -377,6 +379,8 @@ def test_reject_scripted_external_and_cyclic_dependencies(tmp_path):
 def test_minimal_env_and_pass_env(tmp_path, monkeypatch):
     monkeypatch.setenv("PLAYTEST_SECRET", "not allowed")
     monkeypatch.setenv("PLAYTEST_KEEP", "allowed")
+    monkeypatch.setenv("USER", "fake-login")
+    monkeypatch.setenv("PATH", f"{Path.home()}/.local/bin:/usr/bin:/bin")
     task = build(tmp_path, "talk-trap")
     out, result = play(tmp_path, task, "env", extra=("--pass-env", "PLAYTEST_KEEP"))
     assert_evidence(task, out, result, 1)
@@ -391,8 +395,41 @@ def test_sandbox_command_and_skip(tmp_path, monkeypatch, capsys):
     argv = runner.sandbox_command(["/bin/bash", "-c", "echo hello"], profile, root)
     assert argv[:5] == ["/usr/bin/sandbox-exec", "-f", str(profile), "-D", f"SEATROOT={root}"]
     assert argv[-3:] == ["/bin/bash", "-c", "echo hello"]
+    assert f"SEATSCRIPTS={FLOTILLA / 'playtest_seats'}" in argv
+    assert f"SEATSCRIPTS={tmp_path.resolve()}" in runner.sandbox_command(["true"], profile, root, tmp_path)
     monkeypatch.setattr(sys, "platform", "linux")
     assert runner.sandbox_profile(profile) is None
     assert "skipped" in capsys.readouterr().err
     monkeypatch.setattr(sys, "platform", "darwin")
     assert runner.sandbox_profile(profile) == profile.resolve()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS sandbox-exec profile")
+def test_claude_fake_cli_in_custom_scripts_directory(tmp_path, monkeypatch):
+    scripts = tmp_path / "seat scripts"
+    scripts.mkdir()
+    shipped = FLOTILLA / "playtest_seats"
+    wrapper = scripts / "claude.sh"
+    wrapper.write_bytes((shipped / "claude.sh").read_bytes())
+    fake = scripts / "fake-claude"
+    fake.write_text("""#!/bin/bash
+set -eu
+[[ "$USER" == fake-login ]]
+[[ "$SHELL" == /bin/zsh && -d "$ZDOTDIR" && "$ZDOTDIR" == "${PWD%/work}/zdot" ]]
+[[ "$PATH" == /opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin ]]
+/usr/bin/curl -fsS -H "Authorization: Bearer $SEAT_TOKEN" "$WORLD_URL/whoami"
+echo fake-claude-ok
+""")
+    fake.chmod(0o700)
+    monkeypatch.setenv("CLAUDE_BIN", str(fake))
+    monkeypatch.setenv("USER", "fake-login")
+    task = build(tmp_path, "solo")
+    completed = subprocess.run([sys.executable, str(FLOTILLA / "playtest.py"), "--task", str(task),
+                                "--seat-cmd", f"/bin/bash {shlex.quote(str(wrapper))} {{workdir}} {{instruction}} fake",
+                                "--seat-scripts", str(scripts), "--sandbox-profile", str(shipped / "seat.sb"),
+                                "--pass-env", "CLAUDE_BIN", "--out", str(tmp_path / "out")],
+                               capture_output=True, text=True, timeout=20, check=False)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    result = json.loads((tmp_path / "out" / "result.json").read_text())
+    assert result["seats"]["p1"]["world_calls"] == 1
+    assert "fake-claude-ok" in (tmp_path / "out" / "seats" / "p1" / "seat.log").read_text()

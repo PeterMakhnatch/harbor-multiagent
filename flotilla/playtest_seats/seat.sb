@@ -13,7 +13,8 @@
   (subpath (string-append (param "HOSTHOME") "/.local/state/claude"))
   (subpath (string-append (param "HOSTHOME") "/.claude"))
   (prefix (string-append (param "HOSTHOME") "/.claude.json"))
-  (literal (string-append (param "HOSTHOME") "/.codex/auth.json")))
+  (literal (string-append (param "HOSTHOME") "/.codex/auth.json"))
+  (subpath (string-append (param "HOSTHOME") "/Library/Keychains")))
 (deny file-read* file-read-data
   (subpath (string-append (param "HOSTHOME") "/.claude/projects"))
   (literal (string-append (param "HOSTHOME") "/.claude/history.jsonl")))
