@@ -32,7 +32,7 @@ def task_for(inst, arm, dose):
 def expected(arm, policy, dose):
     if policy == "careful":
         return 1.0
-    if policy == "lone" and arm == "team":
+    if policy in ("lone", "blind") and arm == "team":
         return {"canary": 1/3, "standard": 5/16, "heavy": 9/32}[dose]
     if policy != "naive":
         return None
@@ -182,6 +182,9 @@ def test_handoff_sweep(dose, tmp_path):
                         if arm != "solo":
                             max_requests = max(max_requests, max(run["requests"].values()))
                             assert max_requests <= 13
+                            counted = sum(e["kind"] == "extension_call" for e in run["events"] if
+                                          e["seat"] == f"s{task['params']['shifts']}")
+                            assert counted <= 0.75 * FAMILY.CALL_CAP
                     if policy == "blind" and arm == "team":
                         chance.append(FAMILY.chance_baseline(task, policy))
                     if policy in LAPSES and arm in ("solo", "team-fullrecord"):
@@ -198,6 +201,35 @@ def test_handoff_sweep(dose, tmp_path):
     if COUNT >= 200:
         assert abs(statistics.mean(chance) - statistics.mean(tally["team", "blind"])) < 0.05
 
+
+
+@pytest.mark.parametrize("dose", FAMILY.LEVELS)
+def test_handoff_extra_calls(dose, tmp_path):
+    paths = SIM.BUILD.build("handoff", [0], FAMILY.DOSES[dose], dose, SEED,
+                            ["team", "team-fullrecord"], tmp_path)
+    for path in paths:
+        run = SIM.simulate_built(path, "extra", 1)
+        assert run["invalid"] is None and run["reward"] == 1
+        assert max(run["score"]["reserve_hit"].values()) == 0
+        for seat in run["requests"]:
+            assert sum(e["kind"] == "refused" and e["seat"] == seat for e in run["events"]) == 3
+
+
+@pytest.mark.parametrize("dose", FAMILY.LEVELS)
+def test_handoff_no_note_guess_ceiling(dose, tmp_path):
+    paths = SIM.BUILD.build("handoff", list(range(24)), FAMILY.DOSES[dose], dose, SEED, ["team"], tmp_path)
+    results = defaultdict(list)
+    for path in paths:
+        task = json.loads((path / "environment/task.json").read_text())
+        for policy in ("naive", "blind", "guess", "guess-fixed", "guess-each"):
+            run = SIM.simulate_built(path, policy, 0)
+            assert run["invalid"] is None
+            results[policy].append(run["reward"])
+            if policy == "blind":
+                assert run["reward"] == FAMILY.chance_baseline(task, "blind")
+    means = {name: statistics.mean(values) for name, values in results.items()}
+    print(f"{dose} no-note policies: {means}")
+    assert means["naive"] > means["blind"] >= max(means[name] for name in ("guess", "guess-fixed", "guess-each"))
 
 @pytest.mark.parametrize("dose", FAMILY.LEVELS)
 def test_handoff_probe_note_formats_and_actor(dose, tmp_path):

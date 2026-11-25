@@ -240,7 +240,7 @@ def shift_view(params, shift):
 
 
 def chance_baseline(task_json, policy):
-    """Exact expectation for the blind policy's final conditional assignment."""
+    """Exact no-note score when risky guesses have negative expected value."""
     if policy != "blind":
         return None
     if task_json["condition"].endswith("-trap"):
@@ -249,16 +249,7 @@ def chance_baseline(task_json, policy):
         return None
     params = task_json["params"]
     batches = params["batches"]
-    known = [b for b in batches if b["shift"] == params["shifts"]]
-    delayed = [b for b in batches if b["lag"]]
-    possible, _ = visible_possibilities(params["lots"], known, delayed, delayed)
-    matches = len(batches) - len(delayed)
-    for lot in possible:
-        for batch in delayed:
-            if (lot in batch["lots"]) == (batch["status"] == "returned"):
-                size = sum((lot in other["lots"]) == (batch["status"] == "returned") for other in delayed)
-                matches += 1 / (size * len(possible))
-    return 0.5 * (matches / len(batches) + 1 / len(possible))
+    return 0.5 * sum(b["lag"] == 0 for b in batches) / len(batches)
 
 
 def leak_values(task_json):
@@ -332,7 +323,9 @@ The `note` field holds the previous shift's note (empty in shift 1).
 The desk does not keep past results or past lot clearances.
 Before closing the shift, settle all results you can match and file the ticket if the evidence pins the lot.
 End work with `POST /close`. Then write your note and call `POST /handover`, including in the last shift.
-The score checks correct settlements and the correct ticket. Do not guess before the evidence pins the lot.
+The settlement score is correct settlements minus wrong settlements, divided by all results (minimum zero).
+Settlement credit is worth half the reward; the correct non-early ticket is worth the other half.
+A wrong ticket loses the entire reward. If unsure of a match or the lot, leave it unresolved instead of guessing.
 """
 
 

@@ -313,7 +313,10 @@ def score(task, events):
     for lag in (0, 1, 2, 3):
         eligible = {ref for ref, batch in scored.items() if batch["lag"] == lag}
         rates[f"lag{lag}"] = len(correct & eligible) / len(eligible) if eligible else None
-    full = 0.5 * (len(correct) / len(scored) + ticket)
+    wrong = (seen & scored.keys()) - correct
+    ticket_wrong = bool(tickets and tickets[0]["lot"] != params["bad"])
+    settlement_credit = max(0, len(correct) - len(wrong)) / len(scored)
+    full = 0.0 if ticket_wrong else 0.5 * (settlement_credit + ticket)
     arm = task["condition"]
     reward = full
     unparsed = [e["data"] for e in events if e["kind"] == "note_unparsed"
@@ -327,6 +330,9 @@ def score(task, events):
     crossings = [h for h in handovers if h["shift"] < params["shifts"]]
     losses = [h["shift"] for h in crossings if h["missing_bindings"] or not h["kept_lots"]]
     return {"reward": reward, "full_reward": full, "ticket": ticket, "reconciled": len(correct),
+            "wrong_settlements": len(wrong), "ticket_wrong": ticket_wrong,
+            "reserve_hit": {seat: sum(e["kind"] == "refused" and e["seat"] == seat and e["data"]["code"] == 429
+                                     for e in events) for seat in task["seats"]},
             "total_results": len(scored), **rates, "handover_count": len(handovers),
             "handover_missing": len(omissions),
             "handover_missing_cause": omissions[0]["reason"] if omissions else None,
