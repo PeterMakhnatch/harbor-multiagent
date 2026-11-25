@@ -405,6 +405,7 @@ class ExtensionHost:
         try:
             stalled = self.stalled_seats()
             record(kind, None, data | {"stalled_seats": stalled})
+            self.deadline_kind = kind  # play_timeout, play_incomplete or simulation_stalled (a simulator limit)
             hook = getattr(EXTENSION, "on_deadline", None)
             if hook:
                 result = hook(stalled.copy())

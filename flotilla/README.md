@@ -290,6 +290,9 @@ Use separate jobs for different turn caps. A successor's first authenticated cal
 defines that hook and leaves the successor waiting, the successor gets `reason: "predecessor_ended"`
 from `/await?until=active` at once; without the hook the wait is plain.
 
+During `on_deadline`, `host.deadline_kind` names the cause: `play_timeout` (the play limit),
+`play_incomplete` (play was frozen while a seat had an open duty) or `simulation_stalled` (the
+simulator's step limit, its stand-in for a play limit; return None there to keep such a run void).
 Use `pending(seat)` and `on_deadline(stalled_seats)` to score omitted duties as valid results with
 flags. Without the deadline hook, deadlines and exhausted simulations stay invalid. Infrastructure
 faults always remain invalid. `/await`, `/whoami` and `/health` are free of the `max_calls` budget;
