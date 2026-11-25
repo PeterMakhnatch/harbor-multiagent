@@ -104,6 +104,16 @@ The card keeps `stalled_seats` but not all family flags. For the live pilot repo
 the reward and count for flagged and unflagged valid trials separately, using each trial's `score.json`.
 Never remove flagged omissions from the headline reward.
 
+Round-3 card diagnostics (all policies pooled, not a model estimate):
+
+| Card `stalled_seats` | Valid runs | Mean reward |
+|---|---:|---:|
+| All valid | 28,080 | 0.579 |
+| Nonempty | 3,888 | 0 |
+| Empty | 24,192 | 0.672 |
+
+The empty set is not a general proof that every file was uploaded. Use the named family flags for the live split.
+
 Deterministic examples: a completed careful team scores 1; a buyer who ends without any order scores 0 with
 `orders_missing`; a desk that deposits but stops before `/done` leaves the other desk's group worth 1/3.
 The timeout case with no buyer work scores 0 with the omission flags, not an invalid result.
@@ -165,6 +175,11 @@ uvx --quiet --python 3.12 --with pyyaml python flotilla/eval_card.py --family in
 ```
 
 `FLOTILLA_INTERFACE_SWEEP=1` raises the sweep to 60 instances per level.
+
+Round-3 card: 17 PASS, 0 FAIL, 0 NA; 28,080 runs and no invalid simulation. Careful has reward 1 in every
+cell and uses at most 16 world requests per seat. In the wait pair, eager (`naive`) scores 1 in control
+and 0.125 in trap (the sampled chance matches). For lapse 10/20/30/50, the trap scores 0.958/0.833/0.750/0.458;
+the control scores 1. These are sensitivity checks, not predictions of effect size.
 
 ## Oracle rehearsal (pre-registration)
 
