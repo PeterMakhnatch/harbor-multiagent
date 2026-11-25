@@ -127,6 +127,13 @@ def test_commit_scheduler_sweep(tmp_path, dose, arm):
                 result = SIM.simulate_built(path, policy, schedule)
                 score = evidence(task, result)
                 scores.append(score)
+                if policy in ("careful", "script-check", "script-filter"):
+                    for r, activity in score["notice_activity"].items():
+                        releases = sorted(o["index"] for o in task["params"]["outages"]
+                                          if o["start"] == int(r) and arm not in EARLY)
+                        assert activity == [
+                            {"release_index": index, "lookups_before_booking": task["params"]["batch"] - index,
+                             "view_before_booking": policy == "script-check"} for index in releases]
                 if policy in ("careful", "script-check"):
                     assert score["reward"] == 1 and score["closed"] and score["stale_after_delivery"] == 0
                     assert score["p1_stalled"] == score["p2_stalled"] == 0
@@ -207,6 +214,7 @@ def test_commit_receipts_and_view_history(tmp_path, start_world, arm, late_repor
             expected = {o["text"] for o in params["outages"] if o["start"] == r and o["index"] == index}
             pushed = {m["text"] for m in reply.get("new_messages", [])}
             assert pushed == (set() if arm == "probe-control" else expected)
+        assert world.seat("p1", "GET", f"/shipment?id={shipments[-1]['id']}")[0] == 200
         _, history = world.seat("p1", "GET", "/view")
         known.update(m["text"] for m in history["messages"])
         bookings = []
@@ -229,6 +237,11 @@ def test_commit_receipts_and_view_history(tmp_path, start_world, arm, late_repor
     score = EXT.score(task, world.events())
     assert score["reward"] == 1 and score["stale_after_delivery"] == 0
     assert score["affected_after_delivery"] == score["affected_total"]
+    for r, activity in score["notice_activity"].items():
+        indexes = sorted(o["index"] for o in params["outages"] if o["start"] == int(r) and arm != "probe-control")
+        assert activity == [
+            {"release_index": index, "lookups_before_booking": params["batch"] - index + 1,
+             "view_before_booking": True} for index in indexes]
 
 
 def test_commit_partial_and_interleaved_bookings(tmp_path, start_world):
@@ -331,6 +344,8 @@ def test_commit_idle_wait_after_notice(tmp_path, monkeypatch, dose, arm):
         score = evidence(task, result)
         assert score["reward"] == 0 and score["p1_stalled"] == 1 and score["p2_stalled"] == 0
         assert score["delivered_outages"] > 0
+        activity = [entry for entries in score["notice_activity"].values() for entry in entries]
+        assert activity[-1]["lookups_before_booking"] is None and activity[-1]["view_before_booking"] is None
         stalls = [e for e in result["events"] if e["kind"] == "commit_stall"]
         assert len(stalls) == 1 and stalls[0]["data"]["reason"] == "idle_waits"
         assert not any(e["kind"] in ("call_budget", "play_timeout") for e in result["events"])

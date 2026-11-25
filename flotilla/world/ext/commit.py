@@ -207,6 +207,7 @@ class Freight:
         if len(ids) != 1 or ids[0] not in self.by_round.get(self.round, []):
             return self.refuse(seat, 404, "unknown shipment in current round")
         id_ = ids[0]
+        self.record_action("commit_lookup", seat, {"round": self.round, "shipment": id_})
         if id_ not in self.fetched:
             self.fetched.add(id_)
             self.idle_waits[seat] = 0
@@ -214,7 +215,7 @@ class Freight:
             for notice in sorted(self.queued, key=lambda n: n["carrier"]):
                 if notice["start"] == self.round and notice["index"] == index:
                     message_id = self.post("dispatch-mail", notice["text"])
-                    self.host.record("commit_notice_release", seat, {
+                    self.record_action("commit_notice_release", seat, {
                         "id": message_id, "round": self.round, "index": index,
                     })
         return 200, {k: v for k, v in self.shipments[id_].items() if k != "round"}
@@ -223,6 +224,8 @@ class Freight:
         if not self.opened:
             self.open_round()
         if path == "/view":
+            if seat == "p1":
+                self.record_action("commit_view", seat, {"round": self.round})
             return 200, self.view(seat)
         if path == "/shipment":
             return self.shipment(seat, query)
@@ -246,6 +249,36 @@ class Freight:
 
 def create(task, host):
     return Freight(task, host)
+
+
+def notice_activity(rounds, events):
+    activity = {str(r): [] for r in range(1, rounds + 1)}
+    pending = []
+    for event in events:
+        if event["seat"] != "p1":
+            continue
+        kind, data = event["kind"], event["data"]
+        if kind == "commit_notice_release":
+            pending.append({"release_index": data["index"], "lookups_before_booking": 0, "view_before_booking": False})
+        elif kind == "commit_lookup":
+            for entry in pending:
+                entry["lookups_before_booking"] += 1
+        elif kind == "commit_view":
+            for entry in pending:
+                entry["view_before_booking"] = True
+        elif kind == "commit_book" and pending:
+            activity[str(data["round"])].extend(pending)
+            pending = []
+        elif kind == "commit_step" and pending:
+            activity[str(data["round"])].extend(
+                dict(entry, lookups_before_booking=None, view_before_booking=None) for entry in pending)
+            pending = []
+    if pending:
+        # A release without a subsequent booking has no completed interval.
+        round_ = next(e["data"]["round"] for e in reversed(events) if e["kind"] == "commit_notice_release")
+        activity[str(round_)].extend(
+            dict(entry, lookups_before_booking=None, view_before_booking=None) for entry in pending)
+    return activity
 
 
 def score(task, events):
@@ -291,6 +324,7 @@ def score(task, events):
             "unaffected_correct": len(correct - affected), "missed": len(answer) - len(booked),
             "stale_after_delivery": stale, "affected_after_delivery": exposed,
             "stale_rate": stale / exposed if exposed else None,
+            "notice_activity": notice_activity(params["rounds"], events),
             "delivered_outages": len(delivered), "missing_relay": missing, "report_ok": report_ok,
             "p1_stalled": int("p1" in stalls),
             "p2_stalled": int("p2" in stalls), "closed": closed}

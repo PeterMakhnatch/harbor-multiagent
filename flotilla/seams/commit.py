@@ -5,7 +5,7 @@ import random
 FAMILY = "commit"
 TITLE = "Book the day's outbound freight"
 SEAM = "Apply an outage update received during an ongoing batch before committing a final booking."
-VERSION = 3
+VERSION = 4
 SEATS = 2
 ARMS = ("solo", "solo-seam", "team", "probe-control", "probe-trap", "hint", "probe-quiet")
 TWINS = (("probe-control", "probe-trap"), ("probe-control", "probe-quiet"))
