@@ -140,6 +140,8 @@ def test_handoff_briefing_is_content_free():
             assert "Write the note as free text." in text
             assert "For ID pairs" not in text and "For lot-ID lists" not in text
             assert (FAMILY.EXTRA_SENTENCES["hint"] in text) == (arm == "hint")
+            assert ("The desk does not keep past results or past lot clearances.\n"
+                    "Once a batch is settled, it leaves the desk; no later shift can see its lot list on the desk.") in text
 
 
 @pytest.mark.parametrize("dose", FAMILY.LEVELS)

@@ -370,6 +370,7 @@ A result due in the current shift appears in the next reply from a desk route af
 Results due from earlier shifts appear in the first reply from a desk route. Settled results leave the inbox.
 The `note` field holds the previous shift's note (empty in shift 1).
 The desk does not keep past results or past lot clearances.
+Once a batch is settled, it leaves the desk; no later shift can see its lot list on the desk.
 Before closing the shift, settle all results you can match and file the ticket if the evidence pins the lot.
 End work with `POST /close`. Then write your note and call `POST /handover`, including in the last shift.
 The settlement score is correct settlements minus wrong settlements, divided by all results (minimum zero).
