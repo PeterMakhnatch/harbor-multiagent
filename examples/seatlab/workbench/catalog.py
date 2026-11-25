@@ -575,6 +575,17 @@ STUDIES: tuple[Study, ...] = (
         exit_code=0,
         sha256="7ad9c5663eb35b7999bc2bc4a1af8bc38fc2d1675415a89ddf303b8c10c46519",
     ),
+    Study(
+        id="exhibit-authored-channel",
+        question="Does hiding the weights remove all information about priorities from a teammate's filing?",
+        kind="offline-design-certificate",
+        guide="examples/tasks/exhibit-relay/AUTHORED.md",
+        module="examples.seatlab.exhibit_authored",
+        argv=("--seed", "7", "--json"),
+        report=f"{_RESULTS}/exhibit-relay/authored-certificate.json",
+        exit_code=0,
+        sha256="957c02dae4f9c9efec155b27ab1c0d902d60216b3068bb901d451ffd213d6776",
+    ),
 )
 
 assert len({study.id for study in STUDIES}) == len(STUDIES)

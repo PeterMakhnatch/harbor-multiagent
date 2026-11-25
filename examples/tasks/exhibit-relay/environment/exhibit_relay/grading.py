@@ -1,6 +1,7 @@
 from typing import Any
 
-from .cases import capacity, valid_mode, validate_case
+from .cases import AUTHORED_MODES, capacity, valid_mode, validate_case
+from .notes import normalize_notes
 
 _STEPS = (
     ("loader", "request"),
@@ -39,8 +40,11 @@ def _validate_event(
     _require(type(event["role"]) is str and event["role"] == role)
     action = event["action"]
     field = ("slips", "ids", "ids", "routes")[index]
-    _object(action, {"op", field})
+    authored = index == 1 and mode in AUTHORED_MODES
+    _object(action, {"op", field, "notes"} if authored else {"op", field})
     _require(type(action["op"]) is str and action["op"] == op)
+    if authored:
+        _require(action["notes"] == normalize_notes(action["notes"], case["crates"]))
     if index == 0:
         allowed = {brief["id"] for brief in case["briefs"]}
         cap = len(allowed) if mode == "open" else case["nominate"]

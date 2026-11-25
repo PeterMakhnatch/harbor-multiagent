@@ -60,6 +60,18 @@ def parse_routes(pairs: list[str]) -> dict[str, str]:
     return routes
 
 
+def parse_notes(raw: str) -> list[Any]:
+    if len(raw) > 4096:
+        raise ValueError("notes too large")
+    try:
+        rows = json.loads(raw)
+    except (ValueError, RecursionError):
+        raise ValueError("invalid notes JSON") from None
+    if not isinstance(rows, list) or len(rows) > 4:
+        raise ValueError("expected at most four note rows")
+    return rows
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="op", required=True)
@@ -67,6 +79,9 @@ def main() -> int:
     sub.add_parser("wait").add_argument("phase", choices=PHASES)
     sub.add_parser("request").add_argument("slips", nargs="*")
     sub.add_parser("file").add_argument("ids", nargs="*")
+    authored = sub.add_parser("file-notes")
+    authored.add_argument("notes")
+    authored.add_argument("ids", nargs="*")
     sub.add_parser("commit").add_argument("pairs", nargs="+")
     args = parser.parse_args()
     try:
@@ -78,6 +93,12 @@ def main() -> int:
                 action["slips"] = args.slips
             elif args.op == "file":
                 action["ids"] = args.ids
+            elif args.op == "file-notes":
+                action = {
+                    "op": "file",
+                    "ids": args.ids,
+                    "notes": parse_notes(args.notes),
+                }
             elif args.op == "commit":
                 action["routes"] = parse_routes(args.pairs)
             view = rpc(action)
