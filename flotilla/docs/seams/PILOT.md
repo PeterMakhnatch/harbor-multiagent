@@ -26,13 +26,14 @@ stays in the suite as a canary for smaller models. It does not enter a frontier 
 Decision on 2026-11-25: **hold the paid pilot**. `handoff` has a repeatable failure mechanism, but its
 repaired build has no prospective sample for entry rule 3. Round 6 deliberately revisited earlier instances.
 Do not select an 8-trial window from those results and call it the entry test.
-The scheduled packages also lack a complete Docker rehearsal. On v8, 21/24 completed and all scored 1,
-matching the simulator. The other 3 exhausted the runner's 1 retry at Docker preflight. We kept those
-cells missing. The prior v7 result (24/24) does not certify v8. The separate 4-cell positive and negative
-policy control passed on `handoff`; it does not fill missing pilot cells.
-After that rehearsal, the fork changed Docker preflight to request the server version instead of the full
-info report. It still rejects an unreachable engine. A new rehearsal must start in a separate run
-directory and cover all 24 cells. Do not retry the 3 exhausted cells or combine receipts.
+
+The scheduled packages passed a full Docker rehearsal after the startup check changed (`ff0625b2`).
+The new run used all 24 frozen cells once. All 24 scored 1, matching the simulator on 3 schedules.
+All 90 scripted seats completed. No retries, models or paid services were used.
+
+The earlier v8 run completed 21/24; 3 cells exhausted their retry at Docker preflight. Its FAIL receipt
+is unchanged. The repeat used the identical plan and tasks, but separate jobs and trial records. Do not
+combine the two runs. Neither result counts toward the live model entry check.
 
 | Family | Entry | Reason |
 |---|---|---|

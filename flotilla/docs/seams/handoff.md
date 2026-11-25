@@ -233,6 +233,10 @@ and in simulation. Three cells produced no trial after the allowed retry; all th
 Docker preflight. There were 7 preflight failures in 28 total starts. No model ran. The earlier v7
 receipt covers only its own folders. This is an incomplete rehearsal, not a policy failure.
 
+After the Docker startup repair (`ff0625b2`), an independent rehearsal of the same 24 planned cells
+completed on the first attempt for every cell. All rewards were 1. All 90 oracle seats completed.
+The run used no trial from the earlier wave and spent $0. Both receipts remain in the research report.
+
 ### Negative control on the final build
 
 The pilot rehearsal expects 24 rewards of 1. That cannot show that a verifier distinguishes good and bad notes.
