@@ -1,0 +1,219 @@
+"""Deterministic dispatch referee. Settlement acceptance never discloses correctness."""
+
+import re
+from copy import deepcopy
+from typing import ClassVar
+
+
+def narrow(possible, lots, status):
+    return possible & set(lots) if status == "returned" else possible - set(lots)
+
+
+def note_text(bindings, possible):
+    return "Pending " + " ".join(f"{batch}={ref}" for batch, ref in sorted(bindings.items())) + (
+        "; Suspects " + " ".join(sorted(possible)))
+
+
+class Desk:
+    routes: ClassVar = {"/desk": ("GET",), "/print": ("POST",), "/dispatch": ("POST",), "/settle": ("POST",),
+                        "/ticket": ("POST",), "/close": ("POST",), "/log": ("GET",), "/handover": ("POST",)}
+
+    def __init__(self, task, host):
+        self.host = host
+        self.params = task["params"]
+        self.arm = task["condition"]
+        self.seats = tuple(task["seats"])
+        self.batches = {b["batch"]: b for b in self.params["batches"]}
+        self.by_ref = {b["reference"]: b for b in self.batches.values()}
+        self.state = dict.fromkeys(self.batches, "planned")
+        self.shift = 1
+        self.dispatched = set()
+        self.note = ""
+        self.closed = False
+        self.ticket = None
+        self.inbox = {}
+        self.released = set()
+        self.possible = set(self.params["lots"])
+        self.logs = []
+
+    def release(self):
+        for batch, data in self.batches.items():
+            ref, lag = data["reference"], data["lag"]
+            if (batch in self.dispatched and ref not in self.released and lag is not None
+                    and data["shift"] + lag <= self.shift):
+                self.inbox[ref] = data["status"]
+                self.released.add(ref)
+                self.possible = narrow(self.possible, data["lots"], data["status"])
+
+    def public_batch(self, batch):
+        return {"batch": batch, "lots": self.batches[batch]["lots"]}
+
+    def desk(self):
+        return {"shift": self.shift, "shifts": self.params["shifts"], "lots": self.params["lots"],
+                "plan": [self.public_batch(b) | {"state": state} for b, state in self.state.items()
+                         if self.batches[b]["shift"] == self.shift],
+                "open": [self.public_batch(b) for b, state in self.state.items()
+                         if state == "dispatched" and self.batches[b]["shift"] < self.shift], "ticket": self.ticket}
+
+    def print_batch(self, seat, body):
+        batch = body.get("batch")
+        if not isinstance(batch, str) or self.state.get(batch) != "planned" or self.batches[batch]["shift"] != self.shift:
+            return 409, {"error": "batch is not planned for this shift"}
+        self.state[batch] = "printed"
+        self.host.record("printed", seat, {"batch": batch, "shift": self.shift})
+        return 200, {"ok": True}
+
+    def dispatch(self, seat, body):
+        batches = body.get("batches")
+        if not isinstance(batches, list) or not batches or not all(isinstance(b, str) for b in batches):
+            return 400, {"error": "send a nonempty list of batch IDs"}
+        if len(set(batches)) != len(batches) or any(self.state.get(b) != "printed" or
+                self.batches[b]["shift"] != self.shift for b in batches):
+            return 409, {"error": "each batch must be printed in this shift"}
+        references = {}
+        for batch in batches:
+            self.state[batch] = "dispatched"
+            self.dispatched.add(batch)
+            references[batch] = self.batches[batch]["reference"]
+            self.host.record("dispatched", seat, {"batch": batch, "reference": references[batch], "shift": self.shift})
+        return 200, {"references": references}
+
+    def settle(self, seat, body):
+        items = body.get("items")
+        if not isinstance(items, list) or not items or not all(isinstance(i, dict) for i in items):
+            return 400, {"error": "send a nonempty list of settlement objects"}
+        refs, batches = set(), set()
+        for item in items:
+            ref, batch, action = item.get("reference"), item.get("batch"), item.get("action")
+            if not all(isinstance(v, str) for v in (ref, batch, action)) or action not in ("close", "reissue"):
+                return 400, {"error": "send a reference, batch and valid action"}
+            if ref not in self.inbox or self.state.get(batch) != "dispatched" or ref in refs or batch in batches:
+                return 409, {"error": "reference or batch is not available"}
+            refs.add(ref)
+            batches.add(batch)
+        for item in items:
+            ref, batch, action = item["reference"], item["batch"], item["action"]
+            correct = self.by_ref[ref]["batch"] == batch and action == action_for(self.inbox[ref])
+            self.host.record("settled", seat, {"reference": ref, "batch": batch, "action": action,
+                                              "correct": correct, "shift": self.shift})
+            del self.inbox[ref]
+            self.state[batch] = "settled"
+        return 200, {"recorded": len(items)}
+
+    def file_ticket(self, seat, body):
+        lot = body.get("lot")
+        if not isinstance(lot, str) or lot not in self.params["lots"]:
+            return 400, {"error": "send a valid lot ID"}
+        if self.ticket is not None:
+            return 409, {"error": "a ticket was already filed"}
+        self.ticket = lot
+        self.host.record("ticket", seat, {"lot": lot, "shift": self.shift, "early": len(self.possible) != 1,
+                                         "correct": lot == self.params["bad"]})
+        return 200, {"recorded": True}
+
+    def canonical(self):
+        pending = {b: self.batches[b]["reference"] for b, state in self.state.items() if state == "dispatched"}
+        return note_text(pending, self.possible)
+
+    def handover(self, seat, body):
+        note = body.get("note")
+        if not isinstance(note, str):
+            return 400, {"error": "send a note string"}
+        if len(note) > self.params["cap"]:
+            return 413, {"error": "note exceeds the character limit"}
+        pending = [b for b, state in self.state.items() if state == "dispatched" and self.batches[b]["lag"] is not None]
+        if self.arm == "twin":
+            note = self.canonical()
+        tokens = set(re.findall(r"\b[BLR]\d{2}\b", note))
+        missing = [b for b in pending if not {b, self.batches[b]["reference"]} <= tokens]
+        self.host.record("handover", seat, {"shift": self.shift, "note": note, "length": len(note),
+                                            "pending": len(pending), "missing_bindings": missing,
+                                            "kept_lots": self.possible <= tokens})
+        self.note = note
+        if self.shift == self.params["shifts"]:
+            self.host.freeze()
+        else:
+            self.shift += 1
+            self.closed = False
+            self.host.advance()
+            if len(self.seats) > 1:
+                self.host.retire(seat)
+                self.host.activate(self.seats[self.shift - 1])
+        return 200, {"ok": True}
+
+    def perform(self, seat, path, body):
+        if path == "/desk":
+            return 200, self.desk()
+        if path == "/log":
+            records = self.logs if self.arm == "team-record" and self.closed else [r for r in self.logs
+                                                                                   if r["shift"] == self.shift]
+            return 200, {"calls": deepcopy(records)}
+        if path == "/handover":
+            return self.handover(seat, body)
+        if path == "/close":
+            self.closed = True
+            return 200, {"ok": True}
+        if self.closed:
+            return 409, {"error": "work is closed"}
+        return {"/print": self.print_batch, "/dispatch": self.dispatch,
+                "/settle": self.settle, "/ticket": self.file_ticket}[path](seat, body)
+
+    def handle(self, seat, method, path, body, query):
+        shift = self.shift
+        self.release()
+        note = self.note
+        status, reply = self.perform(seat, path, body)
+        inbox = [{"reference": ref, "status": value} for ref, value in sorted(self.inbox.items())]
+        reply |= {"note": note, "inbox": inbox}
+        if path != "/log":
+            entry = {"shift": shift, "path": path, "body": deepcopy(body), "status": status, "reply": deepcopy(reply)}
+            self.logs.append(entry)
+        self.host.record("desk_view", seat, {"shift": shift, "path": path, "status": status, "reply": deepcopy(reply)})
+        if status >= 400:
+            self.host.record("refused", seat, {"path": path, "code": status, "shift": shift})
+        return status, reply
+
+
+def action_for(status):
+    return "reissue" if status == "returned" else "close"
+
+
+def create(task, host):
+    return Desk(task, host)
+
+
+def score(task, events):
+    params = task["params"]
+    scored = {b["reference"]: b for b in params["batches"] if b["lag"] is not None}
+    correct = set()
+    tickets = []
+    seen = set()
+    for event in events:
+        data = event["data"]
+        if event["kind"] == "settled":
+            ref = data["reference"]
+            batch = scored.get(ref)
+            if (ref not in seen and batch and data["batch"] == batch["batch"]
+                    and data["action"] == action_for(batch["status"])):
+                correct.add(ref)
+            seen.add(ref)
+        elif event["kind"] == "ticket":
+            tickets.append(data["lot"])
+    ticket = float(bool(tickets) and tickets[0] == params["bad"])
+    rates = {}
+    for lag in (0, 1, 2):
+        eligible = {ref for ref, batch in scored.items() if batch["lag"] == lag}
+        rates[f"lag{lag}"] = len(correct & eligible) / len(eligible) if eligible else None
+    full = 0.5 * (len(correct) / len(scored) + ticket)
+    arm = task["condition"]
+    reward = full
+    if arm.startswith("probe-hunt"):
+        reward = ticket
+    elif arm.startswith("probe-ref"):
+        reward = float(any(ref in correct and b["batch"] == params["ref_target"] for ref, b in scored.items()))
+    handovers = [e["data"] for e in events if e["kind"] == "handover"]
+    losses = [h["shift"] for h in handovers[:-1] if h["missing_bindings"] or not h["kept_lots"]]
+    return {"reward": reward, "full_reward": full, "ticket": ticket, "reconciled": len(correct),
+            "total_results": len(scored), **rates, "handover_count": len(handovers),
+            "first_loss_shift": min(losses) if losses else None,
+            "missing_bindings": sum(len(h["missing_bindings"]) for h in handovers[:-1])}
