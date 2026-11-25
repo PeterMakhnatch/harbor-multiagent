@@ -112,6 +112,32 @@ def host_env() -> dict[str, str]:
             if not name.startswith("FLOTILLA_") and name not in ("SEAT", "SEAT_TOKEN", "SEAT_BRIEFING", "WORLD_URL")}
 
 
+def seat_env(task: qa.Task, seat: str, root: Path, pass_env: tuple[str, ...]) -> dict[str, str]:
+    tmp = root / "tmp"
+    tmp.mkdir(mode=0o700)
+    names = ("PATH", "HOME", *pass_env)
+    return ({name: os.environ[name] for name in names if name in os.environ}
+            | {"PATH": os.environ.get("PATH", os.defpath), "HOME": str(Path.home())}
+            | task.env(seat) | {"TMPDIR": str(tmp)})
+
+
+def sandbox_command(argv: list[str], profile: Path, root: Path) -> list[str]:
+    return ["/usr/bin/sandbox-exec", "-f", str(profile), "-D", f"SEATROOT={root}",
+            "-D", f"HOSTHOME={Path.home().resolve()}", "-D", f"HOSTTMP={Path(tempfile.gettempdir()).resolve()}",
+            "-D", f"SEATSCRIPTS={Path(__file__).resolve().parent / 'playtest_seats'}", *argv]
+
+
+def sandbox_profile(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    if sys.platform != "darwin":
+        print("playtest: --sandbox-profile skipped: sandbox-exec is only available on macOS", file=sys.stderr)
+        return None
+    if not path.is_file():
+        raise ValueError(f"sandbox profile not found: {path}")
+    return path.resolve()
+
+
 def dependencies(agents: dict) -> dict[str, tuple[str, ...]]:
     result = {}
     for seat, spec in agents.items():
@@ -165,7 +191,8 @@ def host_preface(mapping: dict[str, str]) -> bytes:
 
 
 def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
-                 output: Path, after: tuple[str, ...], token: str, url: str) -> SeatRun:
+                 output: Path, after: tuple[str, ...], token: str, url: str,
+                 pass_env: tuple[str, ...], profile: Path | None) -> SeatRun:
     workdir = root / "work"
     workdir.mkdir()
     copy_seat_files(task, seat, workdir)
@@ -177,11 +204,13 @@ def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
     (output / "seat.log").touch()
     native_log = root / "command.log"
     native_log.touch()
-    env = host_env() | task.env(seat) | {"SEAT_TOKEN": token, "PWD": str(workdir), "WORLD_URL": url}
+    env = seat_env(task, seat, root, pass_env) | {"SEAT_TOKEN": token, "PWD": str(workdir), "WORLD_URL": url}
     if mode == "external":
         values = {"instruction": str(prompt), "seat": seat, "workdir": str(workdir), "log": str(native_log)}
         command = PLACEHOLDER.sub(lambda m: shlex.quote(values[m[1]]), template)
         argv = ["/bin/bash", "-c", command]
+        if profile is not None:
+            argv = sandbox_command(argv, profile, root)
     else:
         argv = policy_command(task, seat, mode, root)
         command = shlex.join(argv)
@@ -336,7 +365,8 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]]) -> None:
 
 
 def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: float | None,
-             max_parallel: int, out: Path) -> dict:
+             max_parallel: int, out: Path, *, pass_env: tuple[str, ...] = (),
+             profile: Path | None = None) -> dict:
     if qa.yaml is None:
         raise ValueError("PyYAML is required; use uvx --quiet --python 3.12 --with pyyaml python flotilla/playtest.py")
     task = qa.load_task(task_dir.resolve())
@@ -351,6 +381,9 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
     timeout = float(config.get("agent", {}).get("timeout_sec", 900)) if timeout is None else timeout
     if not math.isfinite(timeout) or timeout <= 0 or max_parallel <= 0 or not template.strip():
         raise ValueError("timeout and max-parallel must be positive; seat command must not be empty")
+    if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) for name in pass_env):
+        raise ValueError("--pass-env requires environment variable names")
+    profile = sandbox_profile(profile)
     if out.exists() and (not out.is_dir() or any(out.iterdir())):
         raise ValueError(f"output must be a new or empty directory: {out}")
     out = out.resolve()
@@ -362,15 +395,17 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
         try:
             with world_server(task, out, root, tokens, timeout) as (url, env):
                 for seat in task.seats:
-                    seat_root = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="seat-"))).resolve()
+                    seat_root = Path(stack.enter_context(tempfile.TemporaryDirectory(
+                        prefix=".playtest-seat-", dir=Path.home()))).resolve()
                     mode = "external" if seat in selected else "careful" if seat in subjects else "scripted"
                     seats.append(prepare_seat(task, seat, mode, seat_root, template, out / "seats" / seat,
-                                              after[seat], tokens[seat], url))
+                                              after[seat], tokens[seat], url, pass_env, profile))
                 timed_out = run_seats(seats, timeout, max_parallel)
                 reward, score = verify(task, out, url, env, float(config.get("verifier", {}).get("timeout_sec", 120)))
         finally:
             audit = archive_seats(seats)
         result = {"task": str(task.path), "reward": reward, "score": score, "timed_out": timed_out,
+                  "sandbox_profile": str(profile) if profile else None,
                   "seats": {seat.seat: seat.result() for seat in seats}}
         (out / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         timeline(out, result, audit)
@@ -378,17 +413,22 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, epilog="Trusted host commands only; no filesystem isolation.")
+    parser = argparse.ArgumentParser(description=__doc__, epilog="Trusted host commands only; sandbox is optional.")
     parser.add_argument("--task", type=Path, required=True, help="built task folder")
     parser.add_argument("--seat-cmd", required=True, help="shell template; {instruction}, {seat}, {workdir}, {log}")
     parser.add_argument("--seats", help="comma-separated external seats (default: all non-scripted seats)")
     parser.add_argument("--timeout-sec", type=float, help="total seat play time (default: built task timeout)")
     parser.add_argument("--max-parallel", type=int, default=2, help="maximum concurrent external commands")
+    parser.add_argument("--pass-env", action="append", default=[], metavar="NAME",
+                        help="host variable to pass to a seat (repeatable; comma-separated names also accepted)")
+    parser.add_argument("--sandbox-profile", type=Path, help="macOS sandbox-exec profile for external seats")
     parser.add_argument("--out", type=Path, required=True, help="new or empty output folder")
     args = parser.parse_args()
     try:
         selected = {seat.strip() for seat in args.seats.split(",")} if args.seats is not None else None
-        result = playtest(args.task, args.seat_cmd, selected, args.timeout_sec, args.max_parallel, args.out)
+        passed = tuple(name.strip() for group in args.pass_env for name in group.split(","))
+        result = playtest(args.task, args.seat_cmd, selected, args.timeout_sec, args.max_parallel, args.out,
+                          pass_env=passed, profile=args.sandbox_profile)
     except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         parser.exit(2, f"playtest: {exc}\n")
     print(f"Reward: {result['reward']}; results: {args.out / 'result.json'}")

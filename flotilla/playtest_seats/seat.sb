@@ -1,0 +1,29 @@
+(version 1)
+(allow default)
+
+(deny file-read-data
+  (subpath (param "HOSTHOME"))
+  (subpath "/private/tmp")
+  (subpath (param "HOSTTMP")))
+(allow file-read*
+  (subpath (param "SEATROOT"))
+  (subpath (param "SEATSCRIPTS"))
+  (subpath (string-append (param "HOSTHOME") "/.local/bin"))
+  (subpath (string-append (param "HOSTHOME") "/.local/share/claude")))
+
+(deny file-write*)
+(allow file-write*
+  (subpath (param "SEATROOT"))
+  (literal "/dev/null")
+  (literal "/dev/zero")
+  (literal "/dev/tty")
+  (regex #"^/dev/ttys[0-9]+$")
+  (regex #"^/dev/fd/")
+  (literal "/dev/dtracehelper"))
+
+(deny network-outbound)
+(allow network-outbound
+  (remote ip "localhost:*")
+  (remote tcp "*:443")
+  (remote udp "*:53")
+  (remote unix-socket))

@@ -30,10 +30,24 @@ assert Path.cwd() == Path(workdir)
 assert seat == os.environ['SEAT']
 assert urlsplit(os.environ['WORLD_URL']).hostname == '127.0.0.1'
 assert 'FLOTILLA_ADMIN' not in os.environ and 'FLOTILLA_TOKENS' not in os.environ
+assert Path(os.environ['TMPDIR']) == Path(workdir).parent / 'tmp'
+assert Path(os.environ['TMPDIR']).is_dir()
+assert Path(workdir).parent.stat().st_mode & 0o777 == 0o700
+assert Path(workdir).parent.parent == Path.home().resolve()
+assert 'PLAYTEST_SECRET' not in os.environ
+if mode == 'env':
+    assert os.environ['PLAYTEST_KEEP'] == 'allowed'
+    assert set(os.environ) <= {
+        'PATH', 'HOME', 'TMPDIR', 'SEAT', 'SEAT_TOKEN', 'SEAT_BRIEFING', 'WORLD_URL',
+        'PWD', 'SHLVL', '_', 'LC_CTYPE', 'PLAYTEST_KEEP'
+    }
+    mode = 'careful'
 assert list(Path.cwd().iterdir()) == [] or list(Path.cwd().iterdir()) == [Path.cwd() / 'private.txt']
 if Path('private.txt').exists():
     assert Path('private.txt').read_text() == seat
 assert Path(prompt).read_text().startswith('You are working in a sandbox directory.\\n')
+assert f'/home/player maps to {workdir}' in Path(prompt).read_text()
+assert f'http://world:8080 maps to {os.environ["WORLD_URL"]}' in Path(prompt).read_text()
 print('Read', prompt, flush=True)
 print('ls ..', flush=True)
 print('token-sha256', hashlib.sha256(os.environ['SEAT_TOKEN'].encode()).hexdigest(), flush=True)
@@ -187,3 +201,27 @@ def test_reject_scripted_external_and_cyclic_dependencies(tmp_path):
     cyclic = play(tmp_path, task, check=False)
     assert cyclic.returncode == 2 and "cycle" in cyclic.stderr.lower()
     assert not (tmp_path / "out").exists()
+
+
+def test_minimal_env_and_pass_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("PLAYTEST_SECRET", "not allowed")
+    monkeypatch.setenv("PLAYTEST_KEEP", "allowed")
+    task = build(tmp_path, "talk-trap")
+    out, result = play(tmp_path, task, "env", extra=("--pass-env", "PLAYTEST_KEEP"))
+    assert_evidence(task, out, result, 1)
+
+
+def test_sandbox_command_and_skip(tmp_path, monkeypatch, capsys):
+    monkeypatch.syspath_prepend(str(FLOTILLA))
+    runner = load(FLOTILLA / "playtest.py")
+    profile = tmp_path / "seat.sb"
+    profile.write_text("(version 1)\n(allow default)\n")
+    root = tmp_path / "seat"
+    argv = runner.sandbox_command(["/bin/bash", "-c", "echo hello"], profile, root)
+    assert argv[:5] == ["/usr/bin/sandbox-exec", "-f", str(profile), "-D", f"SEATROOT={root}"]
+    assert argv[-3:] == ["/bin/bash", "-c", "echo hello"]
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert runner.sandbox_profile(profile) is None
+    assert "skipped" in capsys.readouterr().err
+    monkeypatch.setattr(sys, "platform", "darwin")
+    assert runner.sandbox_profile(profile) == profile.resolve()
