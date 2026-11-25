@@ -350,6 +350,26 @@ def count_text(row: dict) -> str:
     return f"{row['trials']} | {row['model_seats']} / {row['seats']} | {range_text(row)}"
 
 
+def roster_warnings(result: dict) -> list[str]:
+    warnings = []
+    for level in result["levels"]:
+        by_arm = {arm: totals([row for row in result["rows"]
+                               if row["stage"] == "C" and row["level"] == level and row["arms"] == arm])
+                  for arm in ("team", "team-fullrecord", "hint")}
+        team = by_arm["team"]
+        for arm in ("team-fullrecord", "hint"):
+            row = by_arm[arm]
+            if not row["trials"]:
+                continue
+            actual = tuple(row[key] / row["trials"] for key in ("model_seats", "seats"))
+            expected = tuple(team[key] / team["trials"] for key in ("model_seats", "seats"))
+            if actual != expected:
+                warnings.append(f"- **{level}: {arm} does not match the team roster.** "
+                                f"{actual[0]:g}/{actual[1]:g} model/all seats versus "
+                                f"{expected[0]:g}/{expected[1]:g}. Costed as built; do not claim an isolated effect.")
+    return warnings
+
+
 def family_lines(result: dict) -> list[str]:
     family = result["family"]
     if "error" in result:
@@ -380,8 +400,9 @@ def family_lines(result: dict) -> list[str]:
                 continue
             lines.append(f"| {stage} | {model.removeprefix('openrouter/')} | {count_text(added)} | "
                          f"{count_text(cumulative)} | ${min(result['cap'], math.ceil(cumulative['model_high'])):.2f} |")
-    lines.extend(["", (f"Power source: `{result['card']}`. Stage B exact looks: {result['looks']}; "
-                       "no optional non-binding futility. Stage C envelope (the largest eligible card n, capped):"), ""])
+    looks = (f"Stage B exact looks: {result['looks']}; no optional non-binding futility."
+             if result["pairs"] else "Stage B skipped: no probe pair.")
+    lines.extend(["", f"Power source: `{result['card']}`. {looks} Stage C envelope (largest eligible card n, capped):", ""])
     for level, options in result["power"].items():
         n = next(row["n"] for row in result["sets"] if row["stage"] == "C" and row["level"] == level)
         lines.append(f"- {level}: {n} pairs/model maximum. " + (
@@ -390,6 +411,8 @@ def family_lines(result: dict) -> list[str]:
             "Lapse alternatives (control-only minus trap-only full-success rate, card n): " + "; ".join(
                 f"{row['treatment']} {row['policy']} {row['success_effect']:.3f}, "
                 f"{row['planned_n'] or row['plan_status']}" for row in options)))
+    if warnings := roster_warnings(result):
+        lines.extend(["", *warnings])
     lines.extend(["", "Task sets (zero-based runner index): " + "; ".join(
         f"{i}={row['stage']}/{row['level']}/{','.join(row['arms'])}" for i, row in enumerate(result["sets"])) + ".", ""])
     return lines
@@ -413,6 +436,8 @@ def render_forecast(results: list[dict]) -> str:
               "Turn estimates extrapolate probe history; model cache and turn costs may differ. No assumed compaction."),
              ("- The runner has a single agent and roster design; the second harness and cross-model and matched-token "
               "arms need separate approved plans. A second pass at the same counts and profile would double these totals."),
+             ("- The staged runner's `Outcomes` refuses non-`probe` families even when dry-run accepts the syntax. "
+              "For Seams B, apply `stages.SequentialTest` and count complete pairs from event scores manually."),
              "- Low/high = model estimate divided/multiplied by uncertainty, plus fixed sandbox cost. Not a confidence interval.",
              "- Rebuild using private seeds before real runs. The current built sets are for forecast and simulation only.", ""]
     for result in results:

@@ -63,6 +63,7 @@ def test_fixture_three_gates_and_runner_forecast(tmp_path, tool, monkeypatch, ca
     assert {row["arm"] for row in plan["token_profiles"]} == {"solo", "talk-control", "talk-trap", "team", "hint"}
     report = tool.render_forecast([result])
     assert f"| **Total** | {tool.count_text(total)} |" in report
+    assert "hint does not match the team roster" in report
 
     def forbidden(_url):
         pytest.fail("dry-run unexpectedly requested the network")
