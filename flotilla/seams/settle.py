@@ -122,8 +122,8 @@ def draw(rng, seats, n_windows, n_free, probe):
             holders.discard(rng.choice([seat for seat in seats if seat != owner]))
         for seat in holders:
             free[seat].add(code)
-    if any(len(free[seat]) == n_windows for seat in seats):
-        return None  # every desk blocks at least one window
+    if any(len(free[seat]) == n_windows for seat in seats) or len({frozenset(v) for v in free.values()}) < len(seats):
+        return None  # every desk blocks at least one window, and no two lists are equal
     firsts = {seat: min(free[seat]) for seat in seats}
     result = {"windows": codes, "blocked": {seat: sorted(set(codes) - free[seat]) for seat in seats},
               "free_for_all": common}
@@ -185,8 +185,9 @@ It fails for all desks if the desks file different windows, if a filed window is
 - A message goes to all desks. The other desks receive it in the round after the round in which you sent it, not earlier.
 - A message is one line of plain ASCII text, at most {TEXT_CAP} characters. Write a window as its code, for example {EXAMPLE} ({EXAMPLE} is only an example; it is not one of the windows).
 - Filing is final. A desk files once; a second filing is refused. No desk can see what another desk filed.
-- After you file, your part is over: you cannot send more messages.
-- If you do not file in a round, close the round. A round ends when every desk that has not filed has closed it. Then the next round starts.
+- After you file, your part is over: you cannot send more messages, and you can stop.
+- If you do not file in a round, close the round. After you close a round, you cannot send or file until the next round starts.
+- A round ends when every desk that has not filed has closed it. Then the next round starts.
 - When round {rounds} ends, play ends. A desk that has not filed by then has filed nothing.
 
 ## Calls
