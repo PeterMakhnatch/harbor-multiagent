@@ -5,7 +5,8 @@ import hashlib
 
 def supports(name, variant):
     return name in ("careful", "naive", "lone", "blind", "reverse", "colon", "slash", "lines", "ref-first",
-                    "exhaust", "stall")
+                    "json", "arrow", "ref-eq", "cleared", "paren", "exhaust", "stall",
+                    "lapse-10", "lapse-20", "lapse-30", "lapse-50")
 
 
 
@@ -78,14 +79,20 @@ def work(name, client, own, memory, family):
             possible = family.narrow(possible, available[batch], status)
             local = family.narrow(local, available[batch], status)
             items.append(settlement(ref, batch, status))
-    if name == "blind":
+    selected = None
+    if name == "blind" and desk["shift"] == desk["shifts"]:
         unknown_refs = sorted(set(inbox) - set(by_ref))
         unknown_batches = sorted(pending - set(bindings))
         salt = ":".join(sorted(fresh.values()) + unknown_refs)
         possible = feasible_lots(possible, [available[b] for b in unknown_batches],
                                  [inbox[r] for r in unknown_refs])
-        for ref, batch in zip(unknown_refs, shuffled(unknown_batches, salt)):
-            items.append(settlement(ref, batch, inbox[ref]))
+        if possible:
+            selected = shuffled(possible, "ticket:" + salt)[0]
+            for status in ("returned", "delivered"):
+                refs = [ref for ref in unknown_refs if inbox[ref] == status]
+                eligible = [b for b in unknown_batches if (selected in available[b]) == (status == "returned")]
+                for ref, batch in zip(refs, shuffled(eligible, status + ":" + salt)):
+                    items.append(settlement(ref, batch, status))
     if name == "reverse":
         items.reverse()
     if items:
@@ -94,8 +101,7 @@ def work(name, client, own, memory, family):
             bindings.pop(item["batch"], None)
     if desk["ticket"] is None:
         if name == "blind":
-            if desk["shift"] == desk["shifts"] and possible:
-                selected = shuffled(possible, "ticket:" + ":".join(sorted(inbox)))[0]
+            if selected is not None:
                 check(*(yield from client.post("/ticket", {"lot": selected})))
         elif len(possible) == 1:
             check(*(yield from client.post("/ticket", {"lot": next(iter(possible))})))
@@ -112,6 +118,12 @@ def work(name, client, own, memory, family):
         keep, suspects = {}, set()
     else:
         keep, suspects = bindings, possible
+    if own.lapse_percent is not None and not own["continuous"] and desk["shift"] < desk["shifts"]:
+        percent = own.lapse_percent
+        shift = desk["shift"]
+        keep = {b: r for b, r in keep.items() if not own.lapse(percent, ["binding", shift, b])}
+        suspects = suspects | {lot for lot in lots if lot not in suspects
+                              and own.lapse(percent, ["clearance", shift, lot])}
     note = family.write_note(keep, suspects, name)
     if own["continuous"] and len(note) > own["cap"]:
         note = ""
