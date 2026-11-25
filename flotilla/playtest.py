@@ -48,22 +48,34 @@ sys.path.insert(0, sys.argv[1])
 import world
 requests = Path(sys.argv[3])
 requests.touch()
+responses = requests.with_name("responses.jsonl")
+responses.touch()
 request_lock = threading.Lock()
 request_seq = 0
 origin = time.monotonic()
 
 class RecordedWorld(world.World):
+    request_id = None
+
     def _handle(self, method):
         global request_seq
+        self.request_id = None
         seat = self._caller()
         if seat in world.SEATS:
             with request_lock:
                 request_seq += 1
+                self.request_id = request_seq
                 with requests.open("a") as log:
                     log.write(json.dumps({"seq": request_seq, "seat": seat, "method": method,
                                           "path": self.path.split("?", 1)[0],
                                           "t": round(time.monotonic() - origin, 3)}) + "\\n")
         return super()._handle(method)
+
+    def send_response(self, code, message=None):
+        if self.request_id is not None:
+            with request_lock, responses.open("a") as log:
+                log.write(json.dumps({"seq": self.request_id, "status": code}) + "\\n")
+        return super().send_response(code, message)
 
 world.World = RecordedWorld
 server = world.serve('127.0.0.1', 0)
@@ -127,6 +139,7 @@ class SeatRun:
                 "seconds": None if self.started is None else self.ended - self.started,
                 "started_sec": self.started, "ended_sec": self.ended, "timed_out": self.timed_out,
                 "error": self.error, "start_after": list(self.after), "workdir": str(self.workdir),
+                "http_4xx": sum(400 <= (r.get("status") or 0) < 500 for r in requests),
                 "mapping": self.mapping, "world_calls": len(requests),
                 "first_read": first_read, "first_submit": first_submit,
                 "read_before_submit": None if first_read is None or first_submit is None else first_read < first_submit}
@@ -326,20 +339,42 @@ def verify(task: qa.Task, out: Path, url: str, env: dict[str, str], timeout: flo
         process = subprocess.Popen([sys.executable, "-B", "-c", VERIFY, str(task.env_dir), url, str(verifier)],
                                    cwd=out, env=env, stdin=subprocess.DEVNULL, stdout=log,
                                    stderr=subprocess.STDOUT, start_new_session=True)
+        failure = None
         try:
             if process.wait(timeout=timeout):
-                raise RuntimeError(f"verifier failed; see {out / 'verifier.log'}")
+                failure = f"verifier failed; see {out / 'verifier.log'}"
+        except subprocess.TimeoutExpired:
+            failure = f"verifier timed out after {timeout:g} s"
         finally:
             stop_process(process)
-    score = json.loads((verifier / "score.json").read_text())
-    reward_file = verifier / "reward.json"
-    if not reward_file.exists() and (score.get("error") or score.get("invalid")):
-        return None, score
-    return json.loads(reward_file.read_text())["reward"], score
+    try:
+        score = json.loads((verifier / "score.json").read_text())
+        reason = score.get("invalid") or score.get("error") or failure
+        if reason:
+            return None, score | {"error": reason}
+        return json.loads((verifier / "reward.json").read_text())["reward"], score
+    except (OSError, ValueError, KeyError) as exc:
+        return None, {"error": failure or f"verifier output unavailable: {exc}"}
 
 
 def read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def read_requests(out: Path) -> list[dict]:
+    statuses = {r["seq"]: r["status"] for r in read_jsonl(out / "responses.jsonl")}
+    path = out / "requests.jsonl"
+    requests = [r | {"status": statuses.get(r["seq"])} for r in read_jsonl(path)]
+    path.write_text("".join(json.dumps(r) + "\n" for r in requests))
+    (out / "responses.jsonl").unlink()
+    return requests
+
+
+def world_causes(out: Path) -> dict:
+    events = read_jsonl(out / "artifacts" / "logs" / "world" / "events.jsonl")
+    freeze = next((e for e in events if e["kind"] == "freeze"), None)
+    return {"freeze_reason": (freeze["data"].get("reason", "admin freeze") if freeze else None),
+            "budget_events": [e for e in events if e["kind"] == "call_budget"]}
 
 
 def log_strings(text: str) -> list[str]:
@@ -431,7 +466,8 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
     world = out / "artifacts" / "logs" / "world"
     events = read_jsonl(world / "events.jsonl")
     messages = {m["id"]: m for m in read_jsonl(world / "messages.jsonl")}
-    state = json.loads((out / "verifier" / "world-state.json").read_text())
+    state_file = out / "verifier" / "world-state.json"
+    state = json.loads(state_file.read_text()) if state_file.is_file() else {}
     submissions = iter(state.get("submissions", []))
     by_seat = {seat: [] for seat in result["seats"]}
     clock = "tick" if result["score"].get("mode") == "extension" else "t (seconds)"
@@ -450,6 +486,8 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
                 kind = "scripted send"
         by_seat[seat].append(f"- #{event['seq']} {clock}={event['t']} {kind}: `{json.dumps(data, ensure_ascii=True)}`")
     lines = ["# Local playtest", "", f"Reward: {result['reward']}; timed out: {result['timed_out']}",
+             f"Valid: {result['valid']}; invalid reason: {result['invalid_reason']}",
+             f"Freeze reason: {result['freeze_reason']}; budget events: {json.dumps(result['budget_events'])}",
              (f"Model: {result['model']}; harness: {result['harness']}; "
               f"sandbox profile: {result['sandbox_profile'] or 'none (host processes are not isolated)'}"),
              f"Seat failures: {json.dumps(result['seat_failures']) if result['seat_failures'] else 'none'}",
@@ -465,7 +503,8 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
         started, ended = (f"{info[key]:.3f}" if info[key] is not None else "not started"
                           for key in ("started_sec", "ended_sec"))
         lines += [f"## {seat} ({info['mode']})", "",
-                  f"Started: {started}; ended: {ended}; exit: {info['exit_code']}", "",
+                  f"Started: {started}; ended: {ended}; exit: {info['exit_code']}; "
+                  f"world calls: {info['world_calls']}; 4xx: {info['http_4xx']}", "",
                   *(evidence or ["- No seat events."]), "", "### World requests (arrival order)", "",
                   *(by_request[seat] or ["- No world calls."]), "", "### Shell commands (CLI order)", "",
                   *[f"- `{command}`" for command in commands],
@@ -535,10 +574,12 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
                 reward, score = verify(task, out, url, env, float(config.get("verifier", {}).get("timeout_sec", 120)))
         finally:
             audit = archive_seats(seats)
-        requests = read_jsonl(out / "requests.jsonl")
+        requests = read_requests(out)
         seat_results = {seat.seat: seat.result([r for r in requests if r["seat"] == seat.seat]) for seat in seats}
         failures = {name: errors for name, info in seat_results.items() if (errors := seat_failures(info))}
+        reason = score.get("error") or (None if reward is not None else "verifier returned no reward")
         result = {"task": str(task.path), "reward": reward, "score": score, "timed_out": timed_out,
+                  "valid": reason is None, "invalid_reason": reason, **world_causes(out),
                   "sandbox_profile": str(profile) if profile else None, "model": model_label,
                   "harness": harness_name(template), "seat_failures": failures, "seats": seat_results}
         (out / "result.json").write_text(json.dumps(result, indent=2) + "\n")
@@ -569,9 +610,12 @@ def main() -> None:
     print(f"Reward: {result['reward']}; results: {args.out / 'result.json'}")
     for name, info in result["seats"].items():
         print(f"{name}: exit={info['exit_code']}, world calls={info['world_calls']}")
+    if not result["valid"]:
+        print(f"playtest: invalid: {result['invalid_reason']}", file=sys.stderr)
     if result["seat_failures"]:
         for name, failures in result["seat_failures"].items():
             print(f"playtest: {name}: {', '.join(failures)}", file=sys.stderr)
+    if result["seat_failures"] or not result["valid"]:
         raise SystemExit(1)
 
 

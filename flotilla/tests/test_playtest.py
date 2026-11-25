@@ -77,6 +77,17 @@ elif mode in ('careful', 'json'):
     runpy.run_path(solution, run_name='__main__')
 elif mode == 'fail':
     sys.exit(7)
+elif mode == 'fault':
+    import urllib.error
+    import urllib.request
+    for path, data in [('/await?until=bad', None), ('/fixture-fault' if seat == 'p1' else '/whoami',
+                                                   b'{}' if seat == 'p1' else None)]:
+        request = urllib.request.Request(os.environ['WORLD_URL'] + path, data=data,
+                                         headers={'Authorization': 'Bearer ' + os.environ['SEAT_TOKEN']})
+        try:
+            urllib.request.urlopen(request).read()
+        except urllib.error.HTTPError:
+            pass
 """
 
 
@@ -231,6 +242,24 @@ def test_failed_seat_exit(tmp_path):
     assert result["seat_failures"]["p2"] == ["exit code 7", "no world calls"]
     assert result["seats"]["p2"]["first_read"] is None
     assert result["seats"]["p2"]["first_submit"] is None
+
+
+def test_invalid_verifier_preserves_seats_and_reason(tmp_path):
+    task = build(tmp_path, "team")
+    completed = play(tmp_path, task, "fault", check=False)
+    assert completed.returncode == 1, completed.stdout + completed.stderr
+    out = tmp_path / "out"
+    result = json.loads((out / "result.json").read_text())
+    assert result["valid"] is False and result["reward"] is None
+    assert result["invalid_reason"] == "extension_error"
+    assert "invalid: extension_error" in completed.stderr
+    assert result["freeze_reason"] == "extension ended play"
+    assert result["budget_events"] == []
+    assert set(result["seats"]) == {"p1", "p2"}
+    seat = result["seats"]["p1"]
+    assert seat["exit_code"] == 0 and seat["seconds"] > 0
+    assert seat["world_calls"] == 2 and seat["http_4xx"] == 1
+    assert "invalid reason: extension_error" in (out / "summary.md").read_text()
 
 
 def test_summary_lists_commands_requests_and_scripted_sends(tmp_path):
