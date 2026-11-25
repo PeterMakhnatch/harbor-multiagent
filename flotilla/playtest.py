@@ -243,6 +243,7 @@ def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
         argv = ["/bin/bash", "-c", command]
         if profile is not None:
             argv = sandbox_command(argv, profile, root)
+            env["PLAYTEST_SANDBOX"] = str(profile)
     else:
         argv = policy_command(task, seat, mode, root)
         command = shlex.join(argv)
@@ -449,7 +450,10 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
                 kind = "scripted send"
         by_seat[seat].append(f"- #{event['seq']} {clock}={event['t']} {kind}: `{json.dumps(data, ensure_ascii=True)}`")
     lines = ["# Local playtest", "", f"Reward: {result['reward']}; timed out: {result['timed_out']}",
-             "Host processes are not isolated. This is a rehearsal, not benchmark evidence.", ""]
+             (f"Model: {result['model']}; harness: {result['harness']}; "
+              f"sandbox profile: {result['sandbox_profile'] or 'none (host processes are not isolated)'}"),
+             f"Seat failures: {json.dumps(result['seat_failures']) if result['seat_failures'] else 'none'}",
+             "This is a rehearsal, not benchmark evidence.", ""]
     by_request = {seat: [] for seat in result["seats"]}
     for request in requests:
         by_request[request["seat"]].append(
