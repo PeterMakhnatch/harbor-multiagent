@@ -127,6 +127,8 @@ With 2 equally plausible callback bindings, a wrong guess has at least 50% risk.
 
 All scores are scripted results. `nop` leaves all opportunities unobserved, not failed at a seam. The ledger still charges EUR 840 / 6,300 for unfinished work.
 
+The [EvalCard](cards/week.card.md) runs 4,608 normal simulations over 192 built tasks. They are all valid, and all 576 careful runs score 1. The card has 1 unresolved kit-level failure: it forces the simulator to stop after 1 step and expects an invalid outcome. The kit currently invokes the same deadline hook for that cutoff and for a desk's omission. This scenario must score the latter as valid. The normal simulation matrix passes; do not treat the card as an all-pass certification until the kit distinguishes the 2 causes.
+
 ## Zero-cost oracle rehearsal
 
 Build with a private seed in separate output roots, so the task labels and briefings stay identical across oracle policies. Use the same instance and seed in both roots. Use local Docker only and the approved Docker-slot wrapper. No model or hosted environment is necessary.
