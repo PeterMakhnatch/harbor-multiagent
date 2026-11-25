@@ -371,6 +371,38 @@ def test_retired_repeat(tmp_path, start_world):
     assert sum(e["kind"] == "retired_retry" for e in sim["events"]) == 1
 
 
+def test_core_reply_receipts(tmp_path, start_world):
+    staged, team = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("staged", "team"), tmp_path)
+    task = QA.load_task(staged)
+    world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+    world.ordered = True
+    note = str(json.loads(task.env("p1")["SEAT_BRIEFING"])["left"])
+    assert world.seat("p1", "POST", "/handoff", {"note": note})[0] == 200
+    reply = world.seat("p2", "GET", "/await?until=active")[1]
+    assert reply["note"] == note and reply["reason"] == "active"
+    assert world.events()[-1]["data"] == {"ids": ["note-1"], "path": "/await"}
+    assert world.seat("p2", "POST", "/commit", {"total": task.task_json["params"]["total"]})[0] == 200
+    sim = SIM.simulate_built(staged, {"p2": "core-note"}, 0)
+    actual = SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir)
+    assert actual == {k: v for k, v in sim["score"].items() if k != "versions"}
+    assert sim["reward"] == 1
+    assert any(e["kind"] == "delivered" and e["data"] == {"ids": ["note-1"], "path": "/await"}
+               for e in sim["events"])
+
+    task = QA.load_task(team)
+    world = start_world("team", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"))
+    world.ordered = True
+    status, reply = world.seat("p2", "GET", "/messages")
+    assert status == 200 and reply["messages"] and reply["summary"] == {"tick": 0}
+    assert any(e["kind"] == "delivered" and e["data"] == {"ids": ["summary"], "path": "/messages"}
+               for e in world.events())
+    world.module.EXTENSION.augment_reply = lambda seat, method, path: {"messages": []}
+    before = len([e for e in world.events() if e["kind"] == "deliver"])
+    assert world.seat("p2", "GET", "/messages")[0] == 500
+    assert len([e for e in world.events() if e["kind"] == "deliver"]) == before
+    assert SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir) == {"invalid": "extension_error"}
+
+
 def test_rf1v_read_first_reliance_sweep(tmp_path):
     for policy in ("naive", "careful"):
         paths = BUILD.build("probe", [0], 4, "easy", SEED, ("talk-quiet", "talk-false"), tmp_path / policy,

@@ -972,7 +972,19 @@ class World(BaseHTTPRequestHandler):
         self._handle("POST")
 
     def _reply(self, status: int, body: object, headers: dict[str, str] | None = None,
-               receipt: tuple[str, str, list[str]] | None = None) -> None:
+               receipt: tuple[str, str, list[str]] | None = None) -> bool:
+        augmented = True
+        path = self.path.split("?", 1)[0]
+        if HOST is not None and 200 <= status < 300 and path in ("/await", "/messages"):
+            seat = self._caller()
+            if seat in HOST.status:
+                with LOCK:
+                    try:
+                        body, receipt = self._augment_core_reply(seat, path, body, receipt)
+                    except Exception as exc:  # noqa: BLE001 - contain family-code failures
+                        HOST.fail(seat, path, exc)
+                        status, body, receipt, augmented = 500, {"error": "world failed"}, None, False
+                        self.push_seat = None
         pushed = self._pushed(body)
         if pushed:
             body = dict(body) | {"new_messages": pushed}  # type: ignore[call-overload]
@@ -994,6 +1006,26 @@ class World(BaseHTTPRequestHandler):
                     record("delivered", seat, {"ids": ids, "path": path})
         if not self.delivering:
             self._finish_budget()
+        return written and augmented
+
+    def _augment_core_reply(self, seat: str, path: str, body: object,
+                            receipt: tuple[str, str, list[str]] | None) -> tuple[object, Any]:
+        hook = getattr(EXTENSION, "augment_reply", None)
+        if not hook:
+            return body, receipt
+        result = hook(seat, self.command, path)
+        if result is None:
+            return body, receipt
+        fields, ids = result if isinstance(result, tuple) else (result, [])
+        if (not isinstance(body, dict) or not isinstance(fields, dict)
+                or fields.keys() & (body.keys() | {"new_messages"})):
+            raise ValueError("invalid core reply fields")
+        if not isinstance(ids, list) or any(not isinstance(item, str) or not item for item in ids):
+            raise ValueError("invalid delivery ids")
+        json.dumps(fields, allow_nan=False)
+        if ids:
+            receipt = (seat, path, ids.copy())
+        return body | fields, receipt
 
     def _finish_budget(self) -> None:
         if self.budget_seat is not None:
@@ -1036,7 +1068,7 @@ class World(BaseHTTPRequestHandler):
         try:
             connection.settimeout(REPLY_WRITE_SECONDS)
             self.delivering = True  # this reply shows its messages itself: nothing more is pushed with it
-            self._reply(status, body)
+            written = self._reply(status, body)
         except OSError:  # a reset, a broken pipe or the timeout
             self.close_connection = True
             return
@@ -1046,7 +1078,7 @@ class World(BaseHTTPRequestHandler):
                 connection.settimeout(previous)
             except OSError:
                 self.close_connection = True
-        if self.command != "HEAD":  # a HEAD reply shows no messages
+        if written:
             with LOCK:
                 _deliver(seat, ids, via)
         self._finish_budget()

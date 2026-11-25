@@ -5,7 +5,7 @@ import re
 
 def supports(name, variant):
     return (name in ("careful", "naive", "sender", "exhaust", "stall", "fault", "wait-message",
-                     "script-loop", "free-calls", "retry")
+                     "script-loop", "free-calls", "retry", "core-note")
             or re.fullmatch(r"lapse-(?:0|[1-9][0-9]?|100)", name) is not None)
 
 
@@ -42,6 +42,9 @@ def play(name, client, own, family):
     if role == "read":
         _, me = yield from client.get("/await?until=active")
         if me["reason"] != "active":
+            return
+        if name == "core-note":
+            yield from client.post("/commit", {"total": own["right"] + int(me["note"])})
             return
         status, board = yield from client.get("/board")
         if status == 200 and "note" in board:

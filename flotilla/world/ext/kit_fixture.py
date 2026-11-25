@@ -54,6 +54,12 @@ class Fixture:
                 and body == {"note": self.note} and not query and self.handed_off):
             return 200, {"tick": 1}
 
+    def augment_reply(self, seat, method, path):
+        if self.protocol == "staged" and seat == "p2" and self.handed_off:
+            return {"note": self.note}, ["note-1"]
+        if self.protocol == "team" and seat == "p2" and path == "/messages":
+            return {"summary": {"tick": self.host.tick}}, ["summary"]
+
     def message_delay(self, message, recipient):
         return self.params["delay"] if message["text"].startswith("handoff ") else None
 
