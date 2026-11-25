@@ -230,7 +230,10 @@ def simulate_built(task_dir: Path, policies: str | dict[str, str] | None, schedu
     if task.get("mode") == "rounds":
         raise ValueError("legacy wall-clock games are not supported by the logical simulator")
     settings_path = solution / "policy.json"
-    if settings_path.is_file() and (solution / "policy.py").read_bytes() != (ROOT / "world" / "policy.py").read_bytes():
+    expected_runner = (ROOT / "world" / "policy.py").read_bytes()
+    if task.get("mode") == "extension":
+        expected_runner = BUILD.marked(expected_runner)
+    if settings_path.is_file() and (solution / "policy.py").read_bytes() != expected_runner:
         raise ValueError("built policy runner differs from this checkout; rebuild the task")
     settings = json.loads(settings_path.read_text()) if settings_path.is_file() else {
         "mode": task.get("mode", "answer"), "variant": task.get("variant", ""),
@@ -262,12 +265,16 @@ def simulate_built(task_dir: Path, policies: str | dict[str, str] | None, schedu
 
                 client = POLICY.Client(seat, read_file)
                 generators[seat] = POLICY.play(name, client, own, family, oracle, custom, settings["variant"],
-                                               settings["mode"] == "extension")
+                                               settings["mode"] == "extension", settings.get("seed"),
+                                               settings.get("instance"))
             agents = tomllib.loads((task_dir / "task.toml").read_text())["agents"]
             sim.run(generators, {seat: row["start_after"] for seat, row in agents.items() if "start_after" in row})
             state = sim.finish()
             result = score(task, state, sim.events, family, env)
+    if task.get("mode") == "extension" and "versions" in task:
+        result["versions"] = task["versions"]
     return {"reward": result.get("reward"), "score": result, "invalid": result.get("invalid"),
+            **({"versions": result["versions"]} if "versions" in result else {}),
             "stalled": any(e["kind"] == "simulation_stalled" for e in sim.events),
             "events": sim.events, "state": state, "requests": sim.requests,
             "policies": names, "schedule_seed": schedule_seed, "files_read": files_read}
