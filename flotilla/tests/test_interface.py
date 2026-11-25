@@ -153,17 +153,26 @@ def expected_reward(arm, policy, groups):
     return 0
 
 
-def verify_run(task, run, arm, policy):
+def verify_run(task, run, arm, policy, replay):
     events = run["events"]
-    score = WORLD.score(task, events)
-    assert run["reward"] == score["reward"] == expected_reward(arm, policy, len(task["params"]["groups"]))
+    score = run["score"]
+    assert run["invalid"] is None and run["reward"] == score["reward"]
+    if policy != "blind":
+        assert run["reward"] == expected_reward(arm, policy, len(task["params"]["groups"]))
+    if replay:
+        assert WORLD.score(task, events) == score
     assert all(200 <= e["data"]["status"] < 500 for e in events if e["kind"] == "extension_call")
     assert all(not files for files in run["files_read"].values())
     published = set()
     frozen = False
+    offered = set()
     for e in events:
         if e["kind"] == "freeze":
             frozen = True
+        if e["kind"] in ("staging_notice", "staging_view", "work_events"):
+            offered.add((e["seat"], e["data"]["item"]))
+        if e["kind"] == "delivered":
+            assert all((e["seat"], item) in offered for item in e["data"]["ids"])
         if e["kind"] == "file_publish":
             assert not frozen
             f = e["data"]["file"]
@@ -175,6 +184,8 @@ def verify_run(task, run, arm, policy):
     if policy == "naive" and arm in TRAPS:
         assert score["target"] == 0
         assert score["groups"][task["params"]["target"]]["default_kept"]
+    if policy == "careful" and arm != "solo":
+        assert all(entry["looked"] and entry["exposed"] for entry in score["groups"].values())
     return score
 
 
@@ -186,15 +197,17 @@ def test_sweep(level):
     turns = {}
     for i in range(count):
         with tempfile.TemporaryDirectory(prefix="interface-sweep-") as temp:
-            paths = BUILD.build("interface", [i], FAMILY.DOSES[level][0], level, SEED, FAMILY.ARMS, Path(temp))
+            paths = BUILD.build("interface", [i], None, level, SEED, FAMILY.ARMS, Path(temp),
+                                max_text=1000, max_messages=21)
             for path in paths:
                 task = json.loads((path / "environment" / "task.json").read_text())
                 arm = task["condition"]
                 for schedule in range(schedules):
                     for policy in ("careful", "naive", "nop", "blind"):
+                        if full and schedule != 0 and policy in ("nop", "blind"):
+                            continue
                         run = SIM.simulate_built(path, policy, schedule)
-                        if policy != "blind":
-                            verify_run(task, run, arm, policy)
+                        verify_run(task, run, arm, policy, i == 0)
                         rewards[arm, policy].append(run["reward"])
                         if policy == "careful":
                             for seat, calls in run["requests"].items():
@@ -203,26 +216,43 @@ def test_sweep(level):
                         assert SIM.simulate_built(path, {"p1": "lone"}, schedule)["reward"] == 0
                 if i == 0:
                     assert SIM.simulate_built(path, "careful", 0)["events"] == SIM.simulate_built(path, "careful", 0)["events"]
+        if full and (i + 1) % 25 == 0:
+            print(f"{level}: {i + 1} instances × {schedules} schedules completed for all arms", flush=True)
     for (arm, policy), values in rewards.items():
         mean = statistics.mean(values)
         if full and policy == "blind":
             assert abs(mean - 1 / 12) < 0.075
         print(f"{level:8} {arm:20} {policy:7} n={len(values)} mean={mean:.4f}")
     print(f"{level} maximum careful requests: {turns}")
+    assert turns["p1"] <= {"canary": 15, "standard": 35, "heavy": 100}[level]
 
 
 @pytest.mark.parametrize("level", LEVELS)
 def test_diagnostic_policies(level):
     for i in range(3):
         with tempfile.TemporaryDirectory(prefix="interface-diagnostics-") as temp:
-            paths = BUILD.build("interface", [i], FAMILY.DOSES[level][0], level, SEED,
-                                ("team", "probe-trap-key", "probe-trap-unit"), Path(temp))
+            paths = BUILD.build("interface", [i], None, level, SEED,
+                                ("team", "probe-trap-key", "probe-trap-unit"), Path(temp),
+                                max_text=1000, max_messages=21)
             for path in paths:
                 task = json.loads((path / "environment" / "task.json").read_text())
                 arm = task["condition"]
                 if arm == "team":
                     assert SIM.simulate_built(path, "alternate", 0)["reward"] == 1
+                    if i == 0:
+                        desk_nops = dict.fromkeys(task["seats"][1:], "nop")
+                        assert SIM.simulate_built(path, desk_nops, 0)["reward"] == 0
                 else:
+                    asked = SIM.simulate_built(path, "ask", 0)
+                    assert asked["reward"] == 1
+                    assert all(entry["exposed"] and not entry["looked"] for entry in asked["score"]["groups"].values())
+                    assert any(e["kind"] == "deliver" and e["seat"] == "p1" and e["data"].get("via") == "push"
+                               for e in asked["events"])
+                    careful = SIM.simulate_built(path, "careful", 0)
+                    without_receipts = [e for e in careful["events"] if e["kind"] != "delivered"]
+                    replay = WORLD.score(task, without_receipts)
+                    assert replay["reward"] == 1
+                    assert all(not entry["looked"] and not entry["exposed"] for entry in replay["groups"].values())
                     for name in ("naive_read", "windowed-8", "windowed-30"):
                         run = SIM.simulate_built(path, name, 0)
                         target = WORLD.score(task, run["events"])["groups"][task["params"]["target"]]
@@ -233,8 +263,49 @@ def test_diagnostic_policies(level):
 
 
 def test_opaque_build_qa(tmp_path):
-    paths = BUILD.build("interface", [0, 1], 2, "canary", SEED, FAMILY.ARMS, tmp_path)
+    paths = BUILD.build("interface", [0, 1], None, "canary", SEED, FAMILY.ARMS, tmp_path,
+                        max_text=1000, max_messages=21)
     findings, tasks = QA.check(paths)
     assert len(tasks) == len(paths) == 2 * len(FAMILY.ARMS)
     failures = [f for f in findings if f.level == "FAIL"]
     assert not failures, failures
+
+
+def test_malformed_routes_and_message_limits(tmp_path, monkeypatch):
+    (path,) = BUILD.build("interface", [0], None, "canary", SEED, ("probe-trap-key",), tmp_path,
+                          max_text=2000, max_messages=21)
+    original = SIM.POLICY.play
+
+    def exercise(name, client, own, family, oracle, custom, variant, extension):
+        if client.seat != "p1":
+            yield from original(name, client, own, family, oracle, custom, variant, extension)
+            return
+        group = own["groups"][0]["name"]
+        invalid = {"kind": "order", "unit": "each", "group": group, "rows": [{"key": "B4/Q7", "qty": True}]}
+        assert (yield from client.post("/publish", invalid))[0] == 400
+        assert (yield from client.get("/staging?group=not-a-group"))[0] == 400
+        assert (yield from client.post("/done", {"extra": 1}))[0] == 400
+        assert (yield from client.post("/publish", {"kind": "catalog", "group": group, "unit": "case", "rows": []}))[0] == 403
+        assert (yield from client.post("/messages", {"to": "all", "text": "a" * 1001}))[0] == 413
+        for _ in range(20):
+            status, reply = yield from client.post("/messages", {"to": "all", "text": "What convention?"})
+            assert status == 201
+            assert any(group + ":" in msg["text"] for msg in reply["new_messages"])
+        assert (yield from client.post("/messages", {"to": "all", "text": "Another question"}))[0] == 429
+        generator = original(name, client, own, family, oracle, custom, variant, extension)
+        response = None
+        for _ in range(100):
+            try:
+                request = generator.send(response)
+            except StopIteration:
+                assert (yield from client.post("/next", {}))[0] == 409
+                return
+            response = yield request
+            if isinstance(request, SIM.POLICY.Request) and request.path == "/publish" and response[0] == 201:
+                assert (yield from client.post("/publish", request.body))[0] == 409
+        raise ValueError("policy did not terminate")
+
+    monkeypatch.setattr(SIM.POLICY, "play", exercise)
+    run = SIM.simulate_built(path, "careful", 0)
+    assert run["reward"] == 1 and run["invalid"] is None
+    assert sum(e["kind"] == "file_publish" for e in run["events"]) == 2

@@ -88,8 +88,8 @@ class Interface:
         self.done = set()
         self.files = {}
         self.started = False
-        self.messaging = task["messaging"]
-        self.pending = []
+        self.message_counts = dict.fromkeys(task["seats"], 0)
+        self.receipts = 0
 
     def summary(self):
         return [{"group": file["group"], "kind": file["kind"], "owner": file["owner"], "rows": len(file["rows"])}
@@ -110,9 +110,11 @@ class Interface:
         for name, convention in self.params["prebuilt"].items():
             group = self.groups[name]
             owner = group["desk"]
-            self.publish(owner, {"kind": "catalog", "group": name, "unit": convention[1],
-                                 "rows": [{"key": key, "price_cents": price}
-                                          for key, price in expected(group, convention, "catalog").items()]})
+            rows = self.host.family.encode(group["rows"], [row["price"] for row in group["rows"]], convention, "catalog")
+            self.publish(owner, {"kind": "catalog", "group": name, "unit": convention[1], "rows": rows})
+        for desk in sorted(self.scripted):
+            names = ", ".join(g["name"] for g in self.groups.values() if g["desk"] == desk)
+            self.host.post(desk, "p1", f"Catalogs {names} are in staging.", delay=0)
 
     def message_text(self, desk):
         lines = []
@@ -125,11 +127,35 @@ class Interface:
             lines.append(f"{group['name']}: key for site {row['site']} item {row['item']} is `{key}`, unit {file['unit']}.")
         return "\n".join(lines)
 
-    def response(self, seat, status, reply):
+    def allow_message(self, message):
+        if len(message["text"]) > self.params["text_limit"]:
+            return 413, f"messages are limited to {self.params['text_limit']} characters"
+        if self.message_counts[message["from"]] >= self.params["message_limit"]:
+            return 429, f"limit of {self.params['message_limit']} messages per seat reached"
+        return None
+
+    def on_message(self, message):
+        self.message_counts[message["from"]] += 1
+        self.bootstrap()
+        if message["from"] == "p1":
+            for desk in sorted(self.scripted):
+                if message["to"] in ("all", desk):
+                    self.host.post(desk, "p1", self.message_text(desk), delay=0)
+
+    def receipt(self, kind, seat, data):
+        self.receipts += 1
+        item = f"r{self.receipts}"
+        self.host.record(kind, seat, {**data, "step": self.steps[seat], "item": item})
+        return item
+
+    def response(self, seat, path, query, status, reply):
         summary = self.summary()
-        if summary:
-            self.host.record("staging_notice", seat, {"step": self.steps[seat], "files": summary})
-        return status, {**reply, "staging": summary}
+        ids = [self.receipt("staging_notice", seat, {"files": summary})]
+        if status == 200 and path == "/next":
+            ids.append(self.receipt("work_events", seat, reply))
+        if status == 200 and path == "/staging" and "group" in query:
+            ids.append(self.receipt("staging_view", seat, {"group": query["group"][0], "files": reply["files"]}))
+        return status, {**reply, "staging": summary}, ids
 
     def next_events(self, seat, body):
         if body:
@@ -138,11 +164,11 @@ class Interface:
         step = self.steps[seat]
         if step < len(stream):
             self.steps[seat] += 1
+            self.host.advance()
             events = stream[step]
         else:
             events = []
         reply = {"step": self.steps[seat], "events": events, "end": self.steps[seat] == len(stream)}
-        self.host.record("work_events", seat, reply)
         return 200, reply
 
     def staging(self, seat, query):
@@ -153,7 +179,6 @@ class Interface:
             return 400, {"error": "select one known group"}
         name = names[0]
         files = [file for (_, group), file in self.files.items() if group == name]
-        self.host.record("staging_view", seat, {"group": name, "step": self.steps[seat], "files": files})
         return 200, {"files": files}
 
     def upload(self, seat, body):
@@ -184,12 +209,13 @@ class Interface:
                 return 400, {"error": "send an empty object"}
             self.done.add(seat)
             self.host.record("work_done", seat, {"step": self.steps[seat]})
+            self.host.retire(seat)
             if self.players <= self.done:
                 self.host.freeze()
             status, reply = 200, {"done": True}
         else:
             raise ValueError(f"unexpected route {path}")
-        return self.response(seat, status, reply)
+        return self.response(seat, path, query, status, reply)
 
 
 def create(task, host):
@@ -217,11 +243,15 @@ def score(task, events):
         declared_cat = declared_convention(group, catalog)
         declared_order = declared_convention(group, order)
         before = [e for e in events if upload is None or e["seq"] < upload["seq"]]
+        items = {item for e in before if e["kind"] == "delivered" and e["seat"] == "p1"
+                 for item in e["data"]["ids"]}
         views = [e for e in before if e["kind"] == "staging_view" and e["seat"] == "p1"
-                 and e["data"]["group"] == name and any(f["kind"] == "catalog" for f in e["data"]["files"])]
+                 and e["data"]["item"] in items and e["data"]["group"] == name
+                 and any(f["kind"] == "catalog" for f in e["data"]["files"])]
         notices = [e for e in before if e["kind"] == "staging_notice" and e["seat"] == "p1"
+                   and e["data"]["item"] in items
                    and any(f["kind"] == "catalog" and f["group"] == name for f in e["data"]["files"])]
-        messages = [e["data"] for e in before if e["kind"] == "interface_message"]
+        messages = [e["data"] | {"from": e["seat"]} for e in before if e["kind"] == "send"]
         ids = {message_id for e in before if e["kind"] == "deliver" and e["seat"] == "p1"
                for message_id in e["data"]["ids"]}
         keys = [r["key"] for r in catalog["rows"]] if catalog else []

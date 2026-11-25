@@ -6,10 +6,13 @@ from itertools import combinations
 
 FAMILY = "interface"
 TITLE = "Replenishment batch"
-SEATS = 2
+SEATS = {"canary": 2, "standard": 3, "heavy": 5}
 ARMS = ("solo", "solo-seam", "team", "team-hint", "silent", "probe-control", "probe-trap-key",
         "probe-trap-unit", "probe-trap-key-hint")
 TWINS = (("probe-control", "probe-trap-key"), ("probe-control", "probe-trap-unit"))
+PAIRS = (("team", "team-hint"), ("probe-trap-key", "probe-trap-key-hint"))
+ARM_WORDS = ("probe-control", "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint",
+             "solo-seam", "team-hint", "interface")
 HINT = "Before you upload the order of a group, open that group's catalog in staging and use exactly its key form and its unit."
 FORMS = ("SITE/ITEM", "ITEM/SITE", "SITE:ITEM", "ITEM:SITE", "SITE-ITEM", "ITEM-SITE")
 CONVENTIONS = tuple((form, unit) for form in FORMS for unit in ("each", "case"))
@@ -145,6 +148,7 @@ There is no partial credit inside a group and no correctness feedback.
 
 Use `$WORLD_URL` with header `Authorization: Bearer $SEAT_TOKEN` for all requests.
 For POST requests use `Content-Type: application/json`.
+Each seat can make at most 1,000 authenticated calls.
 
 - `POST /next` with `{{}}` gives work events in `events`, the current `step` and an `end` flag.
 - `GET /staging` lists all staged files by group, kind, owner and row count.
@@ -210,6 +214,10 @@ def extension_arm(inst, arm, max_text, max_messages):
     export = arm == "solo-seam"
     probe = arm.startswith("probe-")
     messaging = not (solo or export or arm == "silent")
+    text_limit = min(max_text, 1000)
+    message_limit = min(max_messages - int(probe), 20)
+    if messaging and (text_limit < 80 * len(inst["groups"]) or message_limit < len(inst["groups"])):
+        raise ValueError("insufficient message budget for catalog notices and replies")
     owner = "both" if solo else "export" if export else "seats"
     groups = []
     prebuilt = {}
@@ -232,7 +240,7 @@ def extension_arm(inst, arm, max_text, max_messages):
              "messaging": messaging}
     if solo:
         buyer["desks"] = list(desks)
-    common = common_text(groups, owner, messaging, max_text, max_messages)
+    common = common_text(groups, owner, messaging, text_limit, message_limit)
     briefings = {"p1": buyer}
     instructions = {"p1": common + buyer_text(buyer, arm.endswith("-hint"))}
     if solo:
@@ -249,9 +257,19 @@ def extension_arm(inst, arm, max_text, max_messages):
                 briefings[seat] = {"role": "desk", "groups": own, "messaging": messaging}
                 instructions[seat] = common + desk_text(own).replace("You are also", "You are") + "\nEnd your work after uploading your catalogs.\n"
     params = {"groups": groups, "buyer": inst["buyer"], "target": inst["target"], "stream": inst["stream"],
-              "prebuilt": prebuilt}
+              "prebuilt": prebuilt, "text_limit": text_limit, "message_limit": message_limit}
     return {"params": params, "briefings": briefings, "instructions": instructions, "messaging": messaging,
-            "scripted_seats": scripted, "scripted_policies": dict.fromkeys(scripted, "nop")}
+            "push": messaging, "scripted_seats": scripted, "scripted_policies": dict.fromkeys(scripted, "nop")}
+
+
+def pair_difference(first, second, views_a, views_b):
+    normalized = {seat: dict(view) for seat, view in views_b.items()}
+    instruction = normalized["p1"]["instruction"]
+    suffix = "\n" + HINT + "\n"
+    if not instruction.endswith(suffix):
+        return ["missing protocol sentence"]
+    normalized["p1"]["instruction"] = instruction.removesuffix(suffix)
+    return [] if normalized == views_a else ["more than the protocol sentence differs"]
 
 
 def qa(task, views):

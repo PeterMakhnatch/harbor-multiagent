@@ -2,46 +2,33 @@
 
 import hashlib
 
-FORMS = ("SITE/ITEM", "ITEM/SITE", "SITE:ITEM", "ITEM:SITE", "SITE-ITEM", "ITEM-SITE")
-CONVENTIONS = tuple((form, unit) for form in FORMS for unit in ("each", "case"))
-
 
 def supports(name, variant):
-    return name in ("careful", "naive", "naive_read", "lone", "focal", "blind", "alternate", "windowed-8", "windowed-30")
+    return name in ("careful", "naive", "naive_read", "lone", "focal", "blind", "alternate",
+                    "windowed-8", "windowed-30", "ask")
 
 
-def key_for(row, convention):
-    return convention[0].replace("SITE", row["site"]).replace("ITEM", row["item"])
+def make_file(family, group, convention, kind, values):
+    return {"group": group["name"], "kind": kind, "unit": convention[1],
+            "rows": family.encode(group["rows"], values, convention, kind)}
 
 
-def make_file(group, convention, kind, values):
-    field = "price_cents" if kind == "catalog" else "qty"
-    rows = []
-    for row, value in zip(group["rows"], values, strict=True):
-        if kind == "order" and value <= 0:
-            continue
-        if convention[1] == "case":
-            value = value * row["case"] if kind == "catalog" else value // row["case"]
-        rows.append({"key": key_for(row, convention), field: value})
-    return {"group": group["name"], "kind": kind, "unit": convention[1], "rows": rows}
-
-
-def infer(group, catalog):
+def infer(family, group, catalog):
     keys = {row["key"] for row in catalog["rows"]}
-    candidates = [c for c in CONVENTIONS if c[1] == catalog["unit"]
-                  and {key_for(row, c) for row in group["rows"]} == keys]
+    candidates = [c for c in family.CONVENTIONS if c[1] == catalog["unit"]
+                  and {family.key_for(row, c) for row in group["rows"]} == keys]
     if len(candidates) != 1:
         raise ValueError("catalog does not identify one convention")
     return candidates[0]
 
 
-def publish_catalogs(name, client, groups, messaging):
+def publish_catalogs(name, client, groups, messaging, family):
     choices = {}
     for group in groups:
         saved = tuple(group["saved"])
         convention = next(tuple(c) for c in group["support"] if tuple(c) != saved) if name == "alternate" else saved
         choices[group["name"]] = convention
-        body = make_file(group, convention, "catalog", [row["price"] for row in group["rows"]])
+        body = make_file(family, group, convention, "catalog", [row["price"] for row in group["rows"]])
         status, _ = yield from client.post("/publish", body)
         if status != 201:
             raise ValueError("catalog upload refused")
@@ -95,15 +82,26 @@ def wait_catalogs(client, groups, step, noticed):
         yield from client.sleep(0.2)
 
 
-def select(name, client, own, group, choices, step, noticed):
+def select(name, client, own, group, choices, step, noticed, family):
     g = group["name"]
     if name == "blind":
         digest = hashlib.sha256(g.encode()).digest()
-        return CONVENTIONS[int.from_bytes(digest[:8], "big") % len(CONVENTIONS)]
+        return family.CONVENTIONS[int.from_bytes(digest[:8], "big") % len(family.CONVENTIONS)]
     if name == "focal":
-        return CONVENTIONS[0]
+        return family.CONVENTIONS[0]
     if name in ("careful", "alternate") and g in choices:
         return choices[g]
+    if name == "ask":
+        status, reply = yield from client.post("/messages", {"to": group["desk"], "text": f"What is the convention for {g}?"})
+        if status != 201:
+            raise ValueError("catalog question refused")
+        lines = [line for message in reply.get("new_messages", []) if message["from"] == group["desk"]
+                 for line in message["text"].splitlines() if line.startswith(g + ":")]
+        row = group["rows"][0]
+        for c in family.CONVENTIONS:
+            if any(f"`{family.key_for(row, c)}`, unit {c[1]}." in line for line in lines):
+                return c
+        raise ValueError("desk did not answer the question")
     read = name in ("careful", "alternate", "naive_read")
     if name.startswith("windowed-"):
         read = step - noticed[g] <= int(name.split("-")[1])
@@ -113,15 +111,15 @@ def select(name, client, own, group, choices, step, noticed):
             raise ValueError("cannot read the staged catalog")
         catalog = next(file for file in reply["files"] if file["kind"] == "catalog")
         if name != "naive_read":
-            return infer(group, catalog)
+            return infer(family, group, catalog)
     return tuple(own["saved"])
 
 
-def play(name, client, own):
+def play(name, client, own, family):
     choices = {}
     if own["role"] in ("all", "desk"):
         groups = own["groups"] if own["role"] == "desk" else own["desks"]
-        choices = yield from publish_catalogs(name, client, groups, own["messaging"])
+        choices = yield from publish_catalogs(name, client, groups, own["messaging"], family)
     if own["role"] in ("all", "buyer"):
         counts, complete, noticed, step = yield from read_work(client)
         yield from wait_catalogs(client, own["groups"], step, noticed)
@@ -129,9 +127,9 @@ def play(name, client, own):
             g = group["name"]
             if g not in complete or g not in noticed:
                 continue
-            convention = yield from select(name, client, own, group, choices, step, noticed)
+            convention = yield from select(name, client, own, group, choices, step, noticed, family)
             values = [row["target"] - sum(counts[g, row["site"], row["item"]]) for row in group["rows"]]
-            body = make_file(group, convention, "order", values)
+            body = make_file(family, group, convention, "order", values)
             status, _ = yield from client.post("/publish", body)
             if status != 201:
                 raise ValueError("order upload refused")
