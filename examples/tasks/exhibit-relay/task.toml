@@ -1,0 +1,31 @@
+schema_version = "1.4"
+
+[task]
+name = "harbor/exhibit-relay"
+description = "Coordinate a museum exhibit dispatch using limited records across three private roles."
+keywords = ["seats", "coordination", "records"]
+
+[metadata]
+difficulty = "medium"
+category = "example"
+tags = ["seats", "coordination"]
+
+[verifier]
+timeout_sec = 60.0
+
+[agent]
+timeout_sec = 600.0
+
+[environment]
+build_timeout_sec = 600.0
+
+[environment.env]
+EXHIBIT_MODE = "linked"
+EXHIBIT_PROFILE = "fork"
+EXHIBIT_LAYOUT = "draw"
+
+[agents.loader]
+
+[agents.registrar]
+
+[agents.depot]

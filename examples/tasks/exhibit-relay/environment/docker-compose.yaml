@@ -1,0 +1,45 @@
+x-seat: &seat
+  build: ./seat
+  user: player
+  working_dir: /home/player
+  command: ["sleep", "infinity"]
+  init: true
+  network_mode: none
+  depends_on:
+    main:
+      condition: service_healthy
+
+services:
+  main:
+    command: ["python3", "/app/serve.py"]
+    working_dir: /app
+    init: true
+    network_mode: none
+    environment:
+      EXHIBIT_PROFILE: "${EXHIBIT_PROFILE:-fork}"
+      EXHIBIT_MODE: "${EXHIBIT_MODE:-linked}"
+      EXHIBIT_LAYOUT: "${EXHIBIT_LAYOUT:-draw}"
+      EXHIBIT_SEED: "${EXHIBIT_SEED:-}"
+    volumes:
+      - loader-rpc:/run/relay/loader
+      - registrar-rpc:/run/relay/registrar
+      - depot-rpc:/run/relay/depot
+    healthcheck:
+      test: ["CMD", "python3", "-c", "from pathlib import Path; assert all(Path(p).is_socket() for p in ['/run/relay/loader/rpc.sock','/run/relay/registrar/rpc.sock','/run/relay/depot/rpc.sock','/run/relay-control/rpc.sock'])"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+  loader:
+    <<: *seat
+    volumes: ["loader-rpc:/run/relay-seat:ro"]
+  registrar:
+    <<: *seat
+    volumes: ["registrar-rpc:/run/relay-seat:ro"]
+  depot:
+    <<: *seat
+    volumes: ["depot-rpc:/run/relay-seat:ro"]
+
+volumes:
+  loader-rpc: {}
+  registrar-rpc: {}
+  depot-rpc: {}

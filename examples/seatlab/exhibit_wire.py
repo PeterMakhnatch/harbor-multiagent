@@ -1,0 +1,31 @@
+import json
+from typing import Any
+
+
+def render_turn(
+    instruction: str, view: dict[str, Any], previous: dict[str, Any] | None
+) -> str:
+    phase = view["phase"]
+    rule = {
+        "request": '{"op":"request","slips":["brief ID", ...]}',
+        "registrar": '{"op":"file","ids":["card ID", ...]}',
+        "depot": '{"op":"file","ids":["card ID", ...]}',
+        "dispatch": '{"op":"commit","routes":{"exhibit ID":"bay ID", ...}}',
+    }[phase]
+    payload = {"instruction": instruction, "view": view, "previous_action": previous}
+    return (
+        "Select the action for your current role using only the supplied information. "
+        "Return one JSON object without markdown, in this form: "
+        + rule
+        + ".\nInput JSON: "
+        + json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
+    )
+
+
+def encode_request(prompt: str) -> bytes:
+    return (
+        json.dumps(
+            {"schema": "seatlab.seat-turn/v1", "prompt": prompt}, ensure_ascii=True
+        )
+        + "\n"
+    ).encode("utf-8")

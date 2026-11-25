@@ -13,8 +13,9 @@ By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 This branch combines the [team operator](examples/seatlab/workbench/team-account.md), native packaging of per-seat instructions, and a [two-seat shipping benchmark](examples/seatlab/decision_receipt/README.md). Start by checking the saved evidence:
 
 ```sh
-git clone --depth 1 --branch seatlab/offline-team-receipts https://github.com/PeterMakhnatch/harbor-multiagent.git
+git clone --depth 1 --branch seatlab/exhibit-relay https://github.com/PeterMakhnatch/harbor-multiagent.git
 cd harbor-multiagent
+python3.12 -BS -m examples.seatlab.workbench verify exhibit-handoff-twins
 python3.12 -BS -m examples.seatlab.workbench verify team-return-partial team-return-complete ship-decision-evidence ship-worker-plans
 python3.12 -BS -m examples.seatlab.workbench verify dispatch-native-choices dispatch-order-ready dispatch-order-coverage
 ```
@@ -80,6 +81,8 @@ To let **two operators collect separate four-seat teams**, use the [campaign com
 To **repeat a whole business panel**, give each worker [one of two company shards](examples/seatlab/market-handoff.md#run-or-verify-a-separate-repetition). Both workers use the recorded decisions without starting models. To inspect an existing result first, run `python3.12 -BS -m examples.seatlab.workbench verify native-business-repeat reporter-tokens`. The second check shows why the calendar teams used fewer calls but reported more tokens.
 
 The fork's default branch does not include this workbench. Use `seatlab/offline-team-receipts` for the combined checkout above. You do not need to switch branches for the linked studies.
+
+**Build a multi-agent handoff benchmark:** [Exhibit Relay](examples/tasks/exhibit-relay/README.md) gives three seats separate records for the same shipment. Its paired worlds have identical per-crate priorities but different best pairs. Run `python3.12 -BS -m examples.seatlab.workbench exhibit twins --seed 7` to check the information loss without any model or container.
 
 ## SeatLab: test what a receiver can do with a peer report
 
