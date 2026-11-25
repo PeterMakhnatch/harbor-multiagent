@@ -1,0 +1,79 @@
+{
+  "name": "handoff-pilot-oracle",
+  "prereg": {
+    "commit": "631505f2831fee8c003ac95043df0c0182fc7617",
+    "doc": "flotilla/docs/seams/handoff.md",
+    "section": "## Zero-cost oracle preregistration"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-a",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-a/manifest.json",
+      "instances": [
+        0,
+        1
+      ],
+      "arms": [
+        "solo",
+        "team-fullrecord"
+      ]
+    },
+    {
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-b",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-b/manifest.json",
+      "instances": [
+        10,
+        11
+      ],
+      "arms": [
+        "probe-hunt-control",
+        "probe-hunt-trap"
+      ]
+    },
+    {
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-b",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-b/manifest.json",
+      "instances": [
+        10,
+        11
+      ],
+      "arms": [
+        "probe-ref-control",
+        "probe-ref-trap"
+      ]
+    },
+    {
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-c",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-c/manifest.json",
+      "instances": [
+        22,
+        23
+      ],
+      "arms": [
+        "team-fullrecord",
+        "team",
+        "hint",
+        "solo-seam",
+        "team-implicit"
+      ]
+    }
+  ],
+  "models": [
+    null
+  ],
+  "agent": "oracle",
+  "make_jobs": {
+    "max_turns": 100,
+    "env": "docker",
+    "concurrency": 2,
+    "start_spacing_s": 0.0
+  },
+  "budget": {
+    "cap_usd": 0.0,
+    "reserve_per_trial_usd": 0.0,
+    "provider_floors": {},
+    "max_invalid_streak": 2
+  },
+  "order_seed": 20261125,
+  "notes": "Zero-cost rehearsal of the task folders of flotilla/plans/seams/handoff.json: the first 2 instances of every stage and arm with Harbor's oracle agent (the careful policy) on local Docker. No model."
+}
