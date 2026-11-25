@@ -41,7 +41,7 @@ For digest heavy, require at least 0.95 solo success: 10/10 at this pilot size.
 ## handoff
 
 Plan: `handoff.json`. Price source: OpenRouter public catalog (https://openrouter.ai/api/v1/models), snapshot `frontier-prices.json`, 2026-11-25 ET.
-Model cap: $800.00. Profiles (uncertainty ×2):
+Model cap: $575.00. Profiles (uncertainty ×2):
 
 - Claude final result usage (cache creation at miss rate)
 - Claude final result usage (cache creation at miss rate); Codex turn.completed usage
@@ -49,58 +49,58 @@ Model cap: $800.00. Profiles (uncertainty ×2):
 
 | Stage | Level | Arm | Model | Trials | Model / all seats | Cost low / expected / high |
 |---|---|---|---|---:|---:|---:|
-| A | standard | solo | anthropic/claude-opus-5.5 | 10 | 10 / 10 | $5.3840 / $10.7470 / $21.4731 |
-| A | standard | solo | openai/gpt-6.2-sol | 10 | 10 / 10 | $2.7025 / $5.3840 / $10.7470 |
-| A | standard | solo | **Total** | 20 | 20 / 20 | $8.0865 / $16.1311 / $32.2201 |
+| A | standard | solo | anthropic/claude-opus-5.5 | 10 | 10 / 10 | $5.3829 / $10.7447 / $21.4685 |
+| A | standard | solo | openai/gpt-6.2-sol | 10 | 10 / 10 | $2.7019 / $5.3829 / $10.7447 |
+| A | standard | solo | **Total** | 20 | 20 / 20 | $8.0848 / $16.1276 / $32.2132 |
 | A | standard | team-fullrecord | anthropic/claude-opus-5.5 | 10 | 40 / 40 | $2.4799 / $4.9387 / $9.8565 |
 | A | standard | team-fullrecord | openai/gpt-6.2-sol | 10 | 40 / 40 | $1.2504 / $2.4799 / $4.9387 |
 | A | standard | team-fullrecord | **Total** | 20 | 80 / 80 | $3.7303 / $7.4186 / $14.7952 |
-| B | standard | probe-hunt-control | anthropic/claude-opus-5.5 | 12 | 12 / 48 | $0.9233 / $1.8214 / $3.6175 |
-| B | standard | probe-hunt-control | openai/gpt-6.2-sol | 12 | 12 / 48 | $0.4742 / $0.9233 / $1.8214 |
-| B | standard | probe-hunt-control | **Total** | 24 | 24 / 96 | $1.3975 / $2.7446 / $5.4389 |
-| B | standard | probe-hunt-trap | anthropic/claude-opus-5.5 | 12 | 12 / 48 | $0.9233 / $1.8214 / $3.6175 |
-| B | standard | probe-hunt-trap | openai/gpt-6.2-sol | 12 | 12 / 48 | $0.4742 / $0.9233 / $1.8214 |
-| B | standard | probe-hunt-trap | **Total** | 24 | 24 / 96 | $1.3975 / $2.7446 / $5.4389 |
-| B | standard | probe-ref-control | anthropic/claude-opus-5.5 | 12 | 12 / 48 | $0.9233 / $1.8214 / $3.6175 |
-| B | standard | probe-ref-control | openai/gpt-6.2-sol | 12 | 12 / 48 | $0.4742 / $0.9233 / $1.8214 |
-| B | standard | probe-ref-control | **Total** | 24 | 24 / 96 | $1.3975 / $2.7446 / $5.4389 |
-| B | standard | probe-ref-trap | anthropic/claude-opus-5.5 | 12 | 12 / 48 | $0.9233 / $1.8214 / $3.6175 |
-| B | standard | probe-ref-trap | openai/gpt-6.2-sol | 12 | 12 / 48 | $0.4742 / $0.9233 / $1.8214 |
-| B | standard | probe-ref-trap | **Total** | 24 | 24 / 96 | $1.3975 / $2.7446 / $5.4389 |
-| C | standard | hint | anthropic/claude-opus-5.5 | 94 | 376 / 376 | $18.7024 / $37.2074 / $74.2174 |
-| C | standard | hint | openai/gpt-6.2-sol | 94 | 376 / 376 | $9.4499 / $18.7024 / $37.2074 |
-| C | standard | hint | **Total** | 188 | 752 / 752 | $28.1523 / $55.9098 / $111.4248 |
-| C | standard | solo-seam | anthropic/claude-opus-5.5 | 94 | 376 / 376 | $29.2068 / $58.2161 / $116.2348 |
-| C | standard | solo-seam | openai/gpt-6.2-sol | 94 | 376 / 376 | $14.7021 / $29.2068 / $58.2161 |
-| C | standard | solo-seam | **Total** | 188 | 752 / 752 | $43.9088 / $87.4229 / $174.4510 |
-| C | standard | team | anthropic/claude-opus-5.5 | 94 | 376 / 376 | $18.1347 / $36.0719 / $71.9464 |
-| C | standard | team | openai/gpt-6.2-sol | 94 | 376 / 376 | $9.1660 / $18.1347 / $36.0719 |
-| C | standard | team | **Total** | 188 | 752 / 752 | $27.3007 / $54.2066 / $108.0184 |
-| C | standard | team-fullrecord | anthropic/claude-opus-5.5 | 94 | 376 / 376 | $23.3108 / $46.4242 / $92.6509 |
-| C | standard | team-fullrecord | openai/gpt-6.2-sol | 94 | 376 / 376 | $11.7541 / $23.3108 / $46.4242 |
-| C | standard | team-fullrecord | **Total** | 188 | 752 / 752 | $35.0649 / $69.7349 / $139.0751 |
-| C | standard | team-implicit | anthropic/claude-opus-5.5 | 94 | 376 / 376 | $17.6923 / $35.1871 / $70.1768 |
-| C | standard | team-implicit | openai/gpt-6.2-sol | 94 | 376 / 376 | $8.9448 / $17.6923 / $35.1871 |
-| C | standard | team-implicit | **Total** | 188 | 752 / 752 | $26.6371 / $52.8794 / $105.3639 |
-| C | standard | team-implicit-all | anthropic/claude-opus-5.5 | 94 | 376 / 376 | $16.0164 / $31.8355 / $63.4735 |
-| C | standard | team-implicit-all | openai/gpt-6.2-sol | 94 | 376 / 376 | $8.1069 / $16.0164 / $31.8355 |
-| C | standard | team-implicit-all | **Total** | 188 | 752 / 752 | $24.1234 / $47.8519 / $95.3090 |
+| B | standard | probe-hunt-control | anthropic/claude-opus-5.5 | 12 | 12 / 48 | $0.9229 / $1.8206 / $3.6160 |
+| B | standard | probe-hunt-control | openai/gpt-6.2-sol | 12 | 12 / 48 | $0.4740 / $0.9229 / $1.8206 |
+| B | standard | probe-hunt-control | **Total** | 24 | 24 / 96 | $1.3969 / $2.7435 / $5.4366 |
+| B | standard | probe-hunt-trap | anthropic/claude-opus-5.5 | 12 | 12 / 48 | $0.9229 / $1.8206 / $3.6160 |
+| B | standard | probe-hunt-trap | openai/gpt-6.2-sol | 12 | 12 / 48 | $0.4740 / $0.9229 / $1.8206 |
+| B | standard | probe-hunt-trap | **Total** | 24 | 24 / 96 | $1.3969 / $2.7435 / $5.4366 |
+| B | standard | probe-ref-control | anthropic/claude-opus-5.5 | 12 | 12 / 48 | $0.9229 / $1.8206 / $3.6160 |
+| B | standard | probe-ref-control | openai/gpt-6.2-sol | 12 | 12 / 48 | $0.4740 / $0.9229 / $1.8206 |
+| B | standard | probe-ref-control | **Total** | 24 | 24 / 96 | $1.3969 / $2.7435 / $5.4366 |
+| B | standard | probe-ref-trap | anthropic/claude-opus-5.5 | 12 | 12 / 48 | $0.9229 / $1.8206 / $3.6160 |
+| B | standard | probe-ref-trap | openai/gpt-6.2-sol | 12 | 12 / 48 | $0.4740 / $0.9229 / $1.8206 |
+| B | standard | probe-ref-trap | **Total** | 24 | 24 / 96 | $1.3969 / $2.7435 / $5.4366 |
+| C | standard | hint | anthropic/claude-opus-5.5 | 62 | 248 / 248 | $12.3356 / $24.5410 / $48.9519 |
+| C | standard | hint | openai/gpt-6.2-sol | 62 | 248 / 248 | $6.2329 / $12.3356 / $24.5410 |
+| C | standard | hint | **Total** | 124 | 496 / 496 | $18.5685 / $36.8767 / $73.4929 |
+| C | standard | solo-seam | anthropic/claude-opus-5.5 | 62 | 248 / 248 | $19.2559 / $38.3816 / $76.6330 |
+| C | standard | solo-seam | openai/gpt-6.2-sol | 62 | 248 / 248 | $9.6931 / $19.2559 / $38.3816 |
+| C | standard | solo-seam | **Total** | 124 | 496 / 496 | $28.9490 / $57.6375 / $115.0147 |
+| C | standard | team | anthropic/claude-opus-5.5 | 62 | 248 / 248 | $13.1555 / $26.1808 / $52.2313 |
+| C | standard | team | openai/gpt-6.2-sol | 62 | 248 / 248 | $6.6428 / $13.1555 / $26.1808 |
+| C | standard | team | **Total** | 124 | 496 / 496 | $19.7983 / $39.3362 / $78.4121 |
+| C | standard | team-fullrecord | anthropic/claude-opus-5.5 | 62 | 248 / 248 | $15.3752 / $30.6202 / $61.1102 |
+| C | standard | team-fullrecord | openai/gpt-6.2-sol | 62 | 248 / 248 | $7.7527 / $15.3752 / $30.6202 |
+| C | standard | team-fullrecord | **Total** | 124 | 496 / 496 | $23.1279 / $45.9954 / $91.7304 |
+| C | standard | team-implicit | anthropic/claude-opus-5.5 | 62 | 248 / 248 | $11.9789 / $23.8275 / $47.5249 |
+| C | standard | team-implicit | openai/gpt-6.2-sol | 62 | 248 / 248 | $6.0545 / $11.9789 / $23.8275 |
+| C | standard | team-implicit | **Total** | 124 | 496 / 496 | $18.0334 / $35.8064 / $71.3524 |
+| C | standard | team-implicit-all | anthropic/claude-opus-5.5 | 62 | 248 / 248 | $12.9852 / $25.8401 / $51.5500 |
+| C | standard | team-implicit-all | openai/gpt-6.2-sol | 62 | 248 / 248 | $6.5577 / $12.9852 / $25.8401 |
+| C | standard | team-implicit-all | **Total** | 124 | 496 / 496 | $19.5428 / $38.8253 / $77.3901 |
 
 | Stage | Model | Added trials | Added model / all seats | Added low / expected / high | Cumulative trials | Cumulative model / all seats | Cumulative low / expected / high | Cumulative model high estimate (stage cap on all row) |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| A | openai/gpt-6.2-sol | 20 | 50 / 50 | $3.9529 / $7.8639 / $15.6858 | 20 | 50 / 50 | $3.9529 / $7.8639 / $15.6858 | $15.64 |
-| A | anthropic/claude-opus-5.5 | 20 | 50 / 50 | $7.8639 / $15.6858 / $31.3296 | 20 | 50 / 50 | $7.8639 / $15.6858 / $31.3296 | $31.29 |
-| A | all | 40 | 100 / 100 | $11.8168 / $23.5497 / $47.0153 | 40 | 100 / 100 | $11.8168 / $23.5497 / $47.0153 | $47.00 |
-| B | openai/gpt-6.2-sol | 48 | 48 / 192 | $1.8970 / $3.6931 / $7.2854 | 68 | 98 / 242 | $5.8499 / $11.5570 / $22.9712 | $22.83 |
-| B | anthropic/claude-opus-5.5 | 48 | 48 / 192 | $3.6931 / $7.2854 / $14.4701 | 68 | 98 / 242 | $11.5570 / $22.9712 / $45.7996 | $45.66 |
-| B | all | 96 | 96 / 384 | $5.5901 / $10.9785 / $21.7555 | 136 | 196 / 484 | $17.4069 / $34.5282 / $68.7708 | $69.00 |
-| C | openai/gpt-6.2-sol | 564 | 2256 / 2256 | $62.1238 / $123.0633 / $244.9422 | 632 | 2354 / 2498 | $67.9737 / $134.6203 / $267.9134 | $266.59 |
-| C | anthropic/claude-opus-5.5 | 564 | 2256 / 2256 | $123.0633 / $244.9422 / $488.7000 | 632 | 2354 / 2498 | $134.6203 / $267.9134 / $534.4996 | $533.17 |
-| C | all | 1128 | 4512 / 4512 | $185.1871 / $368.0055 / $733.6421 | 1264 | 4708 / 4996 | $202.5940 / $402.5337 / $802.4130 | $800.00 |
+| A | openai/gpt-6.2-sol | 20 | 50 / 50 | $3.9524 / $7.8627 / $15.6835 | 20 | 50 / 50 | $3.9524 / $7.8627 / $15.6835 | $15.64 |
+| A | anthropic/claude-opus-5.5 | 20 | 50 / 50 | $7.8627 / $15.6835 / $31.3250 | 20 | 50 / 50 | $7.8627 / $15.6835 / $31.3250 | $31.28 |
+| A | all | 40 | 100 / 100 | $11.8151 / $23.5462 / $47.0084 | 40 | 100 / 100 | $11.8151 / $23.5462 / $47.0084 | $47.00 |
+| B | openai/gpt-6.2-sol | 48 | 48 / 192 | $1.8962 / $3.6916 / $7.2823 | 68 | 98 / 242 | $5.8486 / $11.5543 / $22.9658 | $22.82 |
+| B | anthropic/claude-opus-5.5 | 48 | 48 / 192 | $3.6916 / $7.2823 / $14.4639 | 68 | 98 / 242 | $11.5543 / $22.9658 / $45.7889 | $45.65 |
+| B | all | 96 | 96 / 384 | $5.5878 / $10.9739 / $21.7462 | 136 | 196 / 484 | $17.4029 / $34.5201 / $68.7547 | $69.00 |
+| C | openai/gpt-6.2-sol | 372 | 1488 / 1488 | $42.9337 / $85.0862 / $169.3913 | 440 | 1586 / 1730 | $48.7823 / $96.6405 / $192.3571 | $191.43 |
+| C | anthropic/claude-opus-5.5 | 372 | 1488 / 1488 | $85.0862 / $169.3913 / $338.0013 | 440 | 1586 / 1730 | $96.6405 / $192.3571 / $383.7902 | $382.87 |
+| C | all | 744 | 2976 / 2976 | $128.0199 / $254.4775 / $507.3926 | 880 | 3172 / 3460 | $145.4228 / $288.9976 / $576.1472 | $575.00 |
 
 Power source: `handoff.card.json`. Stage B exact looks: [3, 6, 12]; no optional non-binding futility. Stage C envelope (largest eligible card n, capped):
 
-- standard: 94 pairs/model maximum. Lapse alternatives (control-only minus trap-only full-success rate, card n): probe-ref-trap lapse-10 0.083, 94; probe-hunt-trap lapse-10 0.167, 46; probe-ref-trap lapse-20 0.292, 26; probe-ref-trap lapse-30 0.292, 26; probe-hunt-trap lapse-20 0.333, 23; probe-hunt-trap lapse-30 0.583, 12; probe-ref-trap lapse-50 0.583, 12; probe-hunt-trap lapse-50 0.875, 8
+- standard: 62 pairs/model maximum. Lapse alternatives (control-only minus trap-only full-success rate, card n): probe-ref-trap lapse-10 0.125, 62; probe-hunt-trap lapse-10 0.167, 46; probe-ref-trap lapse-30 0.250, 31; probe-ref-trap lapse-20 0.292, 26; probe-hunt-trap lapse-20 0.417, 18; probe-hunt-trap lapse-30 0.500, 15; probe-ref-trap lapse-50 0.583, 12; probe-hunt-trap lapse-50 0.750, 9
 
 Task sets (zero-based runner index): 0=A/standard/solo,team-fullrecord; 1=B/standard/probe-hunt-control,probe-hunt-trap; 2=B/standard/probe-ref-control,probe-ref-trap; 3=C/standard/team-fullrecord,team,hint,solo-seam,team-implicit,team-implicit-all.
 
@@ -108,5 +108,5 @@ Task sets (zero-based runner index): 0=A/standard/solo,team-fullrecord; 1=B/stan
 
 | Family | Trials | Model / all seats | Cost low / expected / high | Model cap |
 |---|---:|---:|---:|---:|
-| handoff | 1264 | 4708 / 4996 | $202.5940 / $402.5337 / $802.4130 | $800.00 |
-| **Total** | 1264 | 4708 / 4996 | $202.5940 / $402.5337 / $802.4130 | $800.00 |
+| handoff | 880 | 3172 / 3460 | $145.4228 / $288.9976 / $576.1472 | $575.00 |
+| **Total** | 880 | 3172 / 3460 | $145.4228 / $288.9976 / $576.1472 | $575.00 |
