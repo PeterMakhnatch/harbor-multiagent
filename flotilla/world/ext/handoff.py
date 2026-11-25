@@ -132,11 +132,10 @@ class Desk:
         if self.arm == "twin":
             note = self.canonical()
         tokens = set(re.findall(r"\b[BLR]\d{2}\b", note.upper()))
-        bindings, possible = self.host.family.parse_note(note, self.params["lots"])
-        unparsed = [b for b in pending if b not in bindings and self.batches[b]["reference"] not in bindings.values()
-                    and {b, self.batches[b]["reference"]} <= tokens]
-        if unparsed:
-            self.host.record("note_unparsed", seat, {"shift": self.shift, "bindings": unparsed})
+        bindings, possible, problems = self.host.family.parse_note(note, self.params["lots"])
+        unparsed = [b for b in pending if problems and {b, self.batches[b]["reference"]} <= tokens]
+        if problems:
+            self.host.record("note_unparsed", seat, {"shift": self.shift, "bindings": unparsed, "reasons": problems})
         missing = [b for b in pending if bindings.get(b) != self.batches[b]["reference"] and b not in unparsed]
         self.host.record("handover", seat, {"shift": self.shift, "note": note, "length": len(note),
                                             "pending": len(pending), "missing_bindings": missing,
@@ -317,12 +316,13 @@ def score(task, events):
     full = 0.5 * (len(correct) / len(scored) + ticket)
     arm = task["condition"]
     reward = full
+    unparsed = [e["data"] for e in events if e["kind"] == "note_unparsed"
+                and e["data"]["shift"] < params["shifts"]]
+    if arm.startswith("probe-") and any(h["shift"] == params["shifts"] - 1 for h in unparsed):
+        return {"invalid": "note_unparsed", "note_unparsed": True, "full_reward": full}
     if arm.startswith("probe-hunt"):
         reward = ticket
     elif arm.startswith("probe-ref"):
-        if any(e["kind"] == "note_unparsed" and e["data"]["shift"] == params["shifts"] - 1
-               and params["ref_target"] in e["data"]["bindings"] for e in events):
-            return {"invalid": "note_unparsed"}
         reward = float(any(ref in correct and b["batch"] == params["ref_target"] for ref, b in scored.items()))
     crossings = [h for h in handovers if h["shift"] < params["shifts"]]
     losses = [h["shift"] for h in crossings if h["missing_bindings"] or not h["kept_lots"]]
@@ -333,6 +333,7 @@ def score(task, events):
             "first_loss_shift": min(losses) if losses else None,
             "missing_bindings": sum(len(h["missing_bindings"]) for h in crossings),
             "unparsed_bindings": sum(len(h["unparsed_bindings"]) for h in crossings),
+            "note_unparsed": len(unparsed),
             "kept_bindings": sum(h["pending"] - len(h["missing_bindings"]) - len(h["unparsed_bindings"])
                                  for h in crossings),
             "kept_lots": sum(h["kept_lots"] for h in crossings),

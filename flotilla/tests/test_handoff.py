@@ -17,7 +17,9 @@ SEED = 7236499753218553
 COUNT = int(os.environ.get("HANDOFF_SWEEP_INSTANCES", "1"))
 SCHEDULES = 5 if COUNT >= 200 else 2
 LAPSES = ("lapse-10", "lapse-20", "lapse-30", "lapse-50")
-STYLES = ("reverse", "colon", "slash", "lines", "ref-first", "json", "arrow", "ref-eq", "cleared", "paren")
+STYLES = ("reverse", "colon", "slash", "lines", "ref-first", "json", "arrow", "ref-eq", "cleared", "paren",
+          "dash", "ref-colon", "comma", "table", "bare-paren", "json-list", "json-unknown",
+          "candidates", "suspect-lots", "possible-bad", "remaining", "bad-one-of")
 
 
 def task_for(inst, arm, dose):
@@ -213,11 +215,16 @@ def test_handoff_probe_note_formats_and_actor(dose, tmp_path):
                 targets = [e for e in run["events"]
                            if e["kind"] == "settled" and e["data"]["batch"] == params["ref_target"]]
             assert len(targets) == 1 and targets[0]["seat"] == f"s{params['shifts']}"
+        for policy in ("ambiguous-pair", "ambiguous-lot"):
+            run = SIM.simulate_built(path, policy, 0)
+            assert run["invalid"] == "note_unparsed" and run["reward"] is None
+            assert run["score"]["note_unparsed"]
+            assert any(e["kind"] == "note_unparsed" for e in run["events"])
 
 
 def test_handoff_parser_regressions():
     lots = ["L01", "L02", "L03"]
-    gold = {"B01": "R01", "B02": "R02"}, {"L01"}
+    gold = {"B01": "R01", "B02": "R02"}, {"L01"}, []
     for text in (
         '{"pending":{"B01":"R01","B02":"R02"},"suspects":["L01"]}',
         "B01 -> R01; B02 -> R02; Suspects L01",
@@ -225,9 +232,24 @@ def test_handoff_parser_regressions():
         "B01 (ref R01); B02 (ref R02); Suspects L01",
         "Batch B01 has carrier ref R01; B02=R02; Suspects L01; ruled out L02 L03",
         "R01 B01 R02 B02; Cleared L02 L03",
+        "Pending B01 → R01 B02 → R02; Candidates: L01",
+        "B01 - R01 B02 - R02; Suspect lots: L01",
+        "B01: ref R01; B02: ref R02; Possible bad lots: L01",
+        "B01 (R01) B02 (R02); Remaining candidates: L01",
+        "B01, R01 B02, R02; Bad lot one of: L01",
+        "|Batch|Ref|\n|B01|R01|\n|R02|B02|\nL01",
+        '[{"batch":"B01","ref":"R01"},{"reference":"R02","batch":"B02"},{"unknown":["L01"]}]',
+        '{"open":{"B01":"R01","B02":"R02"},"other":["L01"]}',
+        "B01=R01 B02=R02; L02 ok; L03 passed",
+        "B01=R01 B02=R02; L02 good; L03 fine",
+        "B01=R01 B02=R02; not L02; L03 excluded",
     ):
         assert FAMILY.parse_note(text, lots) == gold
     assert FAMILY.parse_note("B01R01", lots)[0] == {}
+    for text in ("B01 R01 B02", "B01 B02 R01 R02", "B01 R01 B01 R02", "B01 R01 B02 R01",
+                 "Suspects L01, cleared L02", "L01; L01 cleared", "not cleared L01; possible L01"):
+        bindings, possible, problems = FAMILY.parse_note(text, lots)
+        assert not bindings and possible == set(lots) and problems
 
 
 def start_desk(tmp_path, start_world, arm="team", budget=None):

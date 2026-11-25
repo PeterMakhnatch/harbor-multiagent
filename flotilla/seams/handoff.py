@@ -30,62 +30,109 @@ EXTRA_SENTENCES = {
     "twin": "At handover the desk writes the outgoing note from the full record instead of using your note.",
 }
 
+ID_TOKEN = re.compile(r"\b[BLR]\d{2}\b", re.IGNORECASE)
+NEGATIVE = re.compile(r"\b(?:cleared|ok|good|ruled\s+out|not|excluded|fine|passed)\b", re.IGNORECASE)
+POSITIVE = re.compile(r"\b(?:suspects?|possible|candidates?|remaining|bad)\b", re.IGNORECASE)
+
+
+def lot_clauses(value, label=""):
+    if isinstance(value, dict):
+        scalars = [f"{key} {child}" for key, child in value.items() if not isinstance(child, (dict, list))]
+        if scalars:
+            yield f"{label} {' '.join(scalars)}"
+        for key, child in value.items():
+            if isinstance(child, (dict, list)):
+                yield from lot_clauses(child, f"{label} {key}")
+    elif isinstance(value, list):
+        scalars = [str(child) for child in value if not isinstance(child, (dict, list))]
+        if scalars:
+            yield f"{label} {' '.join(scalars)}"
+        for child in value:
+            if isinstance(child, (dict, list)):
+                yield from lot_clauses(child, label)
+    elif isinstance(value, str):
+        yield from (f"{label} {clause}" for clause in re.split(r"[;\n.!?]", value))
+
+
 def parse_note(note, lots):
-    """Read the documented notebook notation, not arbitrary natural language."""
-    bindings = {}
-    suspects = None
-    cleared = set()
-    pairs = []
+    """Pair consecutive IDs, and report ambiguous syntax rather than choosing a binding."""
+    bindings, seen, problems = {}, set(), set()
+    tokens = [token.upper() for token in ID_TOKEN.findall(note)]
+    chain = []
+    for token in [*tokens, "L"]:
+        if token.startswith("L"):
+            if chain:
+                problems.add("unpaired_id")
+                chain.clear()
+            continue
+        chain.append(token)
+        if len(chain) < 2:
+            continue
+        first, second = chain
+        chain.clear()
+        if first[0] == second[0]:
+            problems.add("unpaired_id")
+            continue
+        if first in seen or second in seen:
+            problems.add("repeated_id")
+            continue
+        batch, ref = (first, second) if first.startswith("B") else (second, first)
+        bindings[batch] = ref
+        seen.update((batch, ref))
     try:
         payload = json.loads(note)
     except (ValueError, RecursionError):
-        payload = None
-    if isinstance(payload, dict):
-        pending = payload.get("pending")
-        if isinstance(pending, dict):
-            pairs = list(pending.items())
-        for key in ("suspects", "cleared"):
-            values = payload.get(key)
-            if isinstance(values, list) and all(isinstance(v, str) for v in values):
-                if key == "suspects":
-                    suspects = set(values)
-                else:
-                    cleared = set(values)
-    else:
-        pairs = re.findall(r"\b([BR]\d{2})(?:\s*(?:->|>|=|:|/)\s*|\s+\(?ref\s+|"
-                           r"\s+has\s+carrier\s+ref\s+|\s+)([BR]\d{2})\b", note, re.IGNORECASE)
-        for clause in re.split(r"[;\n]", note):
-            label = re.search(r"\b(suspects|bad lot is one of|cleared|ruled out)\b", clause, re.IGNORECASE)
-            if label:
-                values = set(re.findall(r"\bL\d{2}\b", clause[label.end():], re.IGNORECASE))
-                if label[0].lower() in ("cleared", "ruled out"):
-                    cleared.update(values)
-                else:
-                    suspects = values if suspects is None else suspects & values
-    for first, second in pairs:
-        if not isinstance(second, str):
+        payload = note
+    suspects, cleared = set(), set()
+    for clause in lot_clauses(payload):
+        values = {token.upper() for token in ID_TOKEN.findall(clause) if token.upper().startswith("L")}
+        if not values:
             continue
-        first, second = first.upper(), second.upper()
-        batch, ref = (first, second) if first.startswith("B") else (second, first)
-        if re.fullmatch(r"B\d{2}", batch) and re.fullmatch(r"R\d{2}", ref):
-            bindings[batch] = ref
-    possible = set(lots) if suspects is None or not suspects else set(lots) & {v.upper() for v in suspects}
-    return bindings, possible - {v.upper() for v in cleared}
+        if NEGATIVE.search(clause):
+            if POSITIVE.search(clause):
+                problems.add("mixed_lot_markers")
+            cleared.update(values)
+        else:
+            suspects.update(values)
+    if suspects & cleared:
+        problems.add("conflicting_lot_markers")
+    possible = (suspects or set(lots)) & set(lots) - cleared
+    if problems:
+        return {}, set(lots), sorted(problems)
+    return bindings, possible, []
 
 
 def write_note(bindings, possible, style="careful", lots=None):
     if style == "json":
         return json.dumps({"pending": bindings, "suspects": sorted(possible)}, separators=(",", ":"))
+    if style == "json-list":
+        return json.dumps([{"b": b, "r": r} for b, r in sorted(bindings.items())] +
+                          [{"candidates": sorted(possible)}], separators=(",", ":"))
+    if style == "json-unknown":
+        return json.dumps({"open": bindings, "remaining": sorted(possible)}, separators=(",", ":"))
     order = sorted(bindings, reverse=style == "reverse")
-    separator = {"colon": ":", "slash": "/", "lines": " ", "arrow": " -> "}.get(style, "=")
+    separator = {"colon": ":", "slash": "/", "lines": " ", "arrow": " → ", "dash": " - ",
+                 "ref-colon": ": ref ", "comma": ", ", "table": "|"}.get(style, "=")
     if style in ("ref-first", "ref-eq"):
         pairs = [f"{bindings[b]}{'>' if style == 'ref-first' else '='}{b}" for b in order]
     elif style == "paren":
         pairs = [f"{b} (ref {bindings[b]})" for b in order]
+    elif style == "bare-paren":
+        pairs = [f"{b} ({bindings[b]})" for b in order]
     else:
         pairs = [f"{b}{separator}{bindings[b]}" for b in order]
-    joiner = "\n" if style == "lines" else " "
-    label, values = ("Cleared", set(lots) - possible) if style == "cleared" else ("Suspects", possible)
+    joiner = "\n" if style in ("lines", "table") else " "
+    if style == "table":
+        pairs = [f"|{pair}|" for pair in pairs]
+    label = {"candidates": "Candidates:", "suspect-lots": "Suspect lots:", "possible-bad": "Possible bad lots:",
+             "remaining": "Remaining candidates:", "bad-one-of": "Bad lot one of:"}.get(style, "Suspects")
+    values = possible
+    if style == "cleared":
+        label, values = "Cleared", set(lots) - possible
+    if style == "ambiguous-pair" and pairs:
+        pairs.append(pairs[0])
+    if style == "ambiguous-lot":
+        label = "Suspects cleared"
     return "Pending " + joiner.join(pairs) + f"; {label} " + " ".join(sorted(values))
 
 

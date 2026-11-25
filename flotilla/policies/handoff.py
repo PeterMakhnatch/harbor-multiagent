@@ -4,11 +4,14 @@ import hashlib
 
 
 def supports(name, variant):
-    return name in ("careful", "naive", "lone", "blind", "reverse", "colon", "slash", "lines", "ref-first",
-                    "json", "arrow", "ref-eq", "cleared", "paren", "exhaust", "stall",
+    return name in ("careful", "naive", *NO_NOTE, "reverse", "colon", "slash", "lines", "ref-first",
+                    "json", "arrow", "dash", "ref-colon", "comma", "table", "ref-eq", "cleared", "paren",
+                    "bare-paren", "json-list", "json-unknown", "candidates", "suspect-lots", "possible-bad",
+                    "remaining", "bad-one-of", "ambiguous-pair", "ambiguous-lot", "exhaust", "stall", "extra",
                     "lapse-10", "lapse-20", "lapse-30", "lapse-50")
 
 
+NO_NOTE = ("lone", "blind", "guess", "guess-fixed", "guess-each")
 
 def check(code, reply):
     if code != 200:
@@ -49,7 +52,7 @@ def work(name, client, own, memory, family):
     elif name in ("lone", "blind"):
         bindings, possible = {}, set(lots)
     else:
-        bindings, possible = family.parse_note(desk["note"], lots)
+        bindings, possible, _ = family.parse_note(desk["note"], lots)
     local = set(lots)
     if memory is None and name not in ("lone", "blind"):
         record = check(*(yield from client.get("/log")))
