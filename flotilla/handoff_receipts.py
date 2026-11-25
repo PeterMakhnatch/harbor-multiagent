@@ -1,21 +1,26 @@
 """Offline handoff receipt assay: does a batch pointer in a note resolve from what its writer saw, and at what cost?
 
 A shadow of a memory aid, not an intervention: it reads finished world logs (`events.jsonl`, one per argument) and
-never changes a task, a reply or a reward. For each non-final note (`handover` event with shift < shifts, or a
-`handover_missing` event) it writes one JSONL row; each log also gets one `run` row, first.
+never changes a task, a reply or a reward. For each non-final note (a `handover` or `handover_missing` event with
+shift < shifts) it writes one JSONL row; each log also gets one `run` row, first. Final-shift handovers, filed or
+missing, are excluded and only counted in `final_notes`. Condition `twin` is refused with an error row before any
+note is read, because the world replaces its notes with canonical ones the seat did not write.
 
 Handles. A handle is a literal whole batch ID in the exact note: `B` or `b`, then exactly 2 ASCII digits, with no
 ASCII letter, digit or underscore on either side ("B95's", "B82/B72", "(b19," match; "B950", "AB95", "B9", "B 95"
 do not). Handles are upper-cased and kept once, in order of first appearance. Lot and reference IDs are ignored.
 
 Evidence. A handle resolves only from a reply the sending seat itself received in the shift that filed the note:
-a `desk_view` with status 200, the same seat and shift, and a top-level `plan` or `open` entry for that batch,
-confirmed by a later `delivered` event of the same seat and path whose ids hold both the view id and
-`batch-<handle>`, with both events before the note's `handover` event. Only the `note`, `shift`, `seat` and `seq`
-of a `handover` event are read; its measures, `settled.correct`, `dispatched`, the verifier, `result.json`, task
-parameters and the family's note parser are never read. `/log` records (`calls`) are an archive and not used, and
-nothing is followed through earlier notes: the assay is one hop. The shift count comes from the `shifts` field of
-the seat-visible desk replies; a log without desk replies is refused, never resolved from hidden parameters.
+a `desk_view` with status 200, the same seat and the same shift (also in solo arms, where one seat works every
+shift with a fresh session), and a top-level `plan` or `open` entry for that batch, confirmed by a later
+`delivered` event of the same seat and path whose ids hold both the view id and `batch-<handle>`, with both events
+before the note's `handover` event. "Delivered" means the reply was written to the seat's socket, not that the
+seat read it. Resolution attaches lot memberships only; it does not check the note's reference/batch pairs or its
+returned/delivered claims. Only the `note`, `shift`, `seat` and `seq` of a `handover` event are read; its
+measures, `settled.correct`, `dispatched`, the verifier, `result.json`, task parameters and the family's note
+parser are never read. `/log` records (`calls`) are an archive and not used, and nothing is followed through
+earlier notes: the assay is one hop. The shift count comes from the `shifts` field of the seat-visible desk
+replies; a log without desk replies is refused, never resolved from hidden parameters.
 
 An unresolved handle gets the first true reason: `conflicting` (confirmed views disagree on its lots),
 `unconfirmed` (shown to the writer before filing without a matching delivery receipt), `after_filing` (shown to
@@ -170,6 +175,8 @@ def assay(events: list[dict[str, Any]], log: str) -> list[dict[str, Any]]:
     run = {"kind": "run", "log": log, "condition": start.get("condition"), "shifts": None, "notes": 0,
            "final_notes": 0, "error": None}
     try:
+        if run["condition"] == "twin":
+            raise ValueError("condition twin: the world writes its canonical notes, the seat does not")
         seen, shifts = sightings(events)
         if len(shifts) != 1 or not isinstance(next(iter(shifts)), int):
             raise ValueError(f"desk replies state {len(shifts)} shift counts, need exactly 1")
