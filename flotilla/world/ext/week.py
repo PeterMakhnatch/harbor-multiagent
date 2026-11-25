@@ -38,6 +38,10 @@ class Week:
     def pending(self, seat):
         return any(r > self.round or (r == self.round and seat not in self.done) for r in self.duties[seat])
 
+    def work_open(self, seat):
+        """True while the seat's own work round is open: `GET /await?until=work` then returns at once."""
+        return self.round in self.duties[seat] and seat not in self.done
+
     def on_deadline(self, stalled_seats):
         self.record("week_incomplete", None, {"stalled_seats": stalled_seats})
         return score(self.task, self.events)

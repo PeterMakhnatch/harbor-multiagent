@@ -225,6 +225,38 @@ def test_week_private_inputs_and_malformed_requests(monkeypatch):
     assert not any(e["kind"] == "extension_error" for e in result["events"])
 
 
+def test_week_work_wait_needs_no_round_arithmetic(monkeypatch):
+    """A live seat once waited with `after` one too high and stalled its team; `until=work` has no number to get wrong."""
+    original = SIM.POLICY.play
+    reasons = []
+
+    class WorkWait:
+        def __init__(self, client):
+            self.client = client
+
+        def __getattr__(self, name):
+            return getattr(self.client, name)
+
+        def get(self, path):
+            waits = path.startswith("/await?until=tick")
+            status, reply = yield from self.client.get("/await?until=work" if waits else path)
+            if waits:
+                reasons.append(reply["reason"])
+            return status, reply
+
+    def play(name, client, own, family, oracle, custom, variant, extension, seed=None, instance=None):
+        yield from original(name, WorkWait(client), own, family, oracle, custom, variant, extension, seed, instance)
+        if own["role"] == "r":
+            status, reply = yield from client.get("/await?until=work&after=7")
+            assert status == 200 and reply["reason"] in ("frozen", "timeout")
+
+    monkeypatch.setattr(SIM.POLICY, "play", play)
+    for schedule in range(3):
+        result = SIM.simulate("week", "team", 1, "careful", SEED, schedule, difficulty="canary")
+        assert result["reward"] == 1 and result["invalid"] is None
+    assert reasons and set(reasons) == {"work"}
+
+
 def test_week_partial_barrier_scores_omission(monkeypatch):
     def one_seat(name, client, own, *args, **kwargs):
         if own["role"] == "a":

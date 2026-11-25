@@ -1576,12 +1576,15 @@ class World(BaseHTTPRequestHandler):
     def _await(self, seat: str) -> None:
         query = parse_qs(urlsplit(self.path).query)
         until, after = query.get("until", ["active"]), query.get("after", ["0"])
-        if (len(until) != 1 or until[0] not in ("active", "message", "tick")
+        work_open = getattr(EXTENSION, "work_open", None)
+        forms = ("active", "message", "tick", "work") if callable(work_open) else ("active", "message", "tick")
+        if (len(until) != 1 or until[0] not in forms
                 or len(after) != 1 or not after[0].isdigit() or len(after[0]) > 12):
             self._invalid(seat, "GET", "/await", 400, "bad wait",
                           "write /await?until=tick&after=N: the word tick is literal and N is the tick number of your "
                           "last reply (the call returns when the tick is greater than N); other forms are "
-                          "/await?until=message and /await?until=active")
+                          "/await?until=message and /await?until=active"
+                          + (" and /await?until=work (returns when you have open work)" if callable(work_open) else ""))
             return
         self._await_wait(seat, until[0], int(after[0]), time.monotonic() + WAIT_SECONDS)
 
@@ -1608,6 +1611,8 @@ class World(BaseHTTPRequestHandler):
                 reason = "tick"
             elif until == "message" and _unread(seat):
                 reason = "message"
+            elif until == "work" and EXTENSION.work_open(seat):
+                reason = "work"
             elif time.monotonic() >= deadline:
                 reason = "timeout"
             else:

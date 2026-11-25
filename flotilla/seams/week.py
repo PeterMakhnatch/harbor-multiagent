@@ -300,8 +300,8 @@ def instruction(inst, seat, single, fullrecord, hint, max_text, max_messages):
             "POST /round with {\"round\":current_round,...} to perform the listed actions and close your round. "
             "Omit action lists with no work. Each action is processed once, in this order: card, rates, bookings, "
             "reconciles, answers, notebook. Inspect `results` for errors. Rejected actions cost EUR 1. "
-            "For your next work round N, GET /await?until=tick&after=<N minus 2> waits until it opens "
-            "(replace the expression with its integer value). Repeat a timed-out wait. "
+            "GET /await?until=work waits until your next work round is open; it returns at once when your round "
+            "is already open. Repeat a timed-out wait. "
             "You can combine a round POST, its wait, and the next GET /desk in one shell tool call. "
             "Finish your final work round and stop. Do not send more work after it."),
             (f"You have {call_cap(inst, 'all' if single else seat)} calls for this week. "
@@ -353,6 +353,8 @@ def instruction(inst, seat, single, fullrecord, hint, max_text, max_messages):
                     "GET /desk returns the early shift's notebook. "
                     + ("You can also read early-shift order, carrier and reference triples in `prior_record`."
                        if fullrecord else "You cannot read that shift's carrier receipts or private messages."))
+    if seat == "s":
+        text.append("Your desk has no shift change and no notebook: do not send a `notebook`.")
     if hint:
         text.append(HINTS[seat])
     return "\n\n".join(text) + "\n"
