@@ -38,6 +38,20 @@ For a later authorized team, use the verifier’s `private-exhibit-cut.json` ins
 
 `exhibit_options` enumerates legal depot files conditional on the actual registrar filing. It reports attainable true coverage and the true range across all files tied for the best reported weight. It measures coverage over **all** forecast briefs. With no positive delivered weight, that ranking is unavailable, not zero. A missing depot action stays null. An accepted empty file has measured zero coverage. A second ranking requires both crate/epoch entries in the depot’s visible flat agenda. In this fixture the notes alone tie 2 files: their true coverage is 0/10 or 4/10. Checking the flat agenda leaves 1 top file with 4/10. The fixture selects the other file, with 0/10. In other cases individually documented crates can still form a false pair. Neither ranking models actual reasoning. A null ranking does not mean the whole view contains no useful information.
 
+## Check what each owner adapter recorded
+
+After a future native team has finished, keep its prepared input directory and native trial directory. Use the same task and harness revision. This command only reads the archive. It needs the fork’s native Python environment. It does not need running sockets, a provider key or the original machine paths.
+
+```sh
+python -B -m examples.seatlab.exhibit_team_receipt "$work/inputs" authored "$archived_trial"
+```
+
+Set `archived_trial` to the retained trial directory. Use `author-masked` for that arm. The reader checks both prepared inputs, their native locks, the role instructions, the case, the independent verifier output, and each accepted owner action. It reconstructs the exact request bytes for each accepted turn. The loader’s second request must contain its original first action, not the world’s normalized copy.
+
+The output contains hashes, aggregate counts and coverage. It does not print a private prompt, route or endpoint. `prescribed_handoff` is what the world would present after the registrar files. `depot_request_matched` requires a matching accepted depot turn. A missing depot is not an empty depot file. An incomplete team has null native reward. Missing files or inconsistent evidence return exit code `2`; neither is a model failure. The report establishes local consistency only. It does not authenticate an operator, a model, remote delivery or reading. It does not count unaccepted requests.
+
+The engineering fixtures use the native config, lock and result serializers. A separate fixture checks exact request bytes on local sockets. These checks do not launch Harbor or run a model. Older preflights that lack the current harness digest must be read with their original revision.
+
 ## 1. Information and actions
 
 The loader holds its forecast briefs and weights. The registrar receives the nominated briefs, with their original weights, and holds the private exhibit-to-crate history.
