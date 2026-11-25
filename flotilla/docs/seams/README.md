@@ -20,7 +20,7 @@ Two smaller models (GPT-6 Luna, Claude Haiku 5.5) played a part of them.
 
 | Family | Seam | Frontier result (wins / playtests) | Smaller models | Status |
 |---|---|---|---|---|
-| `handoff` | A capped shift note to a fresh context | At `standard`: `team` (fact stated) Opus 17 of 17, Sol 3 of 3; `hint` 8 of 8; **`team-implicit`: Opus 15 of 25, Sol 15 of 16** | 0 of 6; 5 of 6 losses at the seam | Candidate measure for a frontier pilot (`team` / `team-implicit` / `hint` / `team-fullrecord`) |
+| `handoff` | A capped shift note to a fresh context | At `standard`, by facts about the desk left unstated (0 / 1 / 3): **Opus 17 of 17, 15 of 25, 5 of 10; Sol 3 of 3, 15 of 16, 16 of 16**; `hint` 8 of 8 | 0 of 6; 5 of 6 losses at the seam | Candidate measure for a frontier pilot (dose arms `team`, `team-implicit`, `team-implicit-all`; `hint`; `team-fullrecord`) |
 | `digest` | A chain of capped notes with replacement rules | 52 of 52 (base levels, order levels, and the twin `team-implicit` 16 of 16) | 0 of 8; 73 of 90 wrong jobs at the seam | Canary for frontier models in every arm; a measure for smaller models |
 | `commit` | A notice that arrives before an irreversible booking | 51 of 52 (base and bulk levels) | 5 of 6 | Canary |
 | `tell` | A fact that matters only to another desk | 28 of 28 | Luna 1 of 2, Haiku 1 of 1 | Canary for frontier models |
@@ -38,10 +38,14 @@ The first reading, with the limits of a playtest:
    ("Once a batch is settled, it leaves the desk; no later shift can see its lot list on the desk") Opus won
    17 of 17 playtests; without it, 15 of 25, on 16 instances. All 10 losses began with such a pointer note,
    and no win had one. The loss depends on the instance: on the 3 instances drawn first Opus lost 8 of 9
-   runs, on 8 fresh instances 1 of 8. Sol listed the lots in both arms. The twin arm `team-implicit` keeps
-   this loss measurable. AUTHORING.md rule 25 states the pattern and its limit: the same twin in `digest` (16
-   of 16) and `settle` (18 of 18) showed no loss, because there the left-out fact was written in a text that
-   the writer had, or the desks wrote it into their messages. The twin bites when the fact is written nowhere.
+   runs, on 8 fresh instances 1 of 8. With all 3 facts about the desk unstated (`team-implicit-all`) Opus won
+   5 of 10: it lost 3 of 8 instances that it had won with 1 fact unstated. One writer saw the risk ("If the
+   next operator's desk doesn't show the lots ... they can't rebuild the shortlist from my note") and still
+   left the lots out. Sol listed the lots in every arm (34 of 35; its 1 loss was an early ticket). No note of
+   either model ever lost a reference pair. AUTHORING.md rule 25 states the pattern and its limit: the same
+   twin in `digest` (16 of 16) and `settle` (18 of 18) showed no loss, because there the left-out fact was
+   written in a text that the writer had, or the desks wrote it into their messages. The twin bites when the
+   fact is written nowhere.
 3. A team is as weak as its most confused seat. 4 of 12 frontier `week` teams were ended by 1 seat that
    refused the work or misused a wait call; no team of the other families was. These are valid flagged
    results, and the wait call now has a form with no number to get wrong (`/await?until=work`).
