@@ -119,10 +119,12 @@ does it lose reward and why; do the family's measures see that loss; what breaks
     `team-implicit` measures the cost of that inference; `hint` minus `team` measures the habit. First case,
     `handoff`: without the sentence "Once a batch is settled, it leaves the desk; no later shift can see its
     lot list on the desk", Claude Opus 5.5 lost the ticket in 10 of 25 live playtests on 16 instances; with
-    it, it lost 0 of 17 on 14 of those instances. GPT-6.2 Sol lost 0 at the seam in both arms. Counter-case,
-    `digest`: there the left-out usage rule is written in the planner's manual, every planner copied it into
-    its note, and the twin showed no loss in 16 playtests. The twin bites when the fact is written nowhere and
-    the seat must infer it from its own view. These are playtests, not an experiment.
+    it, it lost 0 of 17 on 14 of those instances. GPT-6.2 Sol lost 0 at the seam in both arms. Counter-cases:
+    in `digest` the left-out usage rule is written in the planner's manual, every planner copied it into its
+    note, and the twin showed no loss in 16 playtests; in `settle` the desks wrote their own sheet order into
+    their first message (57 of 62), so the difference showed itself, and the twin showed no loss in 18. The
+    twin bites when the fact is written nowhere and the seat must infer it from its own view. These are
+    playtests, not an experiment.
 
 ## What the first reviews found (2026-11-25)
 

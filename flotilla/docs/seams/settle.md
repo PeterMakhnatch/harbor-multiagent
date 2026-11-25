@@ -21,8 +21,16 @@ This is a two-sided family (AMENDMENTS A1): every desk's own choice decides the 
 Round 1 of the live playtest: 19 of 20 runs won; the only loss was a scripted reader defect. In the 10 `team` and
 2 `team-nolast` runs, 48 of 50 desks proposed the first common window in list order. The shared sorted list made
 that a safe rule. All 5 Opus-only teams filed in round 2; 3 of 5 Sol-only teams confirmed first.
-**Status: `team` is a canary. The two private-order arms are not yet played by a model.** No frontier failure
-for the new seam has been observed.
+Round 2 of the live playtest (26 runs, GPT-6.2 Sol and Claude Opus 5.5, native CLIs, not an experiment): 26 of 26
+won, in `team-implicit` (18 runs at `standard` and `heavy`) and `team-ownorder` (8 runs). In `team-implicit`, 57 of
+62 desks wrote their own sheet order out in the round 1 message, so every desk saw in round 2 that the orders
+differ; the teams then chose by majority or let p1 decide. With 3 desks and 2 common windows a majority always
+exists. One Sol team needed all 4 rounds to repair a split. In `team-ownorder` the stated clause moved Sol to an
+alphabetical rule in 4 of 4 teams.
+**Status: canary for frontier assistants in every arm.** To make the seam bite: remove the built-in majority (more
+common windows or an even number of desks), use 3 rounds, or cap the message so that an order cannot be written
+out. Known measure faults: the blocked-list reader returns nothing for "blocked only W-XT", "my blocked list is
+W-DM only" and "(blocked ...)" (`unparsed` in 10 of 26 runs), and `premature_filing` then flags those desks.
 
 ## Mechanism and one example
 

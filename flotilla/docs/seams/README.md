@@ -25,7 +25,7 @@ Two smaller models (GPT-6 Luna, Claude Haiku 5.5) played a part of them.
 | `commit` | A notice that arrives before an irreversible booking | 51 of 52 (base and bulk levels) | 5 of 6 | Canary |
 | `tell` | A fact that matters only to another desk | 28 of 28 | Luna 1 of 2, Haiku 1 of 1 | Canary for frontier models |
 | `interface` | A setting that only another desk knows | 8 of 8 live teams; 28 of 28 pair runs, 0 premature orders | Luna 0 of 1, Haiku 1 of 1 | Canary. The pair `probe-wait` does not yet measure waiting (see the family page) |
-| `settle` | Agree on one value with delayed messages | 19 of 20 (the loss was a scripted-desk defect) | not played | Canary with a shared sorted list; pair `team-ownorder` / `team-implicit`: see the family page |
+| `settle` | Agree on one value with delayed messages | 45 of 46 (the loss was a scripted-desk defect); the pair `team-ownorder` / `team-implicit` 26 of 26 | not played | Canary in every arm |
 | `week` | All seams in one scenario of 4 or 5 desks | 8 of 12 teams at the reference value or EUR 2 below it; no seam failure in a finished run; 4 teams ended by 1 seat (1 refusal, 3 wait-call errors) | not played | Integration scenario, not a measure |
 
 The first reading, with the limits of a playtest:
@@ -39,7 +39,9 @@ The first reading, with the limits of a playtest:
    17 of 17 playtests; without it, 15 of 25, on 16 instances. All 10 losses began with such a pointer note,
    and no win had one. The loss depends on the instance: on the 3 instances drawn first Opus lost 8 of 9
    runs, on 8 fresh instances 1 of 8. Sol listed the lots in both arms. The twin arm `team-implicit` keeps
-   this loss measurable; AUTHORING.md rule 25 makes it a pattern for the other families.
+   this loss measurable. AUTHORING.md rule 25 states the pattern and its limit: the same twin in `digest` (16
+   of 16) and `settle` (18 of 18) showed no loss, because there the left-out fact was written in a text that
+   the writer had, or the desks wrote it into their messages. The twin bites when the fact is written nowhere.
 3. A team is as weak as its most confused seat. 4 of 12 frontier `week` teams were ended by 1 seat that
    refused the work or misused a wait call; no team of the other families was. These are valid flagged
    results, and the wait call now has a form with no number to get wrong (`/await?until=work`).
