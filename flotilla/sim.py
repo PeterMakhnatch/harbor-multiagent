@@ -270,7 +270,10 @@ def simulate_built(task_dir: Path, policies: str | dict[str, str] | None, schedu
             sim.run(generators, {seat: row["start_after"] for seat, row in agents.items() if "start_after" in row})
             state = sim.finish()
             result = score(task, state, sim.events, family, env)
+    if task.get("mode") == "extension" and "versions" in task:
+        result["versions"] = task["versions"]
     return {"reward": result.get("reward"), "score": result, "invalid": result.get("invalid"),
+            **({"versions": result["versions"]} if "versions" in result else {}),
             "stalled": any(e["kind"] == "simulation_stalled" for e in sim.events),
             "events": sim.events, "state": state, "requests": sim.requests,
             "policies": names, "schedule_seed": schedule_seed, "files_read": files_read}

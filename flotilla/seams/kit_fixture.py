@@ -6,6 +6,7 @@ import re
 
 FAMILY = "kit_fixture"
 TITLE = "Transfer a partial sum"
+VERSION = 1
 SEATS = {"easy": 2, "hard": 2, "canary": 2, "standard": 2, "heavy": 3}
 ARMS = ("solo", "talk", "talk-control", "talk-trap")
 EXTRA_ARMS = ("team", "hint", "staged")

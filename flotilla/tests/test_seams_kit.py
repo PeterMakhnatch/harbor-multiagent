@@ -1,5 +1,6 @@
 """Deterministic proof of file-only discovery, extension lifecycle and read-first reliance."""
 
+import hashlib
 import json
 import os
 import subprocess
@@ -12,6 +13,7 @@ SIM = load(FLOTILLA / "sim.py")
 BUILD = SIM.BUILD
 QA = load(FLOTILLA / "qa.py")
 SEED = 7236499753218553
+
 
 def test_extension_canary(tmp_path):
     (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("talk",), tmp_path)
@@ -30,6 +32,28 @@ def test_extension_canary(tmp_path):
     (legacy,) = BUILD.build("schedule", [0], 2, "easy", SEED, ("solo",), tmp_path)
     assert all(BUILD.CANARY.encode() not in file.read_bytes() for file in legacy.rglob("*") if file.is_file())
     assert not any(f.rule == "canary" for f in QA.check([legacy])[0])
+
+def test_extension_versions(tmp_path):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("talk",), tmp_path)
+    task = QA.load_task(path)
+    versions = task.task_json["versions"]
+    files = {
+        "family": "environment/family.py", "extension": "environment/ext/kit_fixture.py",
+        "policies": "solution/family_policy.py", "policy_runner": "solution/policy.py",
+        "world": "environment/world.py",
+    }
+    for key, name in files.items():
+        assert versions[key] == hashlib.sha256((path / name).read_bytes()).hexdigest()[:12]
+    assert versions["family_version"] == 1
+    assert versions["instructions"] == {
+        seat: hashlib.sha256((path / "instructions" / f"{seat}.md").read_bytes()).hexdigest()[:12]
+        for seat in task.seats
+    }
+    simulated = SIM.simulate_built(path, "careful", 0)
+    assert simulated["score"]["versions"] == simulated["versions"] == versions
+    file = path / "instructions" / "p2.md"
+    file.write_text(file.read_text() + "\nModified.")
+    assert any(f.rule == "versions" for f in QA.check([path])[0])
 
 
 
@@ -230,4 +254,9 @@ def test_rehearsal_over_http_with_built_policy_and_verifier(tmp_path, start_worl
         verifier.VERIFIER, verifier.EVENTS = path / "verified", world.logs / "events.jsonl"
         verifier.main()
         assert json.loads((verifier.VERIFIER / "reward.json").read_text()) == {"reward": expected}
-        assert json.loads((verifier.VERIFIER / "score.json").read_text())["error"] is None
+        summary = json.loads((verifier.VERIFIER / "score.json").read_text())
+        assert summary["error"] is None
+        if task.task_json.get("mode") == "extension":
+            assert summary["versions"] == SIM.simulate_built(path, None, 0)["score"]["versions"]
+        else:
+            assert "versions" not in summary

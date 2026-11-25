@@ -108,6 +108,7 @@ RULES: dict[str, tuple[str, str]] = {
                        "seat has a block without inbox")),
     "solo-sufficient": ("WARN", "in a team condition, a seat's own briefing alone gives a correct answer"),
     "canary": ("FAIL", "an extension task lacks the hidden contamination marker or exposes it to a seat"),
+    "versions": ("FAIL", "an extension task's version stamps differ from its shipped files"),
 }
 ALLOW_READABLE_NAMES = "--allow-readable-names"  # the flag that makes runtime-names a WARN
 ALLOW_PUBLIC_SEED = "--allow-public-seed"  # the flag that makes public-seed a WARN
@@ -995,6 +996,14 @@ def check_canary(task: Task) -> Iterator[Finding]:
                 yield Finding("canary", task.name, seat, f"{name} contains the marker")
 
 
+def check_versions(task: Task) -> Iterator[Finding]:
+    if task.task_json.get("mode") != "extension" or task.family is None:
+        return
+    expected = BUILD.version_stamps(task.path, task.family, task.seats)
+    if task.task_json.get("versions") != expected:
+        yield Finding("versions", task.name, "*", "version stamps differ from the shipped files")
+
+
 def check_extension(task: Task) -> Iterator[Finding]:
     if task.task_json.get("mode") != "extension" or task.family is None:
         return
@@ -1324,7 +1333,7 @@ def check_container_name(task: Task) -> Iterator[Finding]:
 TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
               check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient,
               check_game_secret, check_confederate_plan, check_audit_data, check_push, check_inbox, check_policy,
-              check_extension, check_policy_runner, check_canary)
+              check_extension, check_policy_runner, check_canary, check_versions)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------
