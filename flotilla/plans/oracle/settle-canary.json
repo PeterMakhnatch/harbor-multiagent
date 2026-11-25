@@ -1,0 +1,49 @@
+{
+  "name": "settle-canary-rehearsal",
+  "prereg": {
+    "commit": "46280de3dfad27d81bc1fe46ff43d22837def81d",
+    "doc": "flotilla/docs/seams/settle.md",
+    "section": "## Oracle rehearsal (pre-registration)"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": "/tmp/seams1125/b-settle/careful",
+      "manifest": "/tmp/seams1125/b-settle/careful/manifest.json",
+      "instances": [0],
+      "arms": ["team"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b-settle/careful",
+      "manifest": "/tmp/seams1125/b-settle/careful/manifest.json",
+      "instances": [0],
+      "arms": ["probe-rule-control", "probe-rule-trap"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b-settle/naive",
+      "manifest": "/tmp/seams1125/b-settle/naive/manifest.json",
+      "instances": [0],
+      "arms": ["team"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b-settle/naive",
+      "manifest": "/tmp/seams1125/b-settle/naive/manifest.json",
+      "instances": [0],
+      "arms": ["probe-rule-control", "probe-rule-trap"]
+    }
+  ],
+  "models": [null],
+  "agent": "oracle",
+  "make_jobs": {
+    "max_turns": 15,
+    "env": "docker",
+    "concurrency": 1,
+    "start_spacing_s": 0.0
+  },
+  "budget": {
+    "cap_usd": 0.0,
+    "reserve_per_trial_usd": 0.0,
+    "provider_floors": {},
+    "max_invalid_streak": 1
+  },
+  "order_seed": 20261125
+}
