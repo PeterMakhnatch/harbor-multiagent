@@ -29,8 +29,8 @@ exists. One Sol team needed all 4 rounds to repair a split. In `team-ownorder` t
 alphabetical rule in 4 of 4 teams.
 **Status: canary for frontier assistants in every arm.** To make the seam bite: remove the built-in majority (more
 common windows or an even number of desks), use 3 rounds, or cap the message so that an order cannot be written
-out. Known measure faults: the blocked-list reader returns nothing for "blocked only W-XT", "my blocked list is
-W-DM only" and "(blocked ...)" (`unparsed` in 10 of 26 runs), and `premature_filing` then flags those desks.
+out. Reader repair: replay of round 2 now recovers all 86 blocked lists (previously 73); `unparsed` is empty.
+All 86 desks received every other list before filing; `premature_filing` now flags 0 instead of 27 desks.
 
 ## Mechanism and one example
 
