@@ -272,7 +272,8 @@ def score(task, events):
     for group in params["groups"]:
         name = group["name"]
         published = [e for e in events if e["kind"] == "file_publish" and e["data"]["file"]["group"] == name]
-        catalog = next((e["data"]["file"] for e in published if e["data"]["file"]["kind"] == "catalog"), None)
+        deposit = next((e for e in published if e["data"]["file"]["kind"] == "catalog"), None)
+        catalog = deposit["data"]["file"] if deposit else None
         upload = next((e for e in published if e["data"]["file"]["kind"] == "order"), None)
         order = upload["data"]["file"] if upload else None
         cat, ord_, valid, total, gold = join_result(group, catalog, order)
@@ -295,21 +296,30 @@ def score(task, events):
         export = any(e["kind"] in ("export_view", "writer_view") and e["seat"] == "p1"
                      and e["data"]["item"] in items and name in e["data"]["settings"] for e in before)
         exposed = bool(views) or export or any(m["id"] in ids for m in announcements)
+        desk_received = {message_id for e in events if deposit and e["seq"] < deposit["seq"]
+                         and e["kind"] == "deliver" and e["seat"] == group["desk"]
+                         for message_id in e["data"]["ids"]}
+        agreed = any(m["from"] == "p1" and m["id"] in desk_received and declared_cat is not None
+                     and announced(group, declared_cat, m["text"]) for m in messages)
         saved = tuple(params["buyer"])
         kept = declared_order == saved and declared_cat is not None and declared_cat != saved
         details[name] = {"valid": valid, "cat_ok": cat is not None, "ord_ok": ord_ is not None,
                          "total": total, "gold": gold, "looked": bool(views), "exposed": exposed,
                          "adapted": declared_order is not None and declared_order != saved
                          and declared_order == declared_cat, "default_kept": kept,
-                         "read_not_used": exposed and kept, "blind_match": valid and not exposed,
-                         "valid_exposed": valid and exposed,
+                         "read_not_used": exposed and kept, "blind_match": valid and not (exposed or agreed),
+                         "valid_exposed": valid and exposed, "agreed": agreed,
+                         "valid_coordinated": valid and (exposed or agreed),
                          "asked": sum(e["kind"] == "catalog_question" and e["data"]["group"] == name for e in before),
                          "announced": bool(announcements), "mismatch_axis": mismatch_axes(declared_cat, declared_order),
                          "incomplete": catalog is None or order is None,
                          "distance": upload["data"]["step"] - notices[0]["data"]["step"] if upload and notices else None}
         if task["condition"] == "solo":
-            for metric in ("looked", "exposed", "blind_match", "valid_exposed", "asked", "announced",
-                           "read_not_used", "adapted", "default_kept", "distance"):
+            for metric in ("looked", "exposed", "blind_match", "valid_exposed", "asked", "announced", "agreed",
+                           "valid_coordinated", "read_not_used", "adapted", "default_kept", "distance"):
+                details[name].pop(metric)
+        elif task["condition"] == "team-nosaved":
+            for metric in ("read_not_used", "adapted", "default_kept"):
                 details[name].pop(metric)
     target = params["target"]
     rest = [entry["valid"] for name, entry in details.items() if name != target]
@@ -319,5 +329,10 @@ def score(task, events):
         "solo-seam-key", "solo-seam-unit") else mean
     missing = sorted({seat for seat in task["seats"] if not any(e["kind"] == "work_done" and e["seat"] == seat
                                                                for e in events)})
-    return {"reward": reward, "group_mean": mean, "groups": details, "target": target_score,
-            "non_target": sum(rest) / len(rest) if rest else None, "work_missing": missing}
+    result = {"reward": reward, "group_mean": mean, "groups": details, "target": target_score,
+              "non_target": sum(rest) / len(rest) if rest else None, "work_missing": missing,
+              "preparation_missing": not any(e["kind"] == "prepared" for e in events)}
+    if task["condition"] != "solo":
+        for metric in ("looked", "exposed", "blind_match", "valid_exposed", "valid_coordinated"):
+            result[metric] = sum(e[metric] for e in details.values()) / len(details)
+    return result

@@ -134,7 +134,7 @@ def questions(message, groups):
     if message["from"] != "p1":
         return []
     text = message["text"].casefold()
-    if not re.search(r"\b(convention|format|key|form|unit|separator|order)\b", text):
+    if not re.search(r"\b(convention|format|key|form|unit|separator)\b", text):
         return []
     if not re.search(r"\?|\b(what|which|how|tell|share|confirm|send|specify|provide|need)\b", text):
         return []
@@ -149,16 +149,25 @@ def announced(group, convention, text):
     if group["name"].casefold() not in text.casefold():
         return False
     form, unit = convention
-    text = text.casefold()
-    unit_pattern = r"\b(each|per item|items|individual units)\b" if unit == "each" else r"\b(case|cases|per case)\b"
-    if not re.search(unit_pattern, text):
-        return False
+    text = text.casefold().replace("`", "").replace('"', "")
+    explicit = re.findall(r"\bunit\s*[:=]?\s*(each|case)\b", text)
+    if explicit:
+        if set(explicit) != {unit}:
+            return False
+    else:
+        units = {"each": r"\b(each|per item|individual items|individual units)\b",
+                 "case": r"\b(case|cases|per case)\b"}
+        if {name for name, pattern in units.items() if re.search(pattern, text)} != {unit}:
+            return False
     if any(key_for(row, convention).casefold() in text for row in group["rows"]):
         return True
     left, right = form[:4].casefold(), form[5:].casefold()
     separator = {"/": r"/|slash", ":": r":|colon", "-": r"-|hyphen|dash"}[form[4]]
-    return bool(re.search(rf"\b{left}\b\s*(?:(?:then|followed by|separated by|with|a|the)\s+)*"
-                          rf"(?:{separator})\s*(?:(?:then|followed by|and)\s+)*\b{right}\b", text))
+    between = rf"\b{left}\b\s*(?:(?:then|followed by|separated by|with|a|the)\s+)*"
+    in_order = re.search(between + rf"(?:{separator})\s*(?:(?:then|followed by|and)\s+)*\b{right}\b", text)
+    named = re.search(rf"\b{left}\b\s+(?:first,?\s+)?(?:then|followed by|and)\s+\b{right}\b"
+                      rf"\s+(?:second,?\s+)?(?:separated by|with|using)\s+(?:a\s+)?(?:{separator})", text)
+    return bool(in_order or named)
 
 
 def common_text(groups, owner, messaging, max_text, max_messages):
@@ -170,8 +179,8 @@ A key contains the site and item codes in one of 6 forms: `SITE/ITEM`, `ITEM/SIT
 Each file states its unit in `unit`: `each` or `case`. Use one key form and one unit per file.
 The catalog desk can choose any setting supported by its equipment. Uploaded files are final and cannot change.
 
-Each group requires both files to be correct. Missing or wrong files earn no credit for that group.
-There is no partial credit inside a group and no correctness feedback.
+Each group requires both files to be correct and complete. Missing, partial or wrong files earn no credit for that group.
+A structurally accepted file cannot be replaced. There is no correctness feedback.
 """
     ownership = {"both": "You own both files of every group.",
                  "export": "An automatic export supplies the catalog files; you own the orders.",
@@ -183,7 +192,7 @@ Use `$WORLD_URL` with header `Authorization: Bearer $SEAT_TOKEN` for all request
 For POST requests use `Content-Type: application/json`. Each seat has 1,000 authenticated calls.
 - `POST /next` with `{{}}` gives buyer work events in `events`, `step` and `end`.
 - `POST /prepare` with `{{}}`: the buyer ends its preparation phase (only after `end` is true).
-- `GET /staging` lists visible files, the names of deposited catalogs in `ready`, the buyer's `prepared` flag, and desks whose work has `finished`.
+- `GET /staging` lists visible files, the names of deposited catalogs in `ready`, the buyer's `prepared` flag, and seats whose work has `finished`.
 - `GET /staging?group=<group>` returns the visible full files for that group in `files`.
 - `GET /await?until=tick&after=N` waits until a logical tick greater than N. Work replies include `tick`.
 - `POST /publish` uploads `{{"kind":"catalog" or "order","group":...,"unit":...,"rows":[...]}}`.
@@ -197,7 +206,8 @@ Each work reply includes a `staging` summary, `ready`, `prepared`, `finished` an
         api += (f"- `POST /messages` with {{\"to\":\"<seat>\" or \"all\",\"text\":...}} sends chat "
                 f"(at most {max_messages} messages of {max_text} characters each).\n"
                 "New chat messages appear in `new_messages` with replies. `GET /messages` lists your messages.\n"
-                "For a direct question about a setting, address its desk and name the supplier group.\n")
+                "The buyer can send chat only before `/prepare`. For a direct question about a setting, "
+                "address its desk and name the group, for example `What key form and unit for <group>?`.\n")
     else:
         api += "Chat is not available.\n"
     if owner == "export":
@@ -217,11 +227,14 @@ You are the buyer. Write one order per supplier group.
 For each line, quantity in items = target − on hand − in transit.
 Omit lines with quantity 0 or less. For unit `case`, divide the quantity in items by the case size.
 Positive quantities in this batch are always whole numbers of cases.
-Call `POST /next` until `end` is true. A count or correction replaces both absolute counts for a line, in items.
+Call `POST /next` until `end` is true. Each count or correction has `group`, `site`, `item`, `on_hand` and `in_transit`.
+Both counts are absolute item counts, so the last event for a line replaces both earlier counts.
 A `complete` event means that group's counts are final. Send `/prepare` after the last work event.
-Orders can be uploaded after preparation, once the group's catalog is deposited and its desk has finished.
-Your order writer supports all 12 combinations.
+After preparation you can upload an order once its catalog is deposited.
 """
+    if own["messaging"] or any(g["desk"].startswith("p") and g["desk"] != "p1" for g in own["groups"]):
+        text += "For a group assigned to another seat, its desk must also be in `finished` before the order can be uploaded.\n"
+    text += "Your order writer supports all 12 combinations.\n"
     if "saved" in own:
         text += saved_sentence(own["saved"])
     text += "\nTargets (items):\n"
