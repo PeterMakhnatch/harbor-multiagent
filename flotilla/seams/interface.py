@@ -189,7 +189,7 @@ A structurally accepted file cannot be replaced. There is no correctness feedbac
 {ownership[owner]}
 Groups marked sealed have their catalog held outside staging until the order is final. For other groups, the catalog enters staging when uploaded.
 Use `$WORLD_URL` with header `Authorization: Bearer $SEAT_TOKEN` for all requests.
-For POST requests use `Content-Type: application/json`. Each seat has 1,000 authenticated calls.
+For POST requests use `Content-Type: application/json`. Each seat has 1,000 counted calls; `/await`, `/whoami` and `/health` are free.
 - `POST /next` with `{{}}` gives buyer work events in `events`, `step` and `end`.
 - `POST /prepare` with `{{}}`: the buyer ends its preparation phase (only after `end` is true).
 - `GET /staging` lists visible files, the names of deposited catalogs in `ready`, the buyer's `prepared` flag, and seats whose work has `finished`.
@@ -200,7 +200,7 @@ For POST requests use `Content-Type: application/json`. Each seat has 1,000 auth
   Uploads must have at least one row. A successful upload returns a receipt; a second upload of the same file is refused.
 - `POST /done` with `{{}}` permanently ends your work.
 
-Each work reply includes a `staging` summary, `ready`, `prepared`, `finished` and `tick`.
+Each work reply and each `/await` or `/messages` reply includes a `staging` summary, `ready`, `prepared`, `finished` and `tick`.
 """
     if messaging:
         api += (f"- `POST /messages` with {{\"to\":\"<seat>\" or \"all\",\"text\":...}} sends chat "
@@ -326,7 +326,8 @@ def extension_arm(inst, arm, max_text, max_messages):
               "prebuilt": prebuilt, "text_limit": text_limit, "message_limit": message_limit,
               "fullrecord": arm == "team-fullrecord"}
     return {"params": params, "briefings": briefings, "instructions": instructions, "messaging": messaging,
-            "push": messaging, "scripted_seats": scripted, "scripted_policies": dict.fromkeys(scripted, "careful")}
+            "push": messaging, "scripted_seats": scripted, "scripted_policies": dict.fromkeys(scripted, "careful"),
+            "play_timeout_sec": 1200.0, "agent_timeout_sec": 1200.0}
 
 
 def pair_difference(first, second, views_a, views_b):

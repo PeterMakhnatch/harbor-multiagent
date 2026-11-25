@@ -92,6 +92,8 @@ class Interface:
         self.started = False
         self.message_counts = dict.fromkeys(task["seats"], 0)
         self.receipts = 0
+        self.target_only = task["condition"].startswith("probe-") or task["condition"] in (
+            "solo-seam-key", "solo-seam-unit")
 
     def visible(self, file):
         return (file["kind"] != "catalog" or not self.groups[file["group"]]["hidden"]
@@ -223,7 +225,7 @@ class Interface:
     def finish(self, seat, body):
         if body:
             return 400, {"error": "send an empty object"}
-        if seat in self.desks and not self.prepared:
+        if seat in self.desks and not self.prepared and "p1" not in self.done:
             return 409, {"error": "the buyer is still preparing"}
         self.done.add(seat)
         self.host.record("work_done", seat, {"step": self.steps[seat]})
@@ -250,6 +252,27 @@ class Interface:
         else:
             raise ValueError(f"unexpected route {path}")
         return self.response(seat, path, query, status, reply)
+
+    def augment_reply(self, seat, method, path):
+        if seat in self.done:
+            return None
+        return {"staging": self.summary()} | {k: v for k, v in self.readiness().items() if k != "tick"}
+
+    def pending(self, seat):
+        return seat in self.players and seat not in self.done
+
+    def on_deadline(self, stalled_seats):
+        if not stalled_seats:
+            return None
+        details = {}
+        for name, group in self.groups.items():
+            catalog, order = self.files.get(("catalog", name)), self.files.get(("order", name))
+            details[name] = {"valid": join_result(group, catalog, order)[2], "incomplete": catalog is None or order is None}
+        target = float(details[self.params["target"]]["valid"])
+        mean = sum(entry["valid"] for entry in details.values()) / len(details)
+        return {"reward": target if self.target_only else mean, "group_mean": mean, "groups": details,
+                "target": target, "work_missing": sorted(self.players - self.done),
+                "preparation_missing": not self.prepared, "behavior_unavailable": True}
 
 
 def create(task, host):

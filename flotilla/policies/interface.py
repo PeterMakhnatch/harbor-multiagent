@@ -80,7 +80,7 @@ def read_work(client):
     for _ in range(100):
         status, reply = yield from client.post("/next", {})
         if status != 200:
-            raise ValueError("cannot read work events")
+            raise ValueError(f"cannot read work events: {status} {reply.get('error')}")
         for event in reply["events"]:
             if event["kind"] == "complete":
                 complete.add(event["group"])
