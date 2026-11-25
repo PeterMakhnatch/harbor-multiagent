@@ -24,8 +24,17 @@ def rule_key(order):
     return "/".join((order["customer"], order["zone"], order["flag"]))
 
 
+def fits_utf8(text, cap):
+    if not isinstance(text, str):
+        return False
+    try:
+        return len(text.encode("utf-8")) <= cap
+    except UnicodeEncodeError:
+        return False
+
+
 def parse_card(text, cap):
-    if not isinstance(text, str) or len(text.encode("utf-8")) > cap:
+    if not fits_utf8(text, cap):
         return None
     rows = {}
     for line in text.splitlines():
@@ -222,7 +231,7 @@ def instruction(inst, seat, single, fullrecord, hint, max_text, max_messages):
     shift, rounds = inst["shift"], inst["rounds"]
     text = [AUTH, f"Kestrel Freight and Fulfilment. Your desk is {seat}. There are {rounds} logical rounds.",
             f"Each day has {inst['day_length']} rounds. No deadlines depend on the clock.",
-            "Everyone who is active must close each round before the next one opens. "
+            ("Everyone who is active must close each round before the next one opens. "
             "GET /desk reads your current work; GET /board reads the public manifest. "
             "POST /round with {\"round\":current_round,...} to perform the listed actions and close your round. "
             "Omit action lists with no work. Each action is processed once, in this order: card, rates, bookings, "
@@ -230,7 +239,7 @@ def instruction(inst, seat, single, fullrecord, hint, max_text, max_messages):
             "If the response tick is less than the round you closed, GET /await?until=tick&after=ROUND_MINUS_ONE "
             "waits for the next round. Repeat a timed-out wait. "
             "You can combine a round POST, its wait, and the next GET /desk in one shell tool call. "
-            "Finish your final round and stop. Do not send more work after it."]
+             "Finish your final round and stop. Do not send more work after it.")]
     if not single:
         text.append(f"Staffed desks are {', '.join(s for s in inst['seats'] if s != 'N2')} through round {shift}; "
                     f"N2 replaces N1 in round {shift + 1}. "
@@ -243,7 +252,8 @@ def instruction(inst, seat, single, fullrecord, hint, max_text, max_messages):
     else:
         text.append("You perform account, rates and both dispatch jobs. No messages or shift change. "
                     "You retain all information. You may book up to 3 orders per hub per round. "
-                    "The card guard is disabled, but the handbook still applies. Use amendments directly.")
+                    "The card guard is disabled, but the handbook still applies. Use amendments and rate files directly; "
+                    "you do not have to send messages to yourself.")
     if single or seat == "A":
         text.extend((ACCOUNT, f"The card cap is {inst['card_cap']} UTF-8 bytes."))
     if single or seat == "R":
@@ -258,7 +268,7 @@ def instruction(inst, seat, single, fullrecord, hint, max_text, max_messages):
     if seat == "N2":
         text.append(f"Your first round is {shift + 1}. If necessary, GET /await?until=active waits for your shift. "
                     "GET /desk returns the early shift's notebook. "
-                    + ("You can also read that shift's outstanding carrier receipts."
+                    + ("You can also read the early shift's complete booking record in `prior_record`."
                        if fullrecord else "You cannot read that shift's carrier receipts or private messages."))
     if hint:
         text.append(HINTS[seat])
@@ -281,7 +291,7 @@ def extension_arm(inst, arm, max_text, max_messages):
 
 
 def leak_values(task):
-    return [o["ref"] for o in task["params"]["orders"]]+[o["id"] for o in task["params"]["orders"]]
+    return [o["ref"] for o in task["params"]["orders"]] + [o["id"] for o in task["params"]["orders"]]
 
 
 def qa(task, views):

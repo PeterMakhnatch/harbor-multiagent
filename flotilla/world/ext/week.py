@@ -101,6 +101,8 @@ class Week:
             ids.extend(c["carrier_ref"] for c in reply["callbacks"])
             if seat == "N2":
                 reply["notebook"] = self.note
+                if self.p["fullrecord"]:
+                    reply["prior_record"] = [b for b in self.bookings.values() if b["desk"] == "N1"]
                 ids.append("notebook")
         return 200, reply, ids
 
@@ -163,8 +165,8 @@ class Week:
         return {"action": "answer", "ok": True}
 
     def seal_note(self, seat, note):
-        if (seat != "N1" or self.single or self.round != self.p["shift"] or not isinstance(note, str)
-                or len(note.encode("utf-8")) > self.p["note_cap"] or len(note.splitlines()) > self.p["note_lines"]):
+        if (seat != "N1" or self.single or self.round != self.p["shift"]
+                or not family.fits_utf8(note, self.p["note_cap"]) or len(note.splitlines()) > self.p["note_lines"]):
             return self.reject(seat, "notebook", "seal within the byte and line cap at the end of the early shift")
         self.note = note
         self.host.record("week_notebook", seat, {"note": note})
@@ -286,8 +288,9 @@ def score(task, events):
             charge(oid, "digest", "card_missing", 150, 100)
             valid = False
         if order["amendment"] and b["carrier"] != order["amendment"]:
-            told = sent_before(events, b["desk"], book["seq"], lambda m: m.get("amend", {}).get(oid)
-                               == order["amendment"] if isinstance(m.get("amend"), dict) else False)
+            told = sent_before(events, b["desk"], book["seq"],
+                               lambda m, oid=oid, carrier=order["amendment"]:
+                               isinstance(m.get("amend"), dict) and m["amend"].get(oid) == carrier)
             reason = "consume_failure" if told else "booked_in_window" if b["round"] <= order["amend_close"] else "relay_late"
             charge(oid, "commit", reason, 150, 100 if valid else 0)
             valid = False
@@ -295,8 +298,9 @@ def score(task, events):
         form = table.get(b["carrier"])
         if (form not in p["supports"][b["carrier"]]
                 or b["rate_key"] != family.rate_key(b["carrier"], order["zone"], form)):
-            told = sent_before(events, b["desk"], book["seq"], lambda m: isinstance(m.get("forms"), dict)
-                               and m["forms"].get(b["carrier"]) == form)
+            told = sent_before(events, b["desk"], book["seq"],
+                               lambda m, carrier=b["carrier"], form=form:
+                               isinstance(m.get("forms"), dict) and m["forms"].get(carrier) == form)
             charge(oid, "interface", "told_not_used" if told else "never_told", 40)
         if order["callback"] is not None:
             correct = {"ref": ref, "order": oid, "action": "close" if order["status"] == "delivered" else "reissue"}
