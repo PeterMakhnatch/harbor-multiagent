@@ -12,6 +12,7 @@ import statistics
 import sys
 import tempfile
 import time
+import tomllib
 import types
 from pathlib import Path
 from typing import Any
@@ -76,6 +77,11 @@ def memory_handler(world: Any) -> type:
             self.client_address = ("127.0.0.2", 0)
             self.close_connection = False
             self.response = None
+            self.pending_await = None
+
+        def _await_wait(self, seat, until, after, deadline):
+            if not self._await_poll(seat, until, after, deadline):
+                self.pending_await = (seat, until, after, deadline)
 
         def _write(self, status: int, data: bytes, content_type: str, headers: dict | None = None) -> bool:
             self.response = (status, json.loads(data) if content_type == "application/json" else data.decode())
@@ -101,60 +107,84 @@ class Simulation:
         self.handler = memory_handler(world)
         self.tokens = {seat: token for token, seat in world.TOKENS.items()} | {"admin": world.ADMIN}
         self.requests = dict.fromkeys(world.SEATS, 0)
+        self.parked: dict[str, Any] = {}
         world.start_world()
 
     def record(self, event: dict[str, Any]) -> None:
         if event["seq"] != len(self.events) + 1 or (self.events and event["t"] < self.events[-1]["t"]):
             raise AssertionError("event order is invalid")
-        if event["seat"] is not None and event["seat"] not in self.tokens:
+        if (event["seat"] is not None and event["seat"] not in self.tokens
+                and (self.world.HOST is None or event["seat"] not in self.world.HOST.senders)):
             raise AssertionError("event has an unknown seat")
         if not isinstance(event["kind"], str) or not event["kind"] or not isinstance(event["data"], dict):
             raise AssertionError("invalid event shape")
         self.events.append(json.loads(json.dumps(event, sort_keys=True, allow_nan=False)))
 
-    def request(self, seat: str, request: Any) -> tuple[int, Any]:
+    def request(self, seat: str, request: Any) -> tuple[int, Any] | None:
         self.clock.step()
         frozen = self.world.STATE["frozen"]
         accepted = len(self.world.STATE["submissions"])
         handler = self.handler(self.tokens[seat], request)
         handler._handle(request.method)
+        if seat != "admin":
+            self.requests[seat] += 1
+        if handler.pending_await is not None:
+            self.parked[seat] = handler
+            return None
         if handler.response is None:
             raise AssertionError(f"no reply to {request.method} {request.path}")
         status, reply = handler.response
-        if not 200 <= status < 500:
+        if not 200 <= status < 500 and not (status == 500 and self.world.HOST and self.world.STATE["frozen"]):
             raise AssertionError(f"invalid reply status {status}")
         if frozen and seat != "admin" and request.method == "POST" and status < 400:
             raise AssertionError("world accepted a move after freeze")
         if frozen and len(self.world.STATE["submissions"]) != accepted:
             raise AssertionError("world recorded a late submission")
-        if seat != "admin":
-            self.requests[seat] += 1
         return status, reply
 
-    def run(self, policies: dict[str, Any]) -> None:
-        ready_at = dict.fromkeys(policies, 0.0)
+    def run(self, policies: dict[str, Any], start_after: dict[str, list[str]] | None = None) -> None:
+        pending = dict(start_after or {})
+        ended: set[str] = set()
+        ready_at = dict.fromkeys(set(policies) - pending.keys(), 0.0)
         replies = dict.fromkeys(policies)
         for _ in range(MAX_STEPS):
-            if not ready_at:
+            for seat, predecessors in list(pending.items()):
+                if set(predecessors) <= ended:
+                    ready_at[seat] = self.clock.value
+                    del pending[seat]
+            for seat, handler in list(self.parked.items()):
+                if handler._await_poll(*handler.pending_await):
+                    replies[seat] = handler.response
+                    ready_at[seat] = self.clock.value
+                    del self.parked[seat]
+            if not ready_at and not self.parked:
+                if pending:
+                    raise ValueError("simulation start_after dependency cycle")
                 return
             ready = sorted(s for s, at in ready_at.items() if at <= self.clock.value)
             if not ready:
-                self.clock.value = min(ready_at.values())
-                ready = sorted(s for s, at in ready_at.items() if at <= self.clock.value)
+                deadlines = [handler.pending_await[-1] for handler in self.parked.values()]
+                self.clock.value = min([*ready_at.values(), *deadlines])
+                continue
             seat = self.random.choice(ready)
             try:
                 step = policies[seat].send(replies[seat])
             except StopIteration:
                 del ready_at[seat]
+                ended.add(seat)
                 continue
             if isinstance(step, POLICY.Request):
                 replies[seat] = self.request(seat, step)
+                if seat in self.parked:
+                    del ready_at[seat]
             elif isinstance(step, POLICY.Sleep):
                 replies[seat] = None
                 ready_at[seat] = self.clock.value + step.seconds
             else:
                 raise TypeError(f"invalid policy step {step!r}")
-        raise RuntimeError(f"simulation exceeded {MAX_STEPS} scheduler steps")
+        if self.world.HOST is None:
+            raise RuntimeError(f"simulation exceeded {MAX_STEPS} scheduler steps")
+        self.world.record("simulation_stalled", None, {"steps": MAX_STEPS})
 
     def finish(self) -> dict[str, Any]:
         self.request("admin", POLICY.Request("POST", "/admin/freeze", {}))
@@ -176,9 +206,12 @@ def select_policies(settings: dict[str, Any], scripted: list[str], policies: str
     return names
 
 
-def score(task: dict, state: dict, events: list[dict], family: Any, env: Path) -> float:
+def score(task: dict, state: dict, events: list[dict], family: Any, env: Path) -> dict:
     if task.get("mode") == "extension":
-        reward = SCORE.extension_score(task, events, env)["reward"]
+        try:
+            return SCORE.extension_score(task, events, env)
+        except Exception as exc:  # noqa: BLE001 - scorer failures are invalid in both runtimes
+            return {"invalid": f"extension verification failed: {type(exc).__name__}: {exc}"[:500]}
     else:
         submissions = state["submissions"]
         if probe := task.get("probe"):
@@ -187,7 +220,7 @@ def score(task: dict, state: dict, events: list[dict], family: Any, env: Path) -
         reward = family.score(answer, task["answer_key"])["score"]
     if not 0 <= reward <= 1:
         raise AssertionError(f"invalid reward {reward}")
-    return float(reward)
+    return {"reward": float(reward)}
 
 
 def simulate_built(task_dir: Path, policies: str | dict[str, str] | None, schedule_seed: int) -> dict[str, Any]:
@@ -230,10 +263,13 @@ def simulate_built(task_dir: Path, policies: str | dict[str, str] | None, schedu
                 client = POLICY.Client(seat, read_file)
                 generators[seat] = POLICY.play(name, client, own, family, oracle, custom, settings["variant"],
                                                settings["mode"] == "extension")
-            sim.run(generators)
+            agents = tomllib.loads((task_dir / "task.toml").read_text())["agents"]
+            sim.run(generators, {seat: row["start_after"] for seat, row in agents.items() if "start_after" in row})
             state = sim.finish()
-            reward = score(task, state, sim.events, family, env)
-    return {"reward": reward, "events": sim.events, "state": state, "requests": sim.requests,
+            result = score(task, state, sim.events, family, env)
+    return {"reward": result.get("reward"), "score": result, "invalid": result.get("invalid"),
+            "stalled": any(e["kind"] == "simulation_stalled" for e in sim.events),
+            "events": sim.events, "state": state, "requests": sim.requests,
             "policies": names, "schedule_seed": schedule_seed, "files_read": files_read}
 
 
@@ -247,7 +283,8 @@ def simulate(family: str, arm: str, instance: int, policies: str | dict[str, str
         variant = suffix
     module = BUILD.load_family(family)
     variant = variant or getattr(module, "DEFAULT_VARIANT", "")
-    n_seats = n_seats if n_seats is not None else getattr(module, "SEATS", 2)
+    if n_seats is None:
+        n_seats = BUILD.default_seats(module, difficulty)
     with tempfile.TemporaryDirectory(prefix="flotilla-sim-") as root:
         (path,) = BUILD.build(family, [instance], n_seats, difficulty, seed, (arm,), Path(root), variant=variant,
                               policy="careful", **build_options)
@@ -276,7 +313,9 @@ def main() -> None:
                        for instance in BUILD.parse_instances(args.instances)
                        for schedule_seed in BUILD.parse_instances(args.schedule_seeds)]
             runs += len(rewards)
-            print(f"{arm:20} {name:10} n={len(rewards):5d}  mean={statistics.mean(rewards):.4f}")
+            valid = [reward for reward in rewards if reward is not None]
+            mean = f"{statistics.mean(valid):.4f}" if valid else "n/a"
+            print(f"{arm:20} {name:10} n={len(rewards):5d} invalid={len(rewards) - len(valid)} mean={mean}")
     print(f"{runs} simulations in {time.monotonic() - started:.3f}s")
 
 
