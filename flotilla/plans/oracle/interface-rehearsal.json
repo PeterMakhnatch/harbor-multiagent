@@ -9,17 +9,51 @@
   {
    "tasks_dir": "/tmp/seams1125/b2-interface/oracle-careful",
    "manifest": "/tmp/seams1125/b2-interface/oracle-careful/manifest.json",
-   "instances": [0],
-   "arms": ["team", "team-parallel", "probe-control", "probe-trap-key"]
+   "instances": [
+    0
+   ],
+   "arms": [
+    "team",
+    "team-parallel"
+   ]
+  },
+  {
+   "tasks_dir": "/tmp/seams1125/b2-interface/oracle-careful",
+   "manifest": "/tmp/seams1125/b2-interface/oracle-careful/manifest.json",
+   "instances": [
+    0
+   ],
+   "arms": [
+    "probe-control",
+    "probe-trap-key"
+   ]
   },
   {
    "tasks_dir": "/tmp/seams1125/b2-interface/oracle-naive",
    "manifest": "/tmp/seams1125/b2-interface/oracle-naive/manifest.json",
-   "instances": [0],
-   "arms": ["team", "team-parallel", "probe-control", "probe-trap-key"]
+   "instances": [
+    0
+   ],
+   "arms": [
+    "team",
+    "team-parallel"
+   ]
+  },
+  {
+   "tasks_dir": "/tmp/seams1125/b2-interface/oracle-naive",
+   "manifest": "/tmp/seams1125/b2-interface/oracle-naive/manifest.json",
+   "instances": [
+    0
+   ],
+   "arms": [
+    "probe-control",
+    "probe-trap-key"
+   ]
   }
  ],
- "models": [null],
+ "models": [
+  null
+ ],
  "agent": "oracle",
  "make_jobs": {
   "max_turns": 15,
