@@ -1,6 +1,10 @@
 """Rehearse a built seat task over HTTP, using trusted local commands instead of containers.
 
     uvx --quiet --python 3.12 --with pyyaml python flotilla/playtest.py --help
+
+Before a session with a sandbox profile, check that a seat's shell works like an ordinary one (no task, no model):
+
+    python3 flotilla/playtest.py --check-seat --sandbox-profile flotilla/playtest_seats/seat.sb
 """
 
 from __future__ import annotations
@@ -19,17 +23,25 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import tomllib
+from collections.abc import Iterator
 from dataclasses import dataclass
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 from urllib.parse import parse_qs
 
 import qa
 
 SEAT_SCRIPTS = Path(__file__).resolve().parent / "playtest_seats"
 SEAT_PATH = "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+HOST_PYTHONS = ("/opt/homebrew/bin/python3", "/usr/local/bin/python3",
+                "/Library/Developer/CommandLineTools/usr/bin/python3")  # never /usr/bin/python3: a stub on macOS
+PYTHON_PROBE = ("import os, sys; print(os.path.realpath(getattr(sys, '_base_executable', None) or sys.executable)); "
+                "print(os.path.realpath(sys.base_prefix))")
+CHECK_SHELLS = (("zsh -lc", ("/bin/zsh", "-lc")), ("zsh -c", ("/bin/zsh", "-c")), ("bash -lc", ("/bin/bash", "-lc")))
 PREFACE = ("You are working in a sandbox directory.\n"
            "Work only inside it; use shell commands.\n"
            "Stop when you are done.\n")
@@ -95,6 +107,7 @@ class RecordedWorld(world.World):
 
 world.World = RecordedWorld
 server = world.serve('127.0.0.1', 0)
+Path(sys.argv[2]).with_name("routes").write_text(json.dumps(sorted(world.ROUTES)))
 Path(sys.argv[2]).write_text(str(server.server_address[1]))
 server.serve_forever()
 """
@@ -178,19 +191,73 @@ def host_env() -> dict[str, str]:
             if not name.startswith("FLOTILLA_") and name not in ("SEAT", "SEAT_TOKEN", "SEAT_BRIEFING", "WORLD_URL")}
 
 
-def seat_env(task: qa.Task, seat: str, root: Path, pass_env: tuple[str, ...]) -> dict[str, str]:
-    tmp = root / "tmp"
-    tmp.mkdir(mode=0o700)
+class SeatPython(NamedTuple):
+    """A real interpreter on the host and its install folder, which the sandbox profile lets a seat read."""
+    executable: Path
+    install: Path
+
+
+def real_python(executable: str, install: str) -> SeatPython | None:
+    """Refuse a shim under ~/.local/bin, and an install folder that would open the user's home to the seat."""
+    home = Path.home().resolve()
+    found = SeatPython(Path(os.path.realpath(executable)), Path(os.path.realpath(install)))
+    if (not found.executable.is_file() or not os.access(found.executable, os.X_OK)
+            or found.executable.is_relative_to(home / ".local" / "bin")
+            or not found.install.is_dir() or home.is_relative_to(found.install)):
+        return None
+    return found
+
+
+def host_pythons() -> Iterator[SeatPython]:
+    """Real interpreters, best first: the one that runs this tool (its base install, not a venv), then host installs."""
+    own = real_python(getattr(sys, "_base_executable", None) or sys.executable, sys.base_prefix)
+    if own is not None:
+        yield own
+    for candidate in HOST_PYTHONS:
+        if not Path(candidate).is_file():
+            continue
+        try:
+            probe = subprocess.run([candidate, "-I", "-c", PYTHON_PROBE], stdin=subprocess.DEVNULL,
+                                   capture_output=True, text=True, timeout=20, check=True)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        lines = probe.stdout.splitlines()
+        if len(lines) == 2 and (found := real_python(*lines)) is not None:
+            yield found
+
+
+def seat_shell(root: Path, python: SeatPython | None) -> dict[str, str]:
+    """Make the seat's shell an ordinary one: a private bin that stays first on PATH, and a private temp folder.
+
+    A macOS login shell runs path_helper, which moves unknown PATH entries to the end. zsh reads `.zprofile` after
+    it and bash reads $BASH_ENV, so both put the seat's bin back in front. zsh writes here-documents to TMPPREFIX.
+    """
+    bin_dir, tmp, zdot = root / "bin", root / "tmp", root / "zdot"
+    for folder in (bin_dir, tmp, zdot):
+        folder.mkdir(mode=0o700)
+    if python is not None:
+        (bin_dir / "python3").symlink_to(python.executable)
+    first = shlex.quote(str(bin_dir))
+    keep_first = f'case "${{PATH-}}" in {first}:*) ;; *) PATH={first}"${{PATH:+:$PATH}}"; export PATH ;; esac\n'
+    for name in (".zshenv", ".zprofile"):
+        (zdot / name).write_text(keep_first)
+    return {"PATH": f"{bin_dir}:{SEAT_PATH}", "TMPDIR": str(tmp), "TMPPREFIX": str(tmp / "zsh"),
+            "ZDOTDIR": str(zdot), "BASH_ENV": str(zdot / ".zshenv")}
+
+
+def seat_env(task: qa.Task, seat: str, root: Path, pass_env: tuple[str, ...],
+             python: SeatPython | None) -> dict[str, str]:
     names = ("HOME", "USER", *pass_env)
     return ({name: os.environ[name] for name in names if name in os.environ}
-            | {"PATH": SEAT_PATH, "HOME": str(Path.home())}
-            | task.env(seat) | {"TMPDIR": str(tmp)})
+            | {"HOME": str(Path.home())} | task.env(seat) | seat_shell(root, python))
 
 
-def sandbox_command(argv: list[str], profile: Path, root: Path, scripts: Path = SEAT_SCRIPTS) -> list[str]:
+def sandbox_command(argv: list[str], profile: Path, root: Path, scripts: Path = SEAT_SCRIPTS,
+                    python: SeatPython | None = None) -> list[str]:
     return ["/usr/bin/sandbox-exec", "-f", str(profile), "-D", f"SEATROOT={root}",
             "-D", f"HOSTHOME={Path.home().resolve()}", "-D", f"HOSTTMP={Path(tempfile.gettempdir()).resolve()}",
-            "-D", f"SEATSCRIPTS={scripts.resolve()}", *argv]
+            "-D", f"SEATSCRIPTS={scripts.resolve()}",
+            "-D", f"SEATPYTHON={python.install if python is not None else root}", *argv]
 
 
 def sandbox_profile(path: Path | None) -> Path | None:
@@ -202,6 +269,27 @@ def sandbox_profile(path: Path | None) -> Path | None:
     if not path.is_file():
         raise ValueError(f"sandbox profile not found: {path}")
     return path.resolve()
+
+
+def runs_in_sandbox(python: SeatPython, profile: Path, scripts: Path) -> bool:
+    with tempfile.TemporaryDirectory(prefix=".playtest-seat-", dir=Path.home()) as folder:
+        root = Path(folder).resolve()
+        env = {"HOME": str(Path.home())} | seat_shell(root, python)
+        argv = sandbox_command([str(root / "bin" / "python3"), "-c", "pass"], profile, root, scripts, python)
+        try:
+            return subprocess.run(argv, cwd=root, env=env, stdin=subprocess.DEVNULL, capture_output=True,
+                                  timeout=30, check=False).returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+
+
+def find_python(profile: Path | None, scripts: Path) -> SeatPython | None:
+    """The first real interpreter that also runs under the seats' sandbox profile; say so when there is none."""
+    for python in host_pythons():
+        if profile is None or runs_in_sandbox(python, profile, scripts):
+            return python
+    print("playtest: no real python3 on this host runs in a seat; seats get no python3 of their own", file=sys.stderr)
+    return None
 
 
 def dependencies(agents: dict) -> dict[str, tuple[str, ...]]:
@@ -258,7 +346,8 @@ def host_preface(mapping: dict[str, str]) -> bytes:
 
 def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
                  output: Path, after: tuple[str, ...], token: str, url: str,
-                 pass_env: tuple[str, ...], profile: Path | None, scripts: Path, model: str | None) -> SeatRun:
+                 pass_env: tuple[str, ...], profile: Path | None, scripts: Path, model: str | None,
+                 python: SeatPython | None) -> SeatRun:
     workdir = root / "work"
     workdir.mkdir()
     copy_seat_files(task, seat, workdir)
@@ -270,14 +359,15 @@ def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
     (output / "seat.log").touch()
     native_log = root / "command.log"
     native_log.touch()
-    env = seat_env(task, seat, root, pass_env) | {"SEAT_TOKEN": token, "PWD": str(workdir), "WORLD_URL": url}
+    env = (seat_env(task, seat, root, pass_env, python)
+           | {"SEAT_TOKEN": token, "PWD": str(workdir), "WORLD_URL": url})
     if mode == "external":
         values = {"instruction": str(prompt), "seat": seat, "workdir": str(workdir), "log": str(native_log)}
         command = PLACEHOLDER.sub(lambda m: shlex.quote(values[m[1]]), template)
         harness = harness_name(template)
         argv = ["/usr/bin/env", "/bin/bash", "-c", command]
         if profile is not None:
-            argv = sandbox_command(argv, profile, root, scripts)
+            argv = sandbox_command(argv, profile, root, scripts, python)
             env["PLAYTEST_SANDBOX"] = str(profile)
     else:
         argv = policy_command(task, seat, mode, root)
@@ -495,44 +585,29 @@ def world_causes(out: Path) -> dict:
             "budget_events": [e for e in events if e["kind"] == "call_budget"]}
 
 
-def log_strings(text: str) -> list[str]:
-    """Plain log lines as they are; JSON lines as their decoded string values, so escaped newlines split paths."""
-    strings = []
-    for line in text.splitlines():
-        try:
-            pending = [json.loads(line)]
-        except ValueError:
-            strings.append(line)
-            continue
-        while pending:
-            value = pending.pop()
-            if isinstance(value, str):
-                strings.append(value)
-            elif isinstance(value, dict):
-                pending.extend(value.values())
-            elif isinstance(value, list):
-                pending.extend(value)
-    return strings
+def outside(raw: str, workdir: Path, root: Path) -> str | None:
+    """The absolute path when it lies outside the seat root; a relative path starts at the initial cwd."""
+    path = Path(os.path.abspath(workdir / Path(raw).expanduser()))
+    return None if path.is_relative_to(root) else str(path)
 
 
-def outside_paths(text: str, workdir: Path, root: Path) -> list[str]:
-    """Conservative log-text scan, not an access trace. Resolve relative mentions against the initial cwd."""
+def outside_paths(command: str, workdir: Path, root: Path, routes: frozenset[str] = frozenset()) -> list[str]:
+    """Conservative scan of one shell command, not an access trace. `routes` are URL paths of the world, not files."""
     paths = set()
-    for chunk in log_strings(text):
-        if ROOT_ACCESS.search(chunk):
-            paths.add("/")
-        for match in PATH_MENTION.finditer(chunk):
-            raw = next(value for value in match.groups() if value is not None).rstrip(":")
-            if raw.startswith("//") or raw in IGNORED_PATHS:
-                continue
-            path = Path(os.path.abspath(workdir / Path(raw).expanduser()))
-            if not path.is_relative_to(root):
-                paths.add(str(path))
+    if ROOT_ACCESS.search(command):
+        paths.add("/")
+    for match in PATH_MENTION.finditer(command):
+        raw = next(value for value in match.groups() if value is not None).rstrip(":")
+        if raw.startswith("//") or raw in IGNORED_PATHS or raw.partition("?")[0].rstrip("/") in routes:
+            continue
+        if (path := outside(raw, workdir, root)) is not None:
+            paths.add(path)
     return sorted(paths)
 
 
-def shell_commands(text: str) -> list[str]:
-    commands = []
+def tool_calls(text: str) -> tuple[list[str], list[str]]:
+    """Shell commands and file-tool paths in Codex `--json` and Claude `stream-json` records, each call once."""
+    commands, paths = [], []
     seen = set()
     for line in text.splitlines():
         try:
@@ -545,42 +620,47 @@ def shell_commands(text: str) -> list[str]:
         if event.get("type") in ("item.started", "item.completed"):
             item = event.get("item")
             if isinstance(item, dict) and item.get("type") == "command_execution":
-                items.append((item.get("id"), item.get("command")))
+                items.append((item.get("id"), "command", item.get("command")))
         elif event.get("type") == "assistant":
             message = event.get("message")
             content = message.get("content") if isinstance(message, dict) else None
             for item in content if isinstance(content, list) else []:
-                if isinstance(item, dict) and item.get("type") == "tool_use" and item.get("name") == "Bash":
-                    inputs = item.get("input")
-                    if isinstance(inputs, dict):
-                        items.append((item.get("id"), inputs.get("command")))
-        for item_id, command in items:
-            if not isinstance(command, str):
-                continue
-            if isinstance(item_id, str):
-                if item_id in seen:
+                inputs = item.get("input") if isinstance(item, dict) and item.get("type") == "tool_use" else None
+                if not isinstance(inputs, dict):
                     continue
-                seen.add(item_id)
-            commands.append(command)
-    return commands
+                fields = ("command",) if item.get("name") == "Bash" else ("file_path", "path", "notebook_path")
+                items += [(item.get("id"), field, inputs.get(field)) for field in fields]
+        for item_id, field, value in items:
+            if not isinstance(value, str) or (isinstance(item_id, str) and (item_id, field) in seen):
+                continue
+            seen.add((item_id, field))
+            (commands if field == "command" else paths).append(value)
+    return commands, paths
+
+
+def seat_log(output: Path) -> str:
+    return "\n".join((output / name).read_text(errors="replace") for name in ("seat.log", "command.log"))
 
 
 def seat_commands(output: Path) -> list[str]:
-    text = "\n".join((output / name).read_text(errors="replace") for name in ("seat.log", "command.log"))
-    return shell_commands(text)
+    return tool_calls(seat_log(output))[0]
 
 
-def archive_seats(seats: list[SeatRun]) -> dict[str, list[str]]:
-    audit = {}
+def audit_seat(output: Path, workdir: Path, root: Path, routes: frozenset[str]) -> list[str] | None:
+    """Outside paths in the parsed tool calls only, never in free log text; None when the log has no such record."""
+    commands, file_paths = tool_calls(seat_log(output))
+    if not commands and not file_paths:
+        return None
+    found = {path for command in commands for path in outside_paths(command, workdir, root, routes)}
+    return sorted(found | {path for raw in file_paths if (path := outside(raw, workdir, root)) is not None})
+
+
+def archive_seats(seats: list[SeatRun]) -> None:
     for seat in seats:
-        dest = seat.output
-        shutil.copyfile(seat.root / "command.log", dest / "command.log")
-        text = "\n".join((dest / name).read_text(errors="replace") for name in ("seat.log", "command.log"))
-        audit[seat.seat] = outside_paths(text, seat.workdir, seat.root)
-    return audit
+        shutil.copyfile(seat.root / "command.log", seat.output / "command.log")
 
 
-def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: list[dict]) -> None:
+def timeline(out: Path, result: dict, audit: dict[str, list[str] | None], requests: list[dict]) -> None:
     world = out / "artifacts" / "logs" / "world"
     events = read_jsonl(world / "events.jsonl")
     messages = {m["id"]: m for m in read_jsonl(world / "messages.jsonl")}
@@ -609,6 +689,7 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
              f"Freeze reason: {result['freeze_reason']}; budget events: {json.dumps(result['budget_events'])}",
              (f"Model: {result['model']}; harness: {result['harness']}; "
               f"sandbox profile: {result['sandbox_profile'] or 'none (host processes are not isolated)'}"),
+             f"Seat python3: {result['python3'] or 'none found on this host'}",
              f"Seat failures: {json.dumps(result['seat_failures']) if result['seat_failures'] else 'none'}",
              "This is a rehearsal, not benchmark evidence.", ""]
     by_request = {seat: [] for seat in result["seats"]}
@@ -619,7 +700,8 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
             f"-> {request['status'] if request['status'] is not None else 'no response'}")
     for seat, evidence in by_seat.items():
         info = result["seats"][seat]
-        paths = [f"- `{path}`" for path in audit[seat]] or ["- No outside paths found."]
+        paths = (["- Not audited: the log has no recognized tool records."] if audit[seat] is None
+                 else [f"- `{path}`" for path in audit[seat]] or ["- No outside paths found."])
         commands = seat_commands(out / "seats" / seat)
         started, ended = (f"{info[key]:.3f}" if info[key] is not None else "not started"
                           for key in ("started_sec", "ended_sec"))
@@ -632,7 +714,8 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
                   *(by_request[seat] or ["- No world calls."]), "", "### Shell commands (CLI order)", "",
                   *[f"- `{command}`" for command in commands],
                   *([] if commands else ["- No recognized shell command records."]), "", "### Outside-path audit", "",
-                  "Candidate outside paths in the logs (possible reads or listings, not an access trace).",
+                  "Candidate outside paths in the parsed shell commands and file-tool calls (possible reads or",
+                  "listings, not an access trace). URL paths of the world are not listed.",
                   *paths, ""]
     (out / "summary.md").write_text("\n".join(lines))
 
@@ -716,6 +799,7 @@ def playtest(task_dir: Path, templates: str | list[str], selected: set[str] | No
     scripts = scripts.resolve()
     if not scripts.is_dir():
         raise ValueError(f"seat scripts directory not found: {scripts}")
+    python = find_python(profile, scripts)
     if out.exists() and (not out.is_dir() or any(out.iterdir())):
         raise ValueError(f"output must be a new or empty directory: {out}")
     out = out.resolve()
@@ -732,7 +816,7 @@ def playtest(task_dir: Path, templates: str | list[str], selected: set[str] | No
                     mode = "external" if seat in selected else "careful" if seat in subjects else "scripted"
                     seats.append(prepare_seat(task, seat, mode, seat_root, commands.get(seat, ""), out / "seats" / seat,
                                               after[seat], tokens[seat], url, pass_env, profile, scripts,
-                                              models.get(seat)))
+                                              models.get(seat), python))
                 requests_stream = stack.enter_context((out / "requests.jsonl").open())
                 responses_stream = stack.enter_context((out / "responses.jsonl").open())
                 events_stream = stack.enter_context((out / "artifacts/logs/world/events.jsonl").open())
@@ -741,15 +825,18 @@ def playtest(task_dir: Path, templates: str | list[str], selected: set[str] | No
                 timed_out, stop_reason = run_seats(seats, timeout, max_parallel, watch, seat_timeout, stall_sec, grace_sec)
                 reward, score = verify(task, out, url, env, float(config.get("verifier", {}).get("timeout_sec", 120)))
         finally:
-            audit = archive_seats(seats)
+            archive_seats(seats)
         requests = read_requests(out)
+        routes = frozenset(json.loads((root / "routes").read_text())) | {r["path"] for r in requests}
+        audit = {seat.seat: audit_seat(seat.output, seat.workdir, seat.root, routes) for seat in seats}
         seat_results = {seat.seat: seat.result([r for r in requests if r["seat"] == seat.seat]) for seat in seats}
         failures = {name: errors for name, info in seat_results.items() if (errors := seat_failures(info))}
         reason = score.get("error") or (None if reward is not None else "verifier returned no reward")
         result = {"task": str(task.path), "reward": reward, "score": score, "timed_out": timed_out,
                   "valid": reason is None, "invalid_reason": reason, **world_causes(out),
                   "stop_reason": stop_reason,
-                  "sandbox_profile": str(profile) if profile else None, "model": common_or_by_seat(models),
+                  "sandbox_profile": str(profile) if profile else None,
+                  "python3": str(python.executable) if python else None, "model": common_or_by_seat(models),
                   "harness": common_or_by_seat({s.seat: s.harness for s in seats if s.mode == "external"}),
                   "seat_failures": failures, "seats": seat_results}
         (out / "result.json").write_text(json.dumps(result, indent=2) + "\n")
@@ -757,10 +844,101 @@ def playtest(task_dir: Path, templates: str | list[str], selected: set[str] | No
         return result
 
 
+def check_seat(profile: Path | None, scripts: Path = SEAT_SCRIPTS, deny_probes: tuple[Path, ...] = ()) -> dict:
+    """Probe a seat shell that is set up and sandboxed like an external seat: no task, no assistant, no model."""
+    profile, home = sandbox_profile(profile), Path.home().resolve()
+    if not scripts.is_dir():
+        raise ValueError(f"seat scripts directory not found: {scripts}")
+    python = find_python(profile, scripts)
+    token = secrets.token_hex(8)
+    checks = []
+
+    class Probe(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(token)))
+            self.end_headers()
+            self.wfile.write(token.encode())
+
+        def log_message(self, format: str, *args: Any) -> None:
+            pass
+
+    with contextlib.ExitStack() as stack:
+        root = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix=".playtest-seat-", dir=home))).resolve()
+        canary = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix=".playtest-canary-", dir=home)),
+                      "canary.txt").resolve()
+        canary.write_text(token)
+        server = stack.enter_context(ThreadingHTTPServer(("127.0.0.1", 0), Probe))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        stack.callback(server.shutdown)
+        workdir = root / "work"
+        workdir.mkdir()
+        env = ({name: os.environ[name] for name in ("USER",) if name in os.environ}
+               | {"HOME": str(Path.home()), "PWD": str(workdir)} | seat_shell(root, python))
+        login = CHECK_SHELLS[0][1]
+
+        def shell(invocation: tuple[str, ...], command: str) -> tuple[int | None, str, str]:
+            """Exit code (None: did not run to the end), stdout, and the last stderr line."""
+            argv = [*invocation, command]
+            if profile is not None:
+                argv = sandbox_command(argv, profile, root, scripts, python)
+            try:
+                done = subprocess.run(argv, cwd=workdir, env=env, stdin=subprocess.DEVNULL, capture_output=True,
+                                      text=True, timeout=30, check=False)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                return None, "", str(exc)
+            return done.returncode, done.stdout.strip(), (done.stderr.strip().splitlines() or [""])[-1]
+
+        def refused(path: Path) -> tuple[bool, str]:
+            if not path.exists():
+                return False, "not on this host, so the check proves nothing"
+            code, out, err = shell(login, f"{'ls -A' if path.is_dir() else 'cat'} {shlex.quote(str(path))}")
+            if code is None:
+                return False, err
+            return (True, err.rpartition(": ")[2]) if code != 0 and not out else (False, "the seat can read it")
+
+        def add(name: str, ok: bool, detail: str) -> None:
+            checks.append({"name": name, "ok": ok, "detail": detail})
+
+        link = str(root / "bin" / "python3")
+        for label, invocation in CHECK_SHELLS:
+            code, out, err = shell(invocation,
+                                   "command -v python3 && python3 -c 'import sys; print(sys.version.split()[0])'")
+            lines = out.splitlines()
+            ok = code == 0 and python is not None and len(lines) == 2 and lines[0] == link
+            add(f"python3 -c ({label})", ok, f"Python {lines[1]}" if ok else "; ".join(
+                part for part in (f"python3 is {lines[0]}" if lines else "python3 is not on PATH", err) if part))
+        for label, invocation in CHECK_SHELLS:
+            code, out, err = shell(invocation, "cat <<'EOF'\nhere-document ok\nEOF")
+            add(f"here-document ({label})", code == 0 and out == "here-document ok", err if code != 0 else "")
+        code, out, err = shell(login, f"curl -fsS -m 5 http://127.0.0.1:{server.server_address[1]}/")
+        add("curl to a local port", code == 0 and out == token, err if code != 0 else "")
+        code, out, err = shell(login, 'echo seat > check.txt && echo seat > "$TMPDIR/check.txt" '
+                                      '&& cat check.txt "$TMPDIR/check.txt"')
+        add("write inside the seat folder", code == 0 and out.split() == ["seat", "seat"], err if code != 0 else "")
+        add("read of the user's home refused", *min(refused(home), refused(canary)))
+        for probe in deny_probes:
+            path = Path(os.path.abspath(probe.expanduser()))
+            add(f"read refused: {path}", *refused(path))
+    return {"sandbox_profile": str(profile) if profile else None,
+            "python3": str(python.executable) if python else None, "checks": checks}
+
+
+def print_seat_check(report: dict) -> bool:
+    print(f"Seat check; sandbox profile: {report['sandbox_profile'] or 'none (host processes are not isolated)'}")
+    print(f"Seat python3: {report['python3'] or 'none found on this host'}")
+    for check in report["checks"]:
+        detail = f": {check['detail']}" if check["detail"] else ""
+        print(f"{'PASS' if check['ok'] else 'FAIL'}  {check['name']}{detail}")
+    failed = sum(not check["ok"] for check in report["checks"])
+    print(f"Seat check: {len(report['checks']) - failed} of {len(report['checks'])} passed")
+    return not failed
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, epilog="Trusted host commands only; sandbox is optional.")
-    parser.add_argument("--task", type=Path, required=True, help="built task folder")
-    parser.add_argument("--seat-cmd", required=True, action="append",
+    parser.add_argument("--task", type=Path, help="built task folder")
+    parser.add_argument("--seat-cmd", action="append",
                         help="default or SEAT=template; repeatable; {instruction}, {seat}, {workdir}, {log}")
     parser.add_argument("--seats", help="comma-separated external seats (default: all non-scripted seats)")
     parser.add_argument("--timeout-sec", type=float, help="total seat play time (default: built task timeout)")
@@ -773,8 +951,21 @@ def main() -> None:
     parser.add_argument("--sandbox-profile", type=Path, help="macOS sandbox-exec profile for external seats")
     parser.add_argument("--seat-scripts", type=Path, default=SEAT_SCRIPTS, help="readable seat scripts directory")
     parser.add_argument("--model-label", action="append", help="default or SEAT=model name; repeatable")
-    parser.add_argument("--out", type=Path, required=True, help="new or empty output folder")
+    parser.add_argument("--out", type=Path, help="new or empty output folder")
+    parser.add_argument("--check-seat", action="store_true",
+                        help="only probe a seat shell under the profile (no task, assistant or model), then exit")
+    parser.add_argument("--deny-probe", type=Path, action="append", default=[], metavar="PATH",
+                        help="with --check-seat: a path that the seat must not be able to read (repeatable)")
     args = parser.parse_args()
+    if args.check_seat:
+        try:
+            report = check_seat(args.sandbox_profile, args.seat_scripts, tuple(args.deny_probe))
+        except (ValueError, OSError) as exc:
+            parser.exit(2, f"playtest: {exc}\n")
+        raise SystemExit(0 if print_seat_check(report) else 1)
+    required = (("--task", args.task), ("--seat-cmd", args.seat_cmd), ("--out", args.out))
+    if missing := [flag for flag, value in required if value is None]:
+        parser.error(f"the following arguments are required: {', '.join(missing)}")
     try:
         selected = {seat.strip() for seat in args.seats.split(",")} if args.seats is not None else None
         passed = tuple(name.strip() for group in args.pass_env for name in group.split(","))

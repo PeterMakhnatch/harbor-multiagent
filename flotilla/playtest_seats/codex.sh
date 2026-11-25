@@ -16,7 +16,9 @@ binary=${CODEX_BIN:-$(command -v codex)}
 mkdir -p "$root/codex-home" "$root/tmp" "$root/zdot" "$root/home"
 install -m 600 "$HOME/.codex/auth.json" "$root/codex-home/auth.json"
 cd "$workdir"
-export HOME="$root/home" CODEX_HOME="$root/codex-home" TMPDIR="$root/tmp" ZDOTDIR="$root/zdot" SHELL=/bin/bash
+# PATH comes from playtest.py: the seat's own bin (python3) first. zsh writes here-documents to TMPPREFIX.
+export HOME="$root/home" CODEX_HOME="$root/codex-home" TMPDIR="$root/tmp" TMPPREFIX="$root/tmp/zsh" \
+  ZDOTDIR="$root/zdot" SHELL=/bin/bash
 exec "$binary" exec --model "$model" --ignore-user-config --ignore-rules --ephemeral \
   --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox --json --color never \
   -c allow_login_shell=false --disable shell_snapshot \

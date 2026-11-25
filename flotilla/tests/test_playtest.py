@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+import os
+import re
 import shlex
 import subprocess
 import sys
@@ -30,18 +32,26 @@ assert Path.cwd() == Path(workdir)
 assert seat == os.environ['SEAT']
 assert urlsplit(os.environ['WORLD_URL']).hostname == '127.0.0.1'
 assert 'FLOTILLA_ADMIN' not in os.environ and 'FLOTILLA_TOKENS' not in os.environ
-assert Path(os.environ['TMPDIR']) == Path(workdir).parent / 'tmp'
+root = Path(workdir).parent
+assert Path(os.environ['TMPDIR']) == root / 'tmp' and Path(os.environ['TMPPREFIX']) == root / 'tmp' / 'zsh'
 assert Path(os.environ['TMPDIR']).is_dir()
+assert os.environ['PATH'] == f'{root}/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+link = root / 'bin' / 'python3'
+if link.is_symlink():
+    import shutil
+    import subprocess
+    assert shutil.which('python3') == str(link)
+    assert subprocess.run(['python3', '-c', 'print(6 * 7)'], capture_output=True, text=True).stdout == '42\\n'
+print('seat-python3', os.path.realpath(link) if link.is_symlink() else None, flush=True)
 assert Path(workdir).parent.stat().st_mode & 0o777 == 0o700
 assert Path(workdir).parent.parent == Path.home().resolve()
 assert 'PLAYTEST_SECRET' not in os.environ
 if mode == 'env':
     assert os.environ['PLAYTEST_KEEP'] == 'allowed'
     assert os.environ['USER'] == 'fake-login'
-    assert os.environ['PATH'] == '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin'
     allowed = {
-        'PATH', 'HOME', 'USER', 'TMPDIR', 'SEAT', 'SEAT_TOKEN', 'SEAT_BRIEFING', 'WORLD_URL',
-        'PWD', 'SHLVL', '_', 'LC_CTYPE', '__CF_USER_TEXT_ENCODING', 'PLAYTEST_KEEP'
+        'PATH', 'HOME', 'USER', 'TMPDIR', 'TMPPREFIX', 'ZDOTDIR', 'BASH_ENV', 'SEAT', 'SEAT_TOKEN', 'SEAT_BRIEFING',
+        'WORLD_URL', 'PWD', 'SHLVL', '_', 'LC_CTYPE', '__CF_USER_TEXT_ENCODING', 'PLAYTEST_KEEP'
     }
     assert not (unexpected := set(os.environ) - allowed), unexpected
     mode = 'careful'
@@ -70,6 +80,19 @@ elif mode in ('careful', 'json'):
         claude = {'type': 'tool_use', 'id': 'toolu_1', 'name': 'Bash', 'input': {'command': 'cd /home/player && ls'}}
         print(json.dumps({'type': 'assistant', 'message': {'content': [claude]}}), flush=True)
         print(json.dumps({'type': 'unknown', 'command': 'ls /should-not-parse'}), flush=True)
+        noise = {'type': 'thinking', 'thinking': 'maybe read /etc/shadow', 'signature': 'Eu/aB+/x9/Qm/zz=='}
+        routes = {'type': 'tool_use', 'id': 'toolu_2', 'name': 'Bash', 'input': {'command': (
+            'curl -s "$WORLD_URL"/messages; for p in /whoami /docs; do curl -s "$WORLD_URL$p"; done; ls ../..')}}
+        write = {'type': 'tool_use', 'id': 'toolu_3', 'name': 'Write',
+                 'input': {'file_path': '/tmp/book.py', 'content': 'open("/etc/hosts")'}}
+        print(json.dumps({'type': 'assistant', 'message': {'content': [noise, routes, write]}}), flush=True)
+        result = {'type': 'tool_result', 'tool_use_id': 'toolu_2', 'content': 'see /var/db/secret'}
+        print(json.dumps({'type': 'user', 'message': {'content': [result]}}), flush=True)
+        try:
+            urllib.request.urlopen(urllib.request.Request(
+                os.environ['WORLD_URL'] + '/docs', headers={'Authorization': 'Bearer ' + os.environ['SEAT_TOKEN']}))
+        except urllib.error.HTTPError:
+            pass
         request = urllib.request.Request(os.environ['WORLD_URL'] + '/messages',
                                          headers={'Authorization': 'Bearer ' + os.environ['SEAT_TOKEN']})
         try:
@@ -168,7 +191,6 @@ def assert_evidence(task, out, result, expected):
             prompt = Path(info["workdir"]).parent / "prompt.md"
             assert f"Read {prompt}" in log
             assert f"`{prompt}`" not in summary and f"`{prompt.parent}`" not in summary
-            assert f"`{prompt.parent.parent}`" in summary
             old_token = QA.load_task(task).env(seat)["SEAT_TOKEN"]
             assert hashlib.sha256(old_token.encode()).hexdigest() not in log
     return events, summary
@@ -198,6 +220,9 @@ def test_scripted_probe_and_noop(tmp_path, monkeypatch):
     bad_out, bad = play(tmp_path, task, "nop", name="no-op", expected_exit=1)
     assert bad["seat_failures"] == {"p2": ["no world calls"]}
     assert bad["seats"]["p2"]["world_calls"] == 0
+    for summary in ((good_out / "summary.md").read_text(), (bad_out / "summary.md").read_text()):
+        assert "Not audited: the log has no recognized tool records." in summary.split("## p2 (external)")[1]
+        assert f"`{Path.home().resolve()}`" not in summary  # the plain log line `ls ../..` is not a tool record
     events, _ = assert_evidence(task, bad_out, bad, 0)
     assert [event["kind"] for event in events if event["seat"] == "p2"] == ["seat_transition"]
     good_log = (good_out / "seats" / "p2" / "seat.log").read_text()
@@ -399,11 +424,11 @@ def test_summary_lists_commands_requests_and_scripted_sends(tmp_path):
     assert "should-not-parse" not in commands
     assert "scripted send:" in summary.split("## p2 (external)")[0]
     audit = receiver.split("### Outside-path audit")[1]
-    assert "- `/`" in audit and "- `/home/player`" in audit
-    assert "total" not in audit and "/bin/zsh" not in audit
+    listed = {line[3:-1] for line in audit.splitlines() if line.startswith("- `")}
+    assert listed == {"/", "/home/player", "/tmp/book.py", str(Path.home().resolve())}
 
 
-def test_audit_root_access_and_escaped_newlines(tmp_path, monkeypatch):
+def test_audit_reads_only_tool_calls_and_skips_world_routes(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(FLOTILLA))
     runner = load(FLOTILLA / "playtest.py")
     root = tmp_path / "seat"
@@ -411,11 +436,28 @@ def test_audit_root_access_and_escaped_newlines(tmp_path, monkeypatch):
     for command in ("find / -name x", "ls /", "cd /; cat etc/passwd", "cd '/' && ls"):
         assert runner.outside_paths(command, work, root) == ["/"], command
     assert runner.outside_paths("ls ./data; cat x/y; echo $((4 / 2))", work, root) == []
-    record = json.dumps({"type": "item.completed", "item": {"aggregated_output": f"{work}\ntotal 8\n./a.csv"}})
-    assert "\\n" in record
-    assert runner.outside_paths(record, work, root) == []
     assert runner.outside_paths(f"cat {root / 'prompt.md'} {root / 'tmp' / 'x'} /dev/null", work, root) == []
     assert runner.outside_paths("cat /etc/hosts", work, root) == ["/etc/hosts"]
+    command = "curl -s \"$WORLD_URL\"/desk; for p in /desk/ '/shipment?id=S-1' /close; do curl \"$WORLD_URL$p\"; done"
+    assert runner.outside_paths(command, work, root) == ["/close", "/desk", "/shipment?id=S-1"]
+    assert runner.outside_paths(command, work, root, frozenset({"/desk", "/shipment"})) == ["/close"]
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    (logs / "command.log").write_text("cat /etc/passwd\n")
+    (logs / "seat.log").write_text("ls ../..\nReading /etc/hosts\n")
+    assert runner.audit_seat(logs, work, root, frozenset()) is None
+    content = [
+        {"type": "thinking", "thinking": "read /etc/shadow?", "signature": "Eq/8B/Cq+z9/aa=="},
+        {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "cat ../../notes.txt; curl $W/x '/desk'"}},
+        {"type": "tool_use", "id": "t2", "name": "Write", "input": {"file_path": "/tmp/book.py", "content": "/etc/x"}},
+        {"type": "tool_use", "id": "t3", "name": "Read", "input": {"file_path": str(work / "a.csv")}}]
+    records = [{"type": "assistant", "message": {"content": content}},
+               {"type": "assistant", "message": {"content": content[1:2]}},
+               {"type": "user", "message": {"content": [{"type": "tool_result", "content": f"{work}\n/var/db/secret"}]}}]
+    (logs / "seat.log").write_text("".join(json.dumps(record) + "\n" for record in records))
+    assert runner.tool_calls((logs / "seat.log").read_text()) == (
+        ["cat ../../notes.txt; curl $W/x '/desk'"], ["/tmp/book.py", str(work / "a.csv")])
+    assert runner.audit_seat(logs, work, root, frozenset({"/desk"})) == sorted([str(tmp_path / "notes.txt"), "/tmp/book.py"])
 
 
 def test_reject_scripted_external_and_cyclic_dependencies(tmp_path):
@@ -437,6 +479,9 @@ def test_minimal_env_and_pass_env(tmp_path, monkeypatch):
     task = build(tmp_path, "talk-trap")
     out, result = play(tmp_path, task, "env", extra=("--pass-env", "PLAYTEST_KEEP"))
     assert_evidence(task, out, result, 1)
+    assert result["python3"] and Path(result["python3"]).is_file() and "/.local/bin/" not in result["python3"]
+    assert f"seat-python3 {result['python3']}\n" in (out / "seats" / "p2" / "seat.log").read_text()
+    assert f"Seat python3: {result['python3']}" in (out / "summary.md").read_text()
 
 
 def test_sandbox_command_and_skip(tmp_path, monkeypatch, capsys):
@@ -457,32 +502,125 @@ def test_sandbox_command_and_skip(tmp_path, monkeypatch, capsys):
     assert runner.sandbox_profile(profile) == profile.resolve()
 
 
-@pytest.mark.skipif(sys.platform != "darwin", reason="macOS sandbox-exec profile")
-def test_claude_fake_cli_in_custom_scripts_directory(tmp_path, monkeypatch):
+def test_python_search_skips_shims_and_reports_none(tmp_path, monkeypatch, capsys):
+    monkeypatch.syspath_prepend(str(FLOTILLA))
+    runner = load(FLOTILLA / "playtest.py")
+    real, install = (Path(os.path.realpath(path)) for path in (sys._base_executable, sys.base_prefix))
+    home = tmp_path / "home"
+    shim = home / ".local" / "bin" / "python3"
+    shim.parent.mkdir(parents=True)
+    shim.write_text("#!/bin/sh\nexit 1\n")
+    shim.chmod(0o755)
+    monkeypatch.setenv("HOME", str(home))
+    assert runner.real_python(str(real), str(install)) == (real, install)
+    assert runner.real_python(str(shim), str(install)) is None
+    assert runner.real_python(str(real), str(tmp_path)) is None, "an install folder must not open the user's home"
+    host = tmp_path / "host-python3"
+    host.write_text(f"#!/bin/sh\necho {shlex.quote(str(real))}\necho {shlex.quote(str(install))}\n")
+    host.chmod(0o755)
+    monkeypatch.setattr(sys, "_base_executable", str(shim))
+    monkeypatch.setattr(runner, "HOST_PYTHONS", (str(tmp_path / "missing"), str(host)))
+    scripts = FLOTILLA / "playtest_seats"
+    assert runner.find_python(None, scripts) == (real, install)
+    assert capsys.readouterr().err == ""
+    monkeypatch.setattr(runner, "HOST_PYTHONS", ())
+    assert runner.find_python(None, scripts) is None
+    assert "no real python3" in capsys.readouterr().err
+    task = build(tmp_path, "talk-trap")
+    fake_seat = tmp_path / "fake seat.py"
+    fake_seat.write_text(FAKE_SEAT)
+    template = (f"{shlex.quote(sys.executable)} {shlex.quote(str(fake_seat))} {{instruction}} {{seat}} {{workdir}} {{log}} "
+                f"{shlex.quote(str(task / 'solution' / 'policy.py'))} careful")
+    result = runner.playtest(task, template, None, 15, 2, tmp_path / "out")
+    assert result["reward"] == 1 and result["python3"] is None
+    assert json.loads((tmp_path / "out" / "result.json").read_text())["python3"] is None
+    assert "no real python3" in capsys.readouterr().err
+    assert "seat-python3 None\n" in (tmp_path / "out" / "seats" / "p2" / "seat.log").read_text()
+    assert "Seat python3: none found on this host" in (tmp_path / "out" / "summary.md").read_text()
+
+
+SANDBOX_ONLY = pytest.mark.skipif(sys.platform != "darwin", reason="the seat sandbox needs sandbox-exec; macOS only")
+SHELL_PROBE = """\
+#!/bin/bash
+set -u
+[[ "$PATH" == "${PWD%/work}/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" ]] || echo "bad PATH $PATH"
+[[ -d "$ZDOTDIR" && "$ZDOTDIR" == "${PWD%/work}/zdot" && "$TMPPREFIX" == "${PWD%/work}/tmp/zsh" ]] || echo "bad shell env"
+for shell in "/bin/zsh -lc" "/bin/zsh -c" "/bin/bash -lc"; do
+  echo "[$shell] $($shell 'command -v python3') -> $($shell 'python3 -c "print(6 * 7)"')"
+done
+/bin/zsh -lc "cat <<'EOF'
+here-document ok
+EOF"
+/usr/bin/curl -fsS -H "Authorization: Bearer $SEAT_TOKEN" "$WORLD_URL/whoami"
+echo "fake-cli-ok USER=$USER SHELL=$SHELL HOME=$HOME"
+"""
+
+
+@SANDBOX_ONLY
+@pytest.mark.parametrize("harness", ["claude", "codex"])
+def test_shipped_wrappers_give_a_fake_cli_an_ordinary_shell(tmp_path, monkeypatch, harness):
     scripts = tmp_path / "seat scripts"
     scripts.mkdir()
     shipped = FLOTILLA / "playtest_seats"
-    wrapper = scripts / "claude.sh"
-    wrapper.write_bytes((shipped / "claude.sh").read_bytes())
-    fake = scripts / "fake-claude"
-    fake.write_text("""#!/bin/bash
-set -eu
-[[ "$USER" == fake-login ]]
-[[ "$SHELL" == /bin/zsh && -d "$ZDOTDIR" && "$ZDOTDIR" == "${PWD%/work}/zdot" ]]
-[[ "$PATH" == /opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin ]]
-/usr/bin/curl -fsS -H "Authorization: Bearer $SEAT_TOKEN" "$WORLD_URL/whoami"
-echo fake-claude-ok
-""")
+    wrapper = scripts / f"{harness}.sh"
+    wrapper.write_bytes((shipped / f"{harness}.sh").read_bytes())
+    fake = scripts / f"fake-{harness}"
+    fake.write_text(SHELL_PROBE)
     fake.chmod(0o700)
-    monkeypatch.setenv("CLAUDE_BIN", str(fake))
+    monkeypatch.setenv(f"{harness.upper()}_BIN", str(fake))
     monkeypatch.setenv("USER", "fake-login")
+    if harness == "codex":  # codex.sh copies the login file; give it a fake one in a fake home
+        (tmp_path / "home" / ".codex").mkdir(parents=True)
+        (tmp_path / "home" / ".codex" / "auth.json").write_text("{}")
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
     task = build(tmp_path, "solo")
+    out = tmp_path / "out"
     completed = subprocess.run([sys.executable, str(FLOTILLA / "playtest.py"), "--task", str(task),
                                 "--seat-cmd", f"/bin/bash {shlex.quote(str(wrapper))} {{workdir}} {{instruction}} fake",
                                 "--seat-scripts", str(scripts), "--sandbox-profile", str(shipped / "seat.sb"),
-                                "--pass-env", "CLAUDE_BIN", "--out", str(tmp_path / "out")],
-                               capture_output=True, text=True, timeout=20, check=False)
+                                "--pass-env", f"{harness.upper()}_BIN", "--out", str(out)],
+                               capture_output=True, text=True, timeout=60, check=False)
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    result = json.loads((tmp_path / "out" / "result.json").read_text())
+    result = json.loads((out / "result.json").read_text())
     assert result["seats"]["p1"]["world_calls"] == 1
-    assert "fake-claude-ok" in (tmp_path / "out" / "seats" / "p1" / "seat.log").read_text()
+    assert Path(result["python3"]).is_file()
+    log = (out / "seats" / "p1" / "seat.log").read_text()
+    assert "bad PATH" not in log and "bad shell env" not in log, log
+    for shell in ("/bin/zsh -lc", "/bin/zsh -c", "/bin/bash -lc"):
+        assert re.search(rf"^\[{shell}\] \S+/\.playtest-seat-[^/]+/bin/python3 -> 42$", log, re.MULTILINE), log
+    assert "here-document ok\n" in log
+    expected = (r"USER=fake-login SHELL=/bin/zsh HOME=\S+$" if harness == "claude"
+                else r"USER=fake-login SHELL=/bin/bash HOME=\S+/\.playtest-seat-[^/]+/home$")
+    assert re.search("fake-cli-ok " + expected, log, re.MULTILINE), log
+
+
+@SANDBOX_ONLY
+def test_check_seat_passes_under_the_shipped_profile_and_fails_without_isolation(tmp_path):
+    secret = tmp_path / "secret.txt"
+    secret.write_text("classified")
+    shipped = FLOTILLA / "playtest_seats"
+    command = [sys.executable, str(FLOTILLA / "playtest.py"), "--check-seat", "--deny-probe", str(secret)]
+    good = subprocess.run([*command, "--sandbox-profile", str(shipped / "seat.sb"), "--seat-scripts", str(shipped)],
+                          capture_output=True, text=True, timeout=120, check=False)
+    assert good.returncode == 0, good.stdout + good.stderr
+    passed = [line for line in good.stdout.splitlines() if line.startswith("PASS  ")]
+    names = [f"{check} ({shell})" for check in ("python3 -c", "here-document")
+             for shell in ("zsh -lc", "zsh -c", "bash -lc")]
+    names += ["curl to a local port", "write inside the seat folder", "read of the user's home refused",
+              f"read refused: {secret}"]
+    assert len(passed) == len(names) and all(line.startswith(f"PASS  {name}") for line, name in zip(passed, names))
+    assert "FAIL" not in good.stdout and "classified" not in good.stdout
+    assert f"Seat check: {len(names)} of {len(names)} passed" in good.stdout
+    open_profile = tmp_path / "open.sb"
+    open_profile.write_text("(version 1)\n(allow default)\n")
+    bad = subprocess.run([*command, "--sandbox-profile", str(open_profile), "--deny-probe", str(tmp_path / "absent")],
+                         capture_output=True, text=True, timeout=120, check=False)
+    assert bad.returncode == 1, bad.stdout + bad.stderr
+    assert [line for line in bad.stdout.splitlines() if line.startswith("FAIL")] == [
+        "FAIL  read of the user's home refused: the seat can read it",
+        f"FAIL  read refused: {secret}: the seat can read it",
+        f"FAIL  read refused: {tmp_path / 'absent'}: not on this host, so the check proves nothing"]
+    assert f"Seat check: {len(names) - 2} of {len(names) + 1} passed" in bad.stdout
+    usage = subprocess.run([sys.executable, str(FLOTILLA / "playtest.py"), "--task", str(tmp_path)],
+                           capture_output=True, text=True, timeout=60, check=False)
+    assert usage.returncode == 2 and "--seat-cmd, --out" in usage.stderr
