@@ -1727,12 +1727,12 @@ class Wave:
                          .replace("__TRIES__", json.dumps(str(tmp / "tries")))
                          .replace("__LOG__", json.dumps(str(tmp / "harbor.jsonl"))))
 
-    def run(self, namer=None):
+    def run(self, namer=None, **kwargs):
         prices = {model: {"prompt": "0.0000001", "completion": "0.000002"} for model in self.plan["models"]}
         return RUN.run(self.path, run_dir=self.tmp / "run", jobs_dir=self.tmp / "jobs", harbor=self.harbor,
                        wrapper=self.tmp / "wrapper", sources=Sources(prices, lambda *_args: 100.0),
                        base_env={"PATH": os.environ["PATH"], "HOME": str(self.tmp), "OPENROUTER_API_KEY": "or"},
-                       namer=namer or (lambda _n: f"{namer_box(self.tmp):06x}"))
+                       namer=namer or (lambda _n: f"{namer_box(self.tmp):06x}"), **kwargs)
 
     def summary(self) -> dict:
         return json.loads((self.tmp / "run" / RUN.STAGES_FILE).read_text())
@@ -2200,3 +2200,27 @@ def test_named_incomplete_pairs_are_not_no_effect(tmp_path):
     stage = wave.summary()["stages"][-1]
     assert stage["name"] == "B"
     assert {row["status"] for row in stage["decisions"]} == {"incomplete"}
+
+
+def test_named_operator_pause_and_caps(tmp_path):
+    plan = named_plan()
+    plan["notes"] = "A pre-registered operator approval boundary."
+    for stage, cap in zip(plan["stages"], (.2, .4, .6), strict=True):
+        stage["cap_usd"] = cap
+    wave = Wave(tmp_path / "pause", plan, wins)
+    assert wave.run(stop_after_stage="A")[-1]["reason"] == "paused"
+    count = len(wave.starts())
+    assert count == 6 and wave.state()["stages"]["stage"] == 1
+    assert wave.run(stop_after_stage="A")[-1]["reason"] == "paused"
+    assert len(wave.starts()) == count
+    assert wave.run(stop_after_stage="B")[-1]["reason"] == "paused"
+    assert len(wave.starts()) == 22 and wave.state()["stages"]["stage"] == 2
+    assert wave.run(stop_after_stage="C")[-1]["reason"] == "done"
+    assert len(wave.starts()) == 26
+    assert "must name a stage" in refusal(lambda: wave.run(stop_after_stage="D"))
+
+    cap_plan = named_plan()
+    cap_plan["stages"][0]["cap_usd"] = .005
+    blocked = Wave(tmp_path / "blocked", cap_plan, wins)
+    assert blocked.run()[-1]["reason"] == "cap"
+    assert not blocked.starts()

@@ -108,6 +108,7 @@ _JOBS.loader.exec_module(JOBS)
 PLAN_KEYS = frozenset({
     "name", "prereg", "task_sets", "models", "agent", "make_jobs", "budget", "order_seed", "seat_assignments",
     "scripted_seats", "stages", "token_profiles",
+    "notes",
 })
 PREREG_KEYS = frozenset({"commit", "doc", "section"})
 JOB_KEYS = frozenset({"max_turns", "env", "concurrency", "start_spacing_s"})
@@ -195,6 +196,8 @@ def assert_free(plan: dict) -> None:
 def load_plan(path: Path, *, smoke: bool = False) -> dict:
     plan = json.loads(path.read_text())
     refuse_unknown(plan, PLAN_KEYS, "plan")
+    if "notes" in plan and not isinstance(plan["notes"], str):
+        raise SystemExit("refused: notes must be text")
     required = ["name", "prereg", "task_sets", "agent", "make_jobs", "budget", "order_seed"]
     oracle = plan.get("agent") == "oracle"
     model_less = oracle and "seat_assignments" not in plan
@@ -1757,13 +1760,21 @@ def run_named_stages(staged, state, launch_cells, outcomes, *, run_dir, digest, 
     live = {group_of(cell) for cell in staged.order}
     records = []
     starts = {}
+    def no_replay_launch(_pending, _starts):
+        raise SystemExit("refused: a completed stage has missing attempts")
+
     for stage, spec in enumerate(staged.specs):
         cells = [cell for cell in staged.order if cell["stage"] == stage and group_of(cell) in live]
         if not cells:
             return "gate"
-        reason, tests = named_gate(spec, cells, state, launch_cells, starts, run_dir, outcomes)
+        launch = no_replay_launch if stage < len(recorded) else launch_cells
+        reason, tests = named_gate(spec, cells, state, launch, starts, run_dir, outcomes)
         if reason != "done":
             return reason
+        cap = spec.get("cap_usd", staged.plan["budget"]["cap_usd"])
+        if stage >= len(recorded) and state["spent_usd"] > cap + 1e-9:
+            log(run_dir, f"stage {spec['name']}: accounted model spend exceeds cumulative cap ${cap:.2f}")
+            return "cap"
         kind = spec["gate"]["type"]
         decisions = []
         for group in sorted({group_of(cell) for cell in cells}):
