@@ -14,6 +14,7 @@ Kind = Literal[
     "native-scripted-calibration",
     "native-handler-enumeration",
     "native-plan-preflight",
+    "offline-design-certificate",
 ]
 
 _RESULTS = "examples/seatlab/results"
@@ -562,6 +563,17 @@ STUDIES: tuple[Study, ...] = (
         report=f"{_RESULTS}/dispatch-order/input-coverage.json",
         exit_code=0,
         sha256="12908808309014ce388d61963920fff387f6ce86af1bba2b36f91a4fdd3ad790",
+    ),
+    Study(
+        id="exhibit-handoff-twins",
+        question="Can the depot recover which exhibits travel together from the same totals for each crate?",
+        kind="offline-design-certificate",
+        guide="examples/tasks/exhibit-relay/README.md",
+        module="examples.seatlab.exhibit",
+        argv=("twins", "--seed", "7", "--json"),
+        report=f"{_RESULTS}/exhibit-relay/paired-certificate.json",
+        exit_code=0,
+        sha256="7ad9c5663eb35b7999bc2bc4a1af8bc38fc2d1675415a89ddf303b8c10c46519",
     ),
 )
 
