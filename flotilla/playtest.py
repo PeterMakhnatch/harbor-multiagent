@@ -1,0 +1,383 @@
+"""Rehearse a built seat task over HTTP, using trusted local commands instead of containers.
+
+    uvx --quiet --python 3.12 --with pyyaml python flotilla/playtest.py --help
+"""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import graphlib
+import json
+import math
+import os
+import re
+import secrets
+import shlex
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+import tomllib
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import qa
+
+PREFACE = (b"You are working in a sandbox directory.\n"
+           b"Work only inside it; use shell commands.\n"
+           b"Stop when you are done.\n")
+PLACEHOLDER = re.compile(r"\{(instruction|seat|workdir|log)\}")
+PATH_MENTION = re.compile(
+    r"(?<![\w:/])(?:\"((?:/|~/|\.\.?/)[^\"\r\n]+)\"|'((?:/|~/|\.\.?/)[^'\r\n]+)'"
+    r"|((?:/|~/|\.\.?/)[^\s\"'<>|;,)\]}]+)|(~|\.\.)(?=$|[\s\"';,)]))"
+)
+WORLD_BOOT = """\
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import world
+server = world.serve('127.0.0.1', 0)
+Path(sys.argv[2]).write_text(str(server.server_address[1]))
+server.serve_forever()
+"""
+VERIFY = """\
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import score
+score.WORLD_DIR = Path(sys.argv[1])
+score.WORLD = sys.argv[2]
+score.VERIFIER = Path(sys.argv[3])
+score.main()
+"""
+
+
+@dataclass
+class SeatRun:
+    seat: str
+    mode: str
+    root: Path
+    output: Path
+    workdir: Path
+    env: dict[str, str]
+    command: str
+    argv: list[str]
+    after: tuple[str, ...]
+    process: subprocess.Popen | None = None
+    started: float | None = None
+    ended: float | None = None
+    exit_code: int | None = None
+    timed_out: bool = False
+    error: str | None = None
+
+    def start(self, now: float) -> None:
+        self.started = now
+        try:
+            with (self.output / "seat.log").open("ab") as log:
+                self.process = subprocess.Popen(self.argv, cwd=self.workdir, env=self.env, stdin=subprocess.DEVNULL,
+                                                stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+        except OSError as exc:
+            self.error = str(exc)
+            self.ended = now
+
+    def finish(self, now: float, timeout: bool = False) -> None:
+        if self.process is not None:
+            stop_process(self.process)
+            self.exit_code = self.process.returncode
+            self.process = None
+        self.ended, self.timed_out = now, timeout
+
+    def result(self) -> dict[str, Any]:
+        return {"mode": self.mode, "command": self.command, "exit_code": self.exit_code,
+                "seconds": None if self.started is None else self.ended - self.started,
+                "started_sec": self.started, "ended_sec": self.ended, "timed_out": self.timed_out,
+                "error": self.error, "start_after": list(self.after), "workdir": str(self.workdir)}
+
+
+def stop_process(process: subprocess.Popen) -> None:
+    """Reap the leader and stop ordinary descendants in its process group."""
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(process.pid, signal.SIGKILL)
+    process.wait()
+
+
+def host_env() -> dict[str, str]:
+    return {name: value for name, value in os.environ.items()
+            if not name.startswith("FLOTILLA_") and name not in ("SEAT", "SEAT_TOKEN", "SEAT_BRIEFING", "WORLD_URL")}
+
+
+def dependencies(agents: dict) -> dict[str, tuple[str, ...]]:
+    result = {}
+    for seat, spec in agents.items():
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", seat):
+            raise ValueError(f"invalid seat name: {seat}")
+        after = spec.get("start_after", [])
+        if not isinstance(after, list) or any(not isinstance(s, str) or s not in agents for s in after):
+            raise ValueError(f"invalid start_after for {seat}")
+        result[seat] = tuple(after)
+    tuple(graphlib.TopologicalSorter(result).static_order())
+    return result
+
+
+def copy_seat_files(task: qa.Task, seat: str, workdir: Path) -> None:
+    build = task.build(seat)
+    if build is None:
+        raise ValueError(f"no local player build for {seat}")
+    if task.services[seat].get("volumes"):
+        raise ValueError(f"host playtest does not support seat volumes: {seat}")
+    for source in build.copied:
+        target = workdir / source.name
+        if not source.is_relative_to(task.env_dir) or target.exists() or not source.is_file():
+            raise ValueError(f"cannot copy player file {source} for {seat}")
+        shutil.copyfile(source, target)
+
+
+def policy_command(task: qa.Task, seat: str, mode: str, root: Path) -> list[str]:
+    solution = root / "solution"
+    shutil.copytree(task.path / "solution", solution)
+    if (solution / "policy.json").is_file():
+        settings = json.loads((solution / "policy.json").read_text())
+        if mode == "careful":
+            settings["seats"][seat] = "careful"
+        (solution / "policy.json").write_text(json.dumps(settings))
+        return [sys.executable, "-B", str(solution / "policy.py")]
+    return [sys.executable, "-B", str(solution / "oracle.py")]
+
+
+def prepare_seat(task: qa.Task, seat: str, mode: str, root: Path, template: str,
+                 output: Path, after: tuple[str, ...], token: str) -> SeatRun:
+    workdir = root / "work"
+    workdir.mkdir()
+    copy_seat_files(task, seat, workdir)
+    prompt = root / "prompt.md"
+    prompt.write_bytes(PREFACE + (task.path / "instructions" / f"{seat}.md").read_bytes())
+    output.mkdir(parents=True)
+    shutil.copyfile(prompt, output / "prompt.md")
+    (output / "seat.log").touch()
+    native_log = root / "command.log"
+    native_log.touch()
+    env = host_env() | task.env(seat) | {"SEAT_TOKEN": token, "PWD": str(workdir)}
+    if mode == "external":
+        values = {"instruction": str(prompt), "seat": seat, "workdir": str(workdir), "log": str(native_log)}
+        command = PLACEHOLDER.sub(lambda m: shlex.quote(values[m[1]]), template)
+        argv = ["/bin/bash", "-c", command]
+    else:
+        argv = policy_command(task, seat, mode, root)
+        command = shlex.join(argv)
+    return SeatRun(seat, mode, root, output, workdir, env, command, argv, after)
+
+
+@contextlib.contextmanager
+def world_server(task: qa.Task, out: Path, root: Path, tokens: dict[str, str], timeout: float):
+    logs = out / "artifacts" / "logs" / "world"
+    env = host_env() | task.env("main") | {
+        "FLOTILLA_TOKENS": ",".join(f"{seat}:{token}" for seat, token in tokens.items()),
+        "FLOTILLA_ADMIN": secrets.token_hex(16), "FLOTILLA_TASK_JSON": str(task.env_dir / "task.json"),
+        "FLOTILLA_LOGS": str(logs), "FLOTILLA_PLAY_SECONDS": str(timeout),
+    }
+    for name in ("FLOTILLA_GAME", "FLOTILLA_GAME_PARAMS"):
+        if env.get(name, "").startswith("/world/"):
+            env[name] = str(task.env_dir / env[name].removeprefix("/world/"))
+    port_file = root / "port"
+    with (out / "world.log").open("wb") as log:
+        process = subprocess.Popen([sys.executable, "-B", "-c", WORLD_BOOT, str(task.env_dir), str(port_file)],
+                                   cwd=root, env=env, stdin=subprocess.DEVNULL, stdout=log,
+                                   stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline and process.poll() is None:
+                if port_file.exists() and (port := port_file.read_text()).isdigit():
+                    break
+                time.sleep(0.02)
+            else:
+                raise RuntimeError(f"world did not start; see {out / 'world.log'}")
+            yield f"http://127.0.0.1:{port}", env
+        finally:
+            stop_process(process)
+
+
+def run_seats(seats: list[SeatRun], timeout: float, max_parallel: int) -> bool:
+    origin = time.monotonic()
+    pending = list(seats)
+    running: list[SeatRun] = []
+    ended: set[str] = set()
+    try:
+        while pending or running:
+            now = time.monotonic() - origin
+            for seat in running[:]:
+                if seat.process.poll() is not None:
+                    seat.finish(now)
+                    running.remove(seat)
+                    ended.add(seat.seat)
+            if not pending and not running:
+                return False
+            if now >= timeout:
+                for seat in running + pending:
+                    seat.finish(now, timeout=True)
+                return True
+            external = sum(seat.mode == "external" for seat in running)
+            for seat in pending[:]:
+                if time.monotonic() - origin >= timeout:
+                    break
+                if not ended.issuperset(seat.after) or (seat.mode == "external" and external >= max_parallel):
+                    continue
+                pending.remove(seat)
+                seat.start(time.monotonic() - origin)
+                if seat.process is None:
+                    ended.add(seat.seat)
+                else:
+                    running.append(seat)
+                    external += seat.mode == "external"
+            time.sleep(min(0.02, max(0, timeout - (time.monotonic() - origin))))
+        return False
+    finally:
+        for seat in running:
+            if seat.process is not None:
+                seat.finish(time.monotonic() - origin)
+
+
+def verify(task: qa.Task, out: Path, url: str, env: dict[str, str], timeout: float) -> tuple[float | None, dict]:
+    verifier = out / "verifier"
+    with (out / "verifier.log").open("wb") as log:
+        process = subprocess.Popen([sys.executable, "-B", "-c", VERIFY, str(task.env_dir), url, str(verifier)],
+                                   cwd=out, env=env, stdin=subprocess.DEVNULL, stdout=log,
+                                   stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            if process.wait(timeout=timeout):
+                raise RuntimeError(f"verifier failed; see {out / 'verifier.log'}")
+        finally:
+            stop_process(process)
+    score = json.loads((verifier / "score.json").read_text())
+    reward_file = verifier / "reward.json"
+    if not reward_file.exists() and (score.get("error") or score.get("invalid")):
+        return None, score
+    return json.loads(reward_file.read_text())["reward"], score
+
+
+def read_jsonl(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def outside_paths(text: str, workdir: Path) -> list[str]:
+    """Conservative log-text scan, not an access trace. Resolve relative mentions against the initial cwd."""
+    paths = set()
+    for match in PATH_MENTION.finditer(text):
+        raw = next(value for value in match.groups() if value is not None)
+        if raw.startswith("//"):
+            continue
+        path = Path(os.path.abspath(workdir / Path(raw).expanduser()))
+        if not path.is_relative_to(workdir):
+            paths.add(str(path))
+    return sorted(paths)
+
+
+def archive_seats(seats: list[SeatRun]) -> dict[str, list[str]]:
+    audit = {}
+    for seat in seats:
+        dest = seat.output
+        shutil.copyfile(seat.root / "command.log", dest / "command.log")
+        text = "\n".join((dest / name).read_text(errors="replace") for name in ("seat.log", "command.log"))
+        audit[seat.seat] = outside_paths(text, seat.workdir)
+    return audit
+
+
+def timeline(out: Path, result: dict, audit: dict[str, list[str]]) -> None:
+    world = out / "artifacts" / "logs" / "world"
+    events = read_jsonl(world / "events.jsonl")
+    messages = {m["id"]: m for m in read_jsonl(world / "messages.jsonl")}
+    state = json.loads((out / "verifier" / "world-state.json").read_text())
+    submissions = iter(state.get("submissions", []))
+    by_seat = {seat: [] for seat in result["seats"]}
+    clock = "tick" if result["score"].get("mode") == "extension" else "t (seconds)"
+    for event in events:
+        kind, data = event["kind"], event["data"]
+        seat = event["seat"]
+        if kind == "submit" and (submission := next(submissions, None)) is not None:
+            data = data | {"answer": submission["answer"]}
+        if seat not in by_seat:
+            continue
+        if kind == "deliver":
+            data = data | {"messages": [messages.get(mid, {"id": mid}) for mid in data.get("ids", [])]}
+        elif kind == "send" and data.get("id") in messages:
+            data = data | {"text": messages[data["id"]]["text"]}
+        by_seat[seat].append(f"- #{event['seq']} {clock}={event['t']} {kind}: `{json.dumps(data, ensure_ascii=True)}`")
+    lines = ["# Local playtest", "", f"Reward: {result['reward']}; timed out: {result['timed_out']}",
+             "Host processes are not isolated. This is a rehearsal, not benchmark evidence.", ""]
+    for seat, evidence in by_seat.items():
+        info = result["seats"][seat]
+        paths = [f"- `{path}`" for path in audit[seat]] or ["- No outside paths found."]
+        lines += [f"## {seat} ({info['mode']})", "",
+                  f"Started: {info['started_sec']}; ended: {info['ended_sec']}; exit: {info['exit_code']}", "",
+                  *(evidence or ["- No seat events."]), "", "### Outside-path audit", "",
+                  "Candidate outside paths in the logs (possible reads or listings, not an access trace).",
+                  *paths, ""]
+    (out / "summary.md").write_text("\n".join(lines))
+
+
+def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: float | None,
+             max_parallel: int, out: Path) -> dict:
+    if qa.yaml is None:
+        raise ValueError("PyYAML is required; use uvx --quiet --python 3.12 --with pyyaml python flotilla/playtest.py")
+    task = qa.load_task(task_dir.resolve())
+    if task.errors:
+        raise ValueError("; ".join(f.detail for f in task.errors))
+    config = tomllib.loads((task.path / "task.toml").read_text())
+    after = dependencies(config["agents"])
+    subjects = set(task.under_test)
+    selected = subjects if selected is None else selected
+    if selected - subjects:
+        raise ValueError(f"unknown or scripted external seat(s): {sorted(selected - subjects)}")
+    timeout = float(config.get("agent", {}).get("timeout_sec", 900)) if timeout is None else timeout
+    if not math.isfinite(timeout) or timeout <= 0 or max_parallel <= 0 or not template.strip():
+        raise ValueError("timeout and max-parallel must be positive; seat command must not be empty")
+    if out.exists() and (not out.is_dir() or any(out.iterdir())):
+        raise ValueError(f"output must be a new or empty directory: {out}")
+    out = out.resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    tokens = {seat: secrets.token_hex(16) for seat in task.seats}
+    with contextlib.ExitStack() as stack:
+        root = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="playtest-world-"))).resolve()
+        seats = []
+        for seat in task.seats:
+            seat_root = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="seat-"))).resolve()
+            mode = "external" if seat in selected else "careful" if seat in subjects else "scripted"
+            seats.append(prepare_seat(task, seat, mode, seat_root, template, out / "seats" / seat,
+                                      after[seat], tokens[seat]))
+        try:
+            with world_server(task, out, root, tokens, timeout) as (url, env):
+                for seat in seats:
+                    seat.env["WORLD_URL"] = url
+                timed_out = run_seats(seats, timeout, max_parallel)
+                reward, score = verify(task, out, url, env, float(config.get("verifier", {}).get("timeout_sec", 120)))
+        finally:
+            audit = archive_seats(seats)
+        result = {"task": str(task.path), "reward": reward, "score": score, "timed_out": timed_out,
+                  "seats": {seat.seat: seat.result() for seat in seats}}
+        (out / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+        timeline(out, result, audit)
+        return result
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, epilog="Trusted host commands only; no filesystem isolation.")
+    parser.add_argument("--task", type=Path, required=True, help="built task folder")
+    parser.add_argument("--seat-cmd", required=True, help="shell template; {instruction}, {seat}, {workdir}, {log}")
+    parser.add_argument("--seats", help="comma-separated external seats (default: all non-scripted seats)")
+    parser.add_argument("--timeout-sec", type=float, help="total seat play time (default: built task timeout)")
+    parser.add_argument("--max-parallel", type=int, default=2, help="maximum concurrent external commands")
+    parser.add_argument("--out", type=Path, required=True, help="new or empty output folder")
+    args = parser.parse_args()
+    try:
+        selected = {seat.strip() for seat in args.seats.split(",")} if args.seats is not None else None
+        result = playtest(args.task, args.seat_cmd, selected, args.timeout_sec, args.max_parallel, args.out)
+    except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        parser.exit(2, f"playtest: {exc}\n")
+    print(f"Reward: {result['reward']}; results: {args.out / 'result.json'}")
+
+
+if __name__ == "__main__":
+    main()
