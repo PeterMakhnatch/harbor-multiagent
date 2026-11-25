@@ -1,14 +1,14 @@
 {
-  "name": "handoff-rehearsal-v7",
+  "name": "handoff-rehearsal-v8",
   "prereg": {
-    "commit": "88d9f7b6d19d061973fcb35ccd8b168f11683fd9",
+    "commit": "19cd85ffb577e1267aa81e7b4a60cc347b21bf32",
     "doc": "flotilla/docs/seams/handoff.md",
     "section": "## Zero-cost oracle preregistration"
   },
   "task_sets": [
     {
-      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wnnqyuqc/standard/stage-a",
-      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wnnqyuqc/standard/stage-a/manifest.json",
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-6sic9pvu/standard/stage-a",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-6sic9pvu/standard/stage-a/manifest.json",
       "instances": [
         0,
         1
@@ -19,8 +19,8 @@
       ]
     },
     {
-      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wnnqyuqc/standard/stage-b",
-      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wnnqyuqc/standard/stage-b/manifest.json",
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-6sic9pvu/standard/stage-b",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-6sic9pvu/standard/stage-b/manifest.json",
       "instances": [
         10,
         11
@@ -31,8 +31,8 @@
       ]
     },
     {
-      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wnnqyuqc/standard/stage-b",
-      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wnnqyuqc/standard/stage-b/manifest.json",
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-6sic9pvu/standard/stage-b",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-6sic9pvu/standard/stage-b/manifest.json",
       "instances": [
         10,
         11
@@ -43,8 +43,8 @@
       ]
     },
     {
-      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wnnqyuqc/standard/stage-c",
-      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-wnnqyuqc/standard/stage-c/manifest.json",
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-6sic9pvu/standard/stage-c",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-6sic9pvu/standard/stage-c/manifest.json",
       "instances": [
         22,
         23
