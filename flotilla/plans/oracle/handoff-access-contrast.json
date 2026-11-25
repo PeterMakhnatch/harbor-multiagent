@@ -1,20 +1,20 @@
 {
-  "name": "handoff-access-contrast",
+  "name": "handoff-access-contrast-v2",
   "prereg": {
-    "commit": "712e7d1f75cdca4237453ae1f439360929cba066",
+    "commit": "930cdf8c6dc4eff3c8a260f050a98d481ba0b972",
     "doc": "flotilla/docs/seams/handoff.md",
-    "section": "### Negative control on the final build"
+    "section": "### Packaging repair and repeat of the negative control"
   },
   "task_sets": [
     {
-      "tasks_dir": ".flotilla-local/pointer-access-20261125/careful",
-      "manifest": ".flotilla-local/pointer-access-20261125/careful/manifest.json",
+      "tasks_dir": ".flotilla-local/pointer-access-v2/careful",
+      "manifest": ".flotilla-local/pointer-access-v2/careful/manifest.json",
       "instances": [300],
       "arms": ["team", "team-fullrecord"]
     },
     {
-      "tasks_dir": ".flotilla-local/pointer-access-20261125/pointer",
-      "manifest": ".flotilla-local/pointer-access-20261125/pointer/manifest.json",
+      "tasks_dir": ".flotilla-local/pointer-access-v2/pointer",
+      "manifest": ".flotilla-local/pointer-access-v2/pointer/manifest.json",
       "instances": [300],
       "arms": ["team", "team-fullrecord"]
     }
@@ -24,5 +24,5 @@
   "make_jobs": {"max_turns": 100, "env": "docker", "concurrency": 1, "start_spacing_s": 0.0},
   "budget": {"cap_usd": 0.0, "reserve_per_trial_usd": 0.0, "provider_floors": {}, "max_invalid_streak": 2},
   "order_seed": 20261125,
-  "notes": "Model-free negative control: same world parameters, two note policies, with and without the full record."
+  "notes": "Repeat only after repairing oracle-package access. Same instance, same seed, same policies, same predictions as handoff-access-contrast at 5c1829a7. Count only trials in which all four processes ran."
 }
