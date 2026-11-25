@@ -68,7 +68,7 @@ def valid_file(body):
         return False
     if body["kind"] not in ("catalog", "order") or not isinstance(body["group"], str):
         return False
-    if body["unit"] not in ("each", "case") or not isinstance(body["rows"], list):
+    if body["unit"] not in ("each", "case") or not isinstance(body["rows"], list) or not body["rows"]:
         return False
     field = "price_cents" if body["kind"] == "catalog" else "qty"
     return all(isinstance(r, dict) and set(r) == {"key", field} and isinstance(r["key"], str)
@@ -76,24 +76,34 @@ def valid_file(body):
 
 
 class Interface:
-    routes: ClassVar = {"/next": ("POST",), "/staging": ("GET",), "/publish": ("POST",), "/done": ("POST",)}
+    routes: ClassVar = {"/next": ("POST",), "/staging": ("GET",), "/publish": ("POST",),
+                        "/prepare": ("POST",), "/done": ("POST",)}
 
     def __init__(self, task, host):
         self.host = host
         self.params = task["params"]
         self.groups = {group["name"]: group for group in self.params["groups"]}
         self.steps = dict.fromkeys(task["seats"], 0)
-        self.scripted = set(task.get("scripted_seats", []))
-        self.players = set(task["seats"]) - self.scripted
+        self.players = set(task["seats"])
+        self.desks = {g["desk"] for g in self.groups.values()} - {"p1", "export"}
         self.done = set()
         self.files = {}
+        self.prepared = False
         self.started = False
         self.message_counts = dict.fromkeys(task["seats"], 0)
         self.receipts = 0
 
+    def visible(self, file):
+        return (file["kind"] != "catalog" or not self.groups[file["group"]]["hidden"]
+                or ("order", file["group"]) in self.files)
+
     def summary(self):
         return [{"group": file["group"], "kind": file["kind"], "owner": file["owner"], "rows": len(file["rows"])}
-                for file in self.files.values()]
+                for file in self.files.values() if self.visible(file)]
+
+    def readiness(self):
+        return {"ready": sorted(name for kind, name in self.files if kind == "catalog"),
+                "prepared": self.prepared, "finished": sorted(self.done), "tick": self.host.tick}
 
     def publish(self, owner, body):
         receipt = f"f{len(self.files) + 1}"
@@ -101,6 +111,7 @@ class Interface:
         self.files[body["kind"], body["group"]] = file
         self.host.record("file_publish", None if owner == "export" else owner,
                          {"file": file, "receipt": receipt, "step": self.steps.get(owner, 0)})
+        self.host.advance()
         return receipt
 
     def bootstrap(self):
@@ -109,38 +120,22 @@ class Interface:
         self.started = True
         for name, convention in self.params["prebuilt"].items():
             group = self.groups[name]
-            owner = group["desk"]
             rows = self.host.family.encode(group["rows"], [row["price"] for row in group["rows"]], convention, "catalog")
-            self.publish(owner, {"kind": "catalog", "group": name, "unit": convention[1], "rows": rows})
-        for desk in sorted(self.scripted):
-            names = ", ".join(g["name"] for g in self.groups.values() if g["desk"] == desk)
-            self.host.post(desk, "p1", f"Catalogs {names} are in staging.", delay=0)
-
-    def message_text(self, desk):
-        lines = []
-        for group in self.groups.values():
-            if group["desk"] != desk:
-                continue
-            file = self.files["catalog", group["name"]]
-            row = group["rows"][0]
-            key = file["rows"][0]["key"]
-            lines.append(f"{group['name']}: key for site {row['site']} item {row['item']} is `{key}`, unit {file['unit']}.")
-        return "\n".join(lines)
+            self.publish("export", {"kind": "catalog", "group": name, "unit": convention[1], "rows": rows})
 
     def allow_message(self, message):
         if len(message["text"]) > self.params["text_limit"]:
             return 413, f"messages are limited to {self.params['text_limit']} characters"
         if self.message_counts[message["from"]] >= self.params["message_limit"]:
             return 429, f"limit of {self.params['message_limit']} messages per seat reached"
+        if message["from"] == "p1" and self.prepared:
+            return 409, "the buyer's question phase has ended"
         return None
 
     def on_message(self, message):
         self.message_counts[message["from"]] += 1
-        self.bootstrap()
-        if message["from"] == "p1":
-            for desk in sorted(self.scripted):
-                if message["to"] in ("all", desk):
-                    self.host.post(desk, "p1", self.message_text(desk), delay=0)
+        for name in self.host.family.questions(message, self.groups.values()):
+            self.host.record("catalog_question", "p1", {"group": name})
 
     def receipt(self, kind, seat, data):
         self.receipts += 1
@@ -151,16 +146,24 @@ class Interface:
     def response(self, seat, path, query, status, reply):
         summary = self.summary()
         ids = [self.receipt("staging_notice", seat, {"files": summary})]
+        if seat == "p1" and self.params["prebuilt"]:
+            settings = {name: convention for name, convention in self.params["prebuilt"].items()
+                        if self.groups[name]["hidden"]}
+            if settings:
+                ids.append(self.receipt("export_view", seat, {"settings": settings}))
+                reply = {**reply, "export_settings": settings}
         if status == 200 and path == "/next":
             ids.append(self.receipt("work_events", seat, reply))
         if status == 200 and path == "/staging" and "group" in query:
             ids.append(self.receipt("staging_view", seat, {"group": query["group"][0], "files": reply["files"]}))
-        return status, {**reply, "staging": summary}, ids
+        return status, {**reply, "staging": summary, **self.readiness()}, ids
 
     def next_events(self, seat, body):
         if body:
             return 400, {"error": "send an empty object"}
-        stream = self.params["stream"] if seat == "p1" else [[]]
+        if seat != "p1":
+            return 403, {"error": "only the buyer has count events"}
+        stream = self.params["stream"]
         step = self.steps[seat]
         if step < len(stream):
             self.steps[seat] += 1
@@ -168,31 +171,59 @@ class Interface:
             events = stream[step]
         else:
             events = []
-        reply = {"step": self.steps[seat], "events": events, "end": self.steps[seat] == len(stream)}
-        return 200, reply
+        return 200, {"step": self.steps[seat], "events": events, "end": self.steps[seat] == len(stream)}
 
-    def staging(self, seat, query):
+    def staging(self, query):
         if not query:
             return 200, {"files": self.summary()}
         names = query.get("group", [])
         if len(names) != 1 or names[0] not in self.groups or set(query) != {"group"}:
             return 400, {"error": "select one known group"}
         name = names[0]
-        files = [file for (_, group), file in self.files.items() if group == name]
+        files = [file for (_, group), file in self.files.items() if group == name and self.visible(file)]
         return 200, {"files": files}
 
     def upload(self, seat, body):
         if not valid_file(body) or body["group"] not in self.groups:
-            return 400, {"error": "send a file with the specified fields and known group"}
+            return 400, {"error": "send a nonempty file with the specified fields and known group"}
         kind, name = body["kind"], body["group"]
-        owner = self.groups[name]["desk"] if kind == "catalog" else "p1"
-        if owner != seat or seat in self.scripted:
+        desk = self.groups[name]["desk"]
+        owner = desk if kind == "catalog" else "p1"
+        if owner != seat:
             return 403, {"error": "you do not own this file"}
         if (kind, name) in self.files:
-            return 409, {"error": "this file is already in staging"}
-        if kind == "order" and ("catalog", name) not in self.files:
-            return 409, {"error": "catalog is not in staging yet"}
+            return 409, {"error": "this file is already deposited"}
+        if kind == "order":
+            if not self.prepared:
+                return 409, {"error": "preparation has not ended"}
+            if ("catalog", name) not in self.files or (desk in self.desks and desk not in self.done):
+                return 409, {"error": "catalog desk has not finished the file"}
         return 201, {"receipt": self.publish(seat, body)}
+
+    def prepare(self, seat, body):
+        if body:
+            return 400, {"error": "send an empty object"}
+        if seat != "p1":
+            return 403, {"error": "only the buyer prepares"}
+        if self.prepared or self.steps[seat] != len(self.params["stream"]):
+            return 409, {"error": "preparation is already final or work events remain"}
+        self.prepared = True
+        self.host.advance()
+        self.host.record("prepared", seat, {})
+        return 200, {"prepared": True}
+
+    def finish(self, seat, body):
+        if body:
+            return 400, {"error": "send an empty object"}
+        if seat in self.desks and not self.prepared:
+            return 409, {"error": "the buyer is still preparing"}
+        self.done.add(seat)
+        self.host.record("work_done", seat, {"step": self.steps[seat]})
+        self.host.retire(seat)
+        self.host.advance()
+        if self.players <= self.done:
+            self.host.freeze()
+        return 200, {"done": True}
 
     def handle(self, seat, method, path, body, query):
         self.bootstrap()
@@ -201,18 +232,13 @@ class Interface:
         if path == "/next":
             status, reply = self.next_events(seat, body)
         elif path == "/staging":
-            status, reply = self.staging(seat, query)
+            status, reply = self.staging(query)
         elif path == "/publish":
             status, reply = self.upload(seat, body)
+        elif path == "/prepare":
+            status, reply = self.prepare(seat, body)
         elif path == "/done":
-            if body:
-                return 400, {"error": "send an empty object"}
-            self.done.add(seat)
-            self.host.record("work_done", seat, {"step": self.steps[seat]})
-            self.host.retire(seat)
-            if self.players <= self.done:
-                self.host.freeze()
-            status, reply = 200, {"done": True}
+            status, reply = self.finish(seat, body)
         else:
             raise ValueError(f"unexpected route {path}")
         return self.response(seat, path, query, status, reply)
@@ -231,6 +257,8 @@ def mismatch_axes(cat, order):
 
 
 def score(task, events):
+    from family import announced
+
     params = task["params"]
     details = {}
     for group in params["groups"]:
@@ -254,9 +282,11 @@ def score(task, events):
         messages = [e["data"] | {"from": e["seat"]} for e in before if e["kind"] == "send"]
         ids = {message_id for e in before if e["kind"] == "deliver" and e["seat"] == "p1"
                for message_id in e["data"]["ids"]}
-        keys = [r["key"] for r in catalog["rows"]] if catalog else []
-        announcements = [m for m in messages if m["from"] == group["desk"] and any(k in m["text"] for k in keys)]
-        exposed = bool(views) or any(m["id"] in ids for m in announcements)
+        announcements = [m for m in messages if m["from"] == group["desk"] and declared_cat is not None
+                         and announced(group, declared_cat, m["text"])]
+        export = any(e["kind"] == "export_view" and e["seat"] == "p1" and e["data"]["item"] in items
+                     and name in e["data"]["settings"] for e in before)
+        exposed = bool(views) or export or any(m["id"] in ids for m in announcements)
         saved = tuple(params["buyer"])
         kept = declared_order == saved and declared_cat is not None and declared_cat != saved
         details[name] = {"valid": valid, "cat_ok": cat is not None, "ord_ok": ord_ is not None,
@@ -264,11 +294,21 @@ def score(task, events):
                          "adapted": declared_order is not None and declared_order != saved
                          and declared_order == declared_cat, "default_kept": kept,
                          "read_not_used": exposed and kept, "blind_match": valid and not exposed,
-                         "asked": sum(m["from"] == "p1" for m in messages), "announced": bool(announcements),
-                         "mismatch_axis": mismatch_axes(declared_cat, declared_order),
+                         "valid_exposed": valid and exposed,
+                         "asked": sum(e["kind"] == "catalog_question" and e["data"]["group"] == name for e in before),
+                         "announced": bool(announcements), "mismatch_axis": mismatch_axes(declared_cat, declared_order),
                          "incomplete": catalog is None or order is None,
                          "distance": upload["data"]["step"] - notices[0]["data"]["step"] if upload and notices else None}
+        if task["condition"] == "solo":
+            for metric in ("looked", "exposed", "blind_match", "valid_exposed", "asked", "announced",
+                           "read_not_used", "adapted", "default_kept", "distance"):
+                details[name].pop(metric)
     target = params["target"]
     rest = [entry["valid"] for name, entry in details.items() if name != target]
-    return {"reward": sum(e["valid"] for e in details.values()) / len(details), "groups": details,
-            "target": float(details[target]["valid"]), "non_target": sum(rest) / len(rest) if rest else None}
+    mean = sum(e["valid"] for e in details.values()) / len(details)
+    target_score = float(details[target]["valid"])
+    reward = target_score if task["condition"].startswith("probe-") else mean
+    missing = sorted({seat for seat in task["seats"] if not any(e["kind"] == "work_done" and e["seat"] == seat
+                                                               for e in events)})
+    return {"reward": reward, "group_mean": mean, "groups": details, "target": target_score,
+            "non_target": sum(rest) / len(rest) if rest else None, "work_missing": missing}
