@@ -905,11 +905,13 @@ It returns 200 with `active`, `tick`, `frozen` and `reason` (`active`, `message`
 `retired`, `timeout` or `predecessor_ended`). The timeout is `FLOTILLA_WAIT_SECONDS` (default 60 s).
 For a staged seat's first authenticated call, the world records `seat_end` for its predecessors,
 once each. During open play it invokes `on_seat_end` for each. The simulator records this when a
-predecessor policy returns. If all predecessors ended but the seat is still waiting,
-`/await?until=active` returns immediately with `active: "waiting"` and
-`reason: "predecessor_ended"`. This is not a runner failure signal; it establishes only that the
-predecessor's run ended. The HTTP handler does not hold the world lock while waiting; the simulator
-parks the seat and advances to the next runnable step or timeout.
+predecessor policy returns. A family that defines `on_seat_end` owns what a predecessor's end means:
+if all predecessors ended and the family left the seat waiting, `/await?until=active` returns
+immediately with `active: "waiting"` and `reason: "predecessor_ended"`. A family without the hook
+keeps the plain wait, because its world may activate the seat later, at a tick. This is not a runner
+failure signal; it establishes only that the predecessor's run ended. The HTTP handler does not hold
+the world lock while waiting; the simulator parks the seat and advances to the next runnable step or
+timeout.
 Waiting and retired seats can call `/whoami` and `/await`, but cannot use other seat routes (409).
 After freeze these two read routes still work. `on_retired_call` can replay a completed extension
 route for a retired seat, even after freeze. Return None to use the ordinary refusal. Return the

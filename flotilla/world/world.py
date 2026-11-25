@@ -437,8 +437,12 @@ class ExtensionHost:
                 self.fail(seat, "seat_end", exc)
 
     def predecessor_ended(self, seat: str) -> bool:
+        """A family that defines on_seat_end owns what a predecessor's end means. If it leaves the successor
+        waiting, the successor is told at once. A family without the hook keeps the plain wait (the world may
+        activate the seat later, at a tick)."""
         predecessors = self.start_after.get(seat, [])
-        return bool(predecessors) and set(predecessors) <= self.ended
+        return (bool(predecessors) and set(predecessors) <= self.ended
+                and callable(getattr(EXTENSION, "on_seat_end", None)))
 
     def admit(self, seat: str) -> bool:
         if self.status[seat] != "active" or STATE["frozen"]:

@@ -286,8 +286,9 @@ For staged seats, set `start_after` in the extension arm. Specify `agent_timeout
 seat map) and `play_timeout_sec` for the chain; QA requires the effective staged limits plus 60 s.
 Harbor currently applies the maximum requested agent limit to every staged seat.
 Use separate jobs for different turn caps. A successor's first authenticated call records
-`seat_end` for its predecessors and invokes `on_seat_end(seat)` during open play. A waiting successor
-gets `reason: "predecessor_ended"` from `/await?until=active` instead of waiting for a timeout.
+`seat_end` for its predecessors and invokes `on_seat_end(seat)` during open play. When the family
+defines that hook and leaves the successor waiting, the successor gets `reason: "predecessor_ended"`
+from `/await?until=active` at once; without the hook the wait is plain.
 
 Use `pending(seat)` and `on_deadline(stalled_seats)` to score omitted duties as valid results with
 flags. Without the deadline hook, deadlines and exhausted simulations stay invalid. Infrastructure
