@@ -23,7 +23,7 @@ def _shape(cell: Cell) -> tuple[int, int]:
     if type(cell.weight) is not int or not 1 <= cell.weight <= MAX_WEIGHT:
         raise ValueError("invalid cell weight")
     for packet in (cell.east, cell.west):
-        if type(packet) is not bytes or not 1 <= len(packet) <= MAX_PACKET_BYTES:
+        if type(packet) is not bytes or len(packet) > MAX_PACKET_BYTES:
             raise ValueError("invalid observation bytes")
     scores = cell.scores
     if type(scores) is not tuple or not 1 <= len(scores) <= MAX_ACTIONS:
@@ -101,45 +101,92 @@ def _response_cost(groups: PacketGroups, candidates: Candidates) -> int:
     return sum(len(edges) * len(candidates[packet]) for packet, edges in groups.items())
 
 
-def _decentralized(east: PacketGroups, west: PacketGroups) -> int:
+def _response_score(
+    edges: list[tuple[bytes, WeightedMatrix]],
+    action: int,
+    rule: dict[bytes, int],
+) -> int:
+    return sum(matrix[action][rule[other]] for other, matrix in edges)
+
+
+def _decentralized(
+    east: PacketGroups, west: PacketGroups, *, witness: bool
+) -> tuple[int, dict[bytes, int], dict[bytes, int]]:
     left = _candidates(east)
     right = _candidates(west)
     left_count = _policy_count(left)
     right_count = _policy_count(right)
     left_work = left_count * _response_cost(west, right)
     right_work = right_count * _response_cost(east, left)
-    if (left_count, left_work) <= (right_count, right_work):
+    left_fits = left_count <= MAX_POLICIES and left_work <= MAX_SEARCH_SCORE_OPERATIONS
+    right_fits = (
+        right_count <= MAX_POLICIES and right_work <= MAX_SEARCH_SCORE_OPERATIONS
+    )
+    if not left_fits and not right_fits:
+        raise ValueError("exact decentralized search exceeds its budget")
+    east_first = left_fits and (
+        not right_fits or (left_work, left_count) <= (right_work, right_count)
+    )
+    if east_first:
         rules, responses, groups = left, right, west
-        count, operations = left_count, left_work
     else:
         rules, responses, groups = right, left, east
-        count, operations = right_count, right_work
-    if count > MAX_POLICIES or operations > MAX_SEARCH_SCORE_OPERATIONS:
-        raise ValueError("exact decentralized search exceeds its budget")
 
-    best = 0
-    for actions in product(*rules.values()):
-        rule = dict(zip(rules, actions, strict=True))
+    packets = sorted(rules)
+    best = -1
+    best_rule: dict[bytes, int] = {}
+    for actions in product(*(rules[packet] for packet in packets)):
+        rule = dict(zip(packets, actions, strict=True))
         value = sum(
-            max(
-                sum(matrix[action][rule[other]] for other, matrix in edges)
-                for action in responses[packet]
-            )
+            max(_response_score(edges, action, rule) for action in responses[packet])
             for packet, edges in groups.items()
         )
-        best = max(best, value)
-    return best
+        if value > best:
+            best = value
+            if witness:
+                best_rule = rule
+    if not witness:
+        return best, {}, {}
+
+    best_response = {
+        packet: max(
+            responses[packet],
+            key=lambda action, packet=packet: _response_score(
+                groups[packet], action, best_rule
+            ),
+        )
+        for packet in sorted(groups)
+    }
+    if east_first:
+        return best, best_rule, best_response
+    return best, best_response, best_rule
 
 
-def evaluate(rows: list[Cell]) -> dict[str, str]:
-    """Compute exact common rewards for local, pooled, and world-aware decisions."""
+def _evaluate(
+    rows: list[Cell], *, witness: bool
+) -> tuple[dict[str, str], dict[bytes, int], dict[bytes, int]]:
     pairs, total, oracle = _aggregate(rows)
     pooled = sum(max(map(max, matrix)) for matrix in pairs.values())
-    decentralized = _decentralized(*_groups(pairs))
+    decentralized, east_rule, west_rule = _decentralized(
+        *_groups(pairs), witness=witness
+    )
     if not 0 <= decentralized <= pooled <= oracle <= total:
         raise ValueError("invalid reward bounds")
-    return {
+    values = {
         "decentralized": str(Fraction(decentralized, total)),
         "pooled": str(Fraction(pooled, total)),
         "oracle": str(Fraction(oracle, total)),
     }
+    return values, east_rule, west_rule
+
+
+def evaluate(rows: list[Cell]) -> dict[str, str]:
+    """Compute exact common rewards for local, pooled, and world-aware decisions."""
+    return _evaluate(rows, witness=False)[0]
+
+
+def optimize(
+    rows: list[Cell],
+) -> tuple[dict[str, str], dict[bytes, int], dict[bytes, int]]:
+    """Compute exact rewards and a deterministic optimal rule for each role."""
+    return _evaluate(rows, witness=True)

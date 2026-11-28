@@ -123,7 +123,7 @@ VALID = Cell(1, b"e", b"w", FIRST)
         [replace(VALID, weight=-1)],
         [replace(VALID, weight=1.0)],
         [replace(VALID, weight=1_000_001)],
-        [replace(VALID, east=b"")],
+        [replace(VALID, east=None)],
         [replace(VALID, west=b"x" * 8193)],
         [replace(VALID, east="e")],
         [replace(VALID, scores=())],
@@ -141,6 +141,11 @@ VALID = Cell(1, b"e", b"w", FIRST)
 def test_invalid_cells_rejected(rows: list[Cell]) -> None:
     with pytest.raises(ValueError):
         evaluate(rows)
+
+
+def test_absent_signal_is_a_single_valid_empty_observation() -> None:
+    rows = [Cell(1, b"", b"", FIRST), Cell(3, b"", b"", SECOND)]
+    assert evaluate(rows) == {"decentralized": "3/4", "pooled": "3/4", "oracle": "1"}
 
 
 def _identity(size: int) -> tuple[tuple[int, ...], ...]:

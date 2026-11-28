@@ -71,4 +71,26 @@ A valid commit is one JSON object such as `{"slot":"A"}`. An absent or malformed
 python3.12 -BS -m examples.seatlab.coupled_retention inspect game.json --expect-pooling-gap yes
 ```
 
+Try the included [four-state game](parity-game.json) before adapting a real simulator. Each seat sees one bit. Both must hold when the bits match and switch when they differ. A central reader scores 1; the best pair of separate rules scores 1/2.
+
+### Run the best pair without sharing the packets
+
+`synthesize` produces two private role tables. It finds an optimal pair of separate rules, then a second implementation checks the actual weighted payoff before it writes either table. `score` applies any two submitted rules, including suboptimal ones, without searching or pooling the packets. You can fit the rules under one condition, freeze the files and score them under another.
+
+```sh
+work=$(mktemp -d)
+ops() { python3.12 -BS -m examples.seatlab.coupled_retention.strategies "$@"; }
+game=examples/seatlab/coupled_retention/parity-game.json
+ops synthesize --game "$game" --out "$work/parity"
+ops score --game "$game" --east "$work/parity/east.json" \
+  --west "$work/parity/west.json" --expect-value 1/2
+ops synthesize --start 0 --sender truthful --arm together --out "$work/native"
+ops score --start 0 --sender truthful --arm together \
+  --east "$work/native/east.json" --west "$work/native/west.json" --expect-value 3/4
+```
+
+To run one scripted native voter, pipe the output of `packet --role east` into `python3.12 -IS examples/seatlab/coupled_retention/strategy.py --role east --table "$work/native/east.json" --format slot`. Repeat separately for west, then use `grade` as above. For generic games, omit `--format slot`: stdin is the exact observation, including any final newline, and stdout is `{"action":"…"}`.
+
+Give each scripted receiver only its own table and observation. The table maps hashes of exact inputs to actions. Hashes do **not** keep low-entropy inputs secret. Keep both tables away from experimental model seats. The rules cover the registered finite inputs only. A new packet, missing rule, swapped role or extra rule fails; it cannot silently become a wrong decision. A successful score on a new game does not certify optimality there.
+
 The [Bespoke Seed to Profit trace](https://benchmarks.bespokelabs.ai/multi-agent-coordination-bench/#task-seed-to-profit) describes participants issuing incompatible final assignments. That motivates checking the pair of commitments. It does not establish a memory failure or validate this task as a proxy for that benchmark. No result here establishes how a frontier model would act.

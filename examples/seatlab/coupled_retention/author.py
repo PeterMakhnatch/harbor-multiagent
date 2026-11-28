@@ -57,7 +57,7 @@ def _wire(text: Any) -> bytes:
     return data
 
 
-def census(path: str) -> list[Cell]:
+def load_game(path: str) -> tuple[tuple[str, ...], tuple[str, ...], list[Cell]]:
     root = document(read_input(path))
     if (
         root.keys() != {"schema", "east_actions", "west_actions", "rows"}
@@ -91,7 +91,11 @@ def census(path: str) -> list[Cell]:
                 tuple(tuple(line) for line in scores),
             )
         )
-    return cells
+    return tuple(root["east_actions"]), tuple(root["west_actions"]), cells
+
+
+def census(path: str) -> list[Cell]:
+    return load_game(path)[2]
 
 
 def vote(path: str, actions: tuple[str, ...]) -> int:
