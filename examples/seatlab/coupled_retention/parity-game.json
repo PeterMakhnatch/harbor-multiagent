@@ -1,0 +1,11 @@
+{
+  "schema": "seatlab.two-seat-game/v1",
+  "east_actions": ["hold", "switch"],
+  "west_actions": ["hold", "switch"],
+  "rows": [
+    {"weight":1, "east_b64":"AA==", "west_b64":"AA==", "scores":[[1,0],[0,0]]},
+    {"weight":1, "east_b64":"AA==", "west_b64":"AQ==", "scores":[[0,0],[0,1]]},
+    {"weight":1, "east_b64":"AQ==", "west_b64":"AA==", "scores":[[0,0],[0,1]]},
+    {"weight":1, "east_b64":"AQ==", "west_b64":"AQ==", "scores":[[1,0],[0,0]]}
+  ]
+}

@@ -79,3 +79,5 @@ One possible primary test uses the seed, not the 16 cells, as the independent un
 Do not declare a pass with an unverified outcome. Report missing assignments and the possible reward range if their grades were 0 or 1. A correct unsupported guess is still a correct dispatch. An incorrect dispatch with both chains present is a receiver error, not proof of what the model attended to. No study has been enrolled or run for this proposal.
 
 To test **when** a correction still helps, use [Dispatch Recall](../dispatch_recall/README.md). Its world delivers the same depot report before commitment, after commitment, or not at all.
+
+When **both** teammates must commit, use the [coupled-retention benchmark](../coupled_retention/README.md). It checks whether two systems with identical per-seat inputs and accuracy can get different physical team rewards. It also measures what a pair of separate decision rules can achieve without pooling private context.
