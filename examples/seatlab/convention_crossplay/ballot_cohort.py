@@ -29,13 +29,15 @@ def _pin(value: object) -> str:
     return value
 
 
-def _read_pair(path: str) -> tuple[bytes, bytes]:
+def _read_pair(path: str, parent_fd: int | None) -> tuple[bytes, bytes]:
     if type(path) is not str or not path or path == "-":
         raise _invalid()
     path = path.rstrip("/")
     if os.path.basename(path) in ("", ".", "..", "-"):
         raise _invalid()
-    directory = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    directory = os.open(
+        path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd
+    )
     try:
         return loader._read(directory, "evidence.json"), loader._read(
             directory, "strategy.json"
@@ -57,9 +59,9 @@ def _counts(value: object, length: int) -> None:
 
 
 def _role(
-    path: str, name: str, role: str, decks: set[str]
+    path: str, name: str, role: str, decks: set[str], *, parent_fd: int | None = None
 ) -> tuple[dict[str, str], str]:
-    evidence, table = _read_pair(path)
+    evidence, table = _read_pair(path, parent_fd)
     receipt = loader._fields(
         json.loads(
             evidence.decode("utf-8"),
