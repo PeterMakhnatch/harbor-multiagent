@@ -36,7 +36,7 @@ python3.12 -BS -m examples.seatlab.receiver_memory.cohort \
 
 The cohort includes all 6 directed replacements of A, B and C. For each seed it crosses confirm/replace, older/newer note and both independent tag assignments: 48 equally weighted rows per arm. These are designed cases, **not 48 independent trials**. `--start 200` selects different seeds for the same six rotations, not a new task. `never`, `always`, and `adaptive` use the best finite choice given the declared distribution. `adaptive` chooses whether to read using only its initial observation. A tie skips the read. Inspect physical reward, read fraction, and utility separately; do not report utility as the native grade.
 
-The bounds can use knowledge of the sender rule and tag assignment. A participant does not receive either. For a stronger control, `public_wire_policies` runs the **same** rule on the actual packets in every arm: commit the retained slot on tag `2`; otherwise read and commit the reported revision. It has no access to the task, seed, arm or payoff table. With truthful reports, the valid and sham tags both trigger a read in half the cases. The valid tag lets this rule commit the correct slot in all cases, versus 7/8 with the sham tag. This is a scripted reference, not an agent score. The `always` and `never` public controls remain the same across arms.
+The bounds can use knowledge of the sender rule and tag assignment. A participant does not receive either. For a stronger control, `public_wire_policies` runs the **same** rule on the actual packets in every arm: commit the retained slot on tag `2`; otherwise read and commit the reported revision. The rule receives only the role packet, not the seed, arm or payoff table. A subprocess on the operator's machine is not a sandbox. With truthful reports, the valid and sham tags both trigger a read in half the cases. The valid tag lets this rule commit the correct slot in all cases, versus 7/8 with the sham tag. This is a scripted reference, not an agent score. The `always` and `never` public controls remain the same across arms.
 
 ## Give a receiver one decision without giving it the answer
 
@@ -63,6 +63,27 @@ printf '%s\n' '{"op":"read"}' '{"op":"commit","slot":"A"}' | \
     --arm version --coin 2 --price 1/4 --outcome "$work/outcome.json"
 cat "$work/outcome.json"
 ```
+
+## Run the same control through independent receiver processes
+
+Use this study when several operators or receivers must not reuse a case, see its answer, or drop an unfinished decision. `plan` freezes 96 assignments and shuffles their opaque tickets. It binds the source declaration, native action scores and exact offered bytes, including the trailing newline. Retain its SHA-256 outside the study directory **before** assigning any work.
+
+```sh
+umask 077
+work=$(mktemp -d)
+study() { python3.12 -BS -m examples.seatlab.receiver_memory.study "$@"; }
+pin=$(study plan "$work/control" --start 400 --sender truthful \
+      --source scripted_control | python3.12 -c 'import json,sys; print(json.load(sys.stdin)["sha256"])')
+study assess "$work/control" --expect "$pin"
+study control "$work/control" --expect "$pin" --all --workers 2
+study assess "$work/control" --expect "$pin"
+```
+
+The first report must show 96 not started, **not** 96 wrong. The second must show 96 complete. `control` connects each native replay to the same stand-alone `by-tag` receiver through a socket pair. Neither service credentials, the plan path nor its ticket enter the receiver's command or environment. This is a scripted control, not a provider run. With `--sender repeat`, the expected physical reward difference is zero even though a truthful position tag still describes which report was retained.
+
+To distribute the study, use `study tickets "$work/control" --expect "$pin"` and assign disjoint tickets to trusted operators. Use `control --ticket TICKET` for the reference receiver. For a different receiver, prepare **a separate plan** with `--source external_unverified`. Start `study serve DIRECTORY TICKET --expect PIN` on the operator side and connect only its stdin/stdout to the participant. The receiver gets the offer, can request one read, then must commit. Never provide the private directory or CLI arguments to the participant. Use separate accounts or machines if you need isolation. The wire does not prove who supplied an answer or how much they spent.
+
+A second claim on a ticket fails. A broken connection remains incomplete. `assess` recomputes each completed physical reward from its action, then bounds the result over **every scheduled assignment**. It refuses inconsistent evidence. After the operators finish, report all three counts (`not_started`, `incomplete`, `complete`), physical reward, reads and utility. These bounds are not confidence intervals. For a future behavioral study, select the participant and endpoints before issuing tickets and replicate over genuinely different task instances; the 96 designed assignments are not 96 independent teams.
 
 ## Use your own task's role history
 
