@@ -1,0 +1,131 @@
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+from . import plan, results
+
+
+def _team(raw: str) -> tuple[str, Path]:
+    name, separator, path = raw.partition("=")
+    if not separator or not name or not path:
+        raise argparse.ArgumentTypeError("expected NAME=ROSTER.json")
+    return name, Path(path)
+
+
+def parser() -> argparse.ArgumentParser:
+    cli = argparse.ArgumentParser(
+        description="Prepare or inspect a native Joint Reopen partner study. Does not launch trials."
+    )
+    commands = cli.add_subparsers(dest="command", required=True)
+    reg = commands.add_parser("register")
+    reg.add_argument("--start", type=int, required=True)
+    reg.add_argument("--out", type=Path, required=True)
+    modes = reg.add_mutually_exclusive_group(required=True)
+    modes.add_argument("--control", choices=("same", "different", "offsetting"))
+    modes.add_argument(
+        "--team", action="append", type=_team, metavar="NAME=ROSTER.json"
+    )
+    commands.add_parser(
+        "retained-repeats",
+        help="Recompute repeat disagreement from published native team rewards.",
+    )
+    for name in (
+        "audit",
+        "score",
+        "explain",
+        "rehearse",
+        "compare-repeats",
+        "rehearse-repeats",
+    ):
+        read = commands.add_parser(name)
+        read.add_argument("--study", type=Path, required=True)
+        read.add_argument("--pin", required=True)
+        if name in ("compare-repeats", "rehearse-repeats"):
+            read.add_argument("--repeat-study", type=Path, required=True)
+            read.add_argument("--repeat-pin", required=True)
+        if name == "compare-repeats":
+            read.add_argument(
+                "--repeat-trials", type=Path, action="append", required=True
+            )
+        if name in ("score", "explain", "compare-repeats"):
+            read.add_argument("--trials", type=Path, action="append", required=True)
+    return cli
+
+
+def _receipt(manifest: dict[str, Any], reg: dict[str, Any], pin: str) -> dict[str, Any]:
+    return {
+        "schema": "seatlab.partner-native-admission/v1",
+        "names": manifest["names"],
+        "mode": manifest["mode"],
+        "study_sha256": pin,
+        "registration_sha256": manifest["registration_sha256"],
+        "pairings": len(reg["teams"]),
+        "registered_native_trials": len(reg["cells"]),
+        "launched_native_trials_by_command": 0,
+    }
+
+
+def command(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
+    if args.command == "retained-repeats":
+        from . import repeat_archives
+
+        return 0, repeat_archives.report()
+    if args.command == "register":
+        manifest, reg = plan.build(args.start, args.team, args.control)
+        pin = plan.save(args.out, manifest, reg)
+        return 0, _receipt(manifest, reg, pin)
+    manifest, reg = plan.load(args.study, args.pin)
+    if args.command in ("compare-repeats", "rehearse-repeats"):
+        from . import repeat_driver
+
+        repeated, repeat_reg = plan.load(args.repeat_study, args.repeat_pin)
+        collected = args.command == "compare-repeats"
+        report = repeat_driver.compare(
+            manifest,
+            reg,
+            repeated,
+            repeat_reg,
+            roots=args.trials if collected else None,
+            repeat_roots=args.repeat_trials if collected else None,
+        )
+        return int(not report["complete"]), report
+    if args.command == "audit":
+        return 0, _receipt(manifest, reg, args.pin)
+    if args.command == "rehearse":
+        from . import rehearse
+
+        check = rehearse.run(manifest, reg)
+        return int(not check["matched_prediction"]), check
+    if args.command == "explain":
+        from . import diagnose
+
+        report = diagnose.summarize(manifest, reg, args.trials)
+        return int(not report["complete"]), report
+    report = results.summarize(manifest, reg, args.trials)
+    return int(not report["complete"]), report
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parser().parse_args(argv)
+    try:
+        code, receipt = command(args)
+    except (OSError, ValueError, TypeError, RecursionError) as exc:
+        print(
+            f"{args.command}: invalid study, roster, result source or destination ({type(exc).__name__})",
+            file=sys.stderr,
+        )
+        return 2
+    except ImportError:
+        print(
+            "Install the fork's normal development environment to register native participants.",
+            file=sys.stderr,
+        )
+        return 2
+    print(json.dumps(receipt, sort_keys=True, allow_nan=False))
+    return code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

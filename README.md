@@ -10,6 +10,20 @@ By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 
 ## SeatLab workbench
 
+**Test whether two agents can coordinate with a new partner.** Start with the [partner substitution benchmark](examples/seatlab/partner_switch/README.md). Each agent receives the replacement partner’s actual message before it votes. To register your own Harbor participants, use the [native operator guide](examples/seatlab/partner_native/README.md). Multiple workers can take different trials. A reservation or missing result does not count as a loss.
+
+The native report compares the same calendar before and after a partner swap. It shows wins gained and lost, even when the average does not change. [Run the no-key control](examples/seatlab/partner_native/README.md#see-what-a-team-average-hides) before spending money on model seats.
+
+To see why repeats matter, run `python3.12 -BS -m examples.seatlab.partner_native retained-repeats` from this checkout. It reads two published native studies with 288 real teams. No installation, Docker daemon or model key is required.
+
+Try the scripted counterexample without Docker, an API key or a model:
+
+```sh
+git clone --depth 1 --branch seatlab/native-partners https://github.com/PeterMakhnatch/harbor-multiagent.git team-partners
+cd team-partners
+python3.12 -BS -m examples.seatlab.partner_switch qualify --start 9327 --control different
+```
+
 New: [check whether a teammate’s filing changes the **physical** dispatch outcome](examples/seatlab/physical_dispatch/README.md). The offline command checks every legal final move in two warehouses and can prepare a native task without starting any model.
 
 Before running a communication benchmark, [check whether a teammate’s message can change the best decision](examples/seatlab/decision_boundary/README.md). The author tool runs offline on 2 native tasks or your own finite case table. It separates missing information from a missing action.
