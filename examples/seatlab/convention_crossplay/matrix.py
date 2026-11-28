@@ -23,7 +23,20 @@ def _fingerprint(game: Game, keys: list[tuple[str, str]]) -> str:
     return "sha256:" + h.hexdigest()
 
 
-def evaluate(game: Game, teams: list[Team]) -> dict[str, Any]:
+def gate(result: dict[str, Any], sign: str | None, equal_home: bool) -> int:
+    gap = Fraction(result["home_advantage"])
+    actual = "positive" if gap > 0 else "negative" if gap < 0 else "zero"
+    return int(
+        (sign is not None and sign != actual)
+        or (equal_home and not result["home_values_equal"])
+    )
+
+
+def evaluate(
+    game: Game, teams: list[Team], *, unit: str = "convention"
+) -> dict[str, Any]:
+    if unit not in ("convention", "recorded_team"):
+        raise ValueError("invalid population unit")
     if type(teams) is not list or not 2 <= len(teams) <= 12:
         raise ValueError("expected 2 to 12 teams")
     if type(game) is not tuple or len(game) != 3:
@@ -57,7 +70,7 @@ def evaluate(game: Game, teams: list[Team]) -> dict[str, Any]:
         east_vector = tuple(east[key] for key, _ in keys)
         west_vector = tuple(west[key] for _, key in keys)
         behavior = (east_vector, west_vector)
-        if behavior in behaviors:
+        if unit == "convention" and behavior in behaviors:
             raise ValueError("duplicate team behavior")
         behaviors.add(behavior)
         names.append(team.name)
@@ -87,6 +100,8 @@ def evaluate(game: Game, teams: list[Team]) -> dict[str, Any]:
     home_mean = sum(home, Fraction()) / len(home)
     cross_mean = sum(cross, Fraction()) / len(cross)
     return {
+        "unit": unit,
+        "distinct_behaviors": len(behaviors),
         "order": names,
         "matrix": [[str(score) for score in row] for row in scores],
         "home_mean": str(home_mean),

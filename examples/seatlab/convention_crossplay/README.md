@@ -53,3 +53,39 @@ Read `closed_role_replay.matrix` as **row = east team, column = west team**. The
 The native command starts with one optimal pair of role-only rules. It applies all 6 permutations of the 3 active calendar labels, checking the weighted joint observations and **both** payoff axes for every permutation. It keeps all distinct resulting teams and records duplicate multiplicities. It does not search for the worst partner or enumerate every optimal strategy. The matrix includes no calls to model seats and no live Harbor trials.
 
 The question comes from [Hu et al., *Other-Play* (ICML 2020)](https://proceedings.mlr.press/v119/hu20a.html): self-play partners can rely on incompatible conventions. This check does not implement their training algorithm. [Wolski et al. (2026)](https://arxiv.org/abs/2608.03644) distinguish crossing random seeds from crossing implementations. Their study found that inter-seed evaluation was a reasonable proxy for Other-Play in their setting. These label permutations are neither independent training seeds nor separate implementations. Use independently authored or collected rules before making a claim about external agents. Use live partners if either can change the other's later observations.
+
+## Compare decisions from your own agents
+
+Use this path if your evidence is a saved answer from each role, not a hand-written convention. No command below starts an agent. Prepare a **new deck for each team and role**. Use a private directory outside the checkout.
+
+```sh
+ballots() { python3 -BS -m examples.seatlab.convention_crossplay.ballots "$@"; }
+work=$(mktemp -d)
+ballots prepare --start 9327 --sender truthful --role east --out "$work/a-east" > "$work/a-east.json"
+pin=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["deck_sha256"])' < "$work/a-east.json")
+```
+
+Each line of `a-east/requests.jsonl` contains `id`, `prompt_sha256`, and `prompt`. The seat sees **only the exact prompt**, not the ID, hash, other prompts, partner, filenames, or grade. For an authored game, use `--game PATH` instead of `--start` and `--sender`. Authored observations must decode as UTF-8. State the response contract before collection: native packets request `{"slot":"A"}`; authored games accept `{"action":"LABEL"}`. Put the role's legal action labels and instructions in the authored observation itself. Do not add unrecorded hints.
+
+An adapter saves one JSON line per first reply with the same `id`, the same `prompt_sha256`, and the **unmodified reply text** in `reply`. Never retry a bad decision or select the best of several replies. Keep refusals and invalid answers. Keep different roles in separate sessions with no access to each other's files. Save replies outside the checkout. Freeze them before grading.
+
+```sh
+ballots freeze --deck "$work/a-east" --deck-sha256 "$pin" --role east \
+  --source alpha --replies "$work/a-east-replies.jsonl" --out "$work/a-east-frozen"
+```
+
+Repeat `prepare` and `freeze` separately for west on `alpha`, and for both roles on `beta`. Multiple reply files may arrive in any order. A missing or ambiguous answer produces a coverage report and no strategy file. Valid but wrong actions stay in the data. Do not treat a missing answer as a zero team reward. Do not silently drop incomplete teams from a study: report all registered teams and their completion counts.
+
+```sh
+ballots compare --start 9327 --sender truthful --arm together \
+  --team alpha "$work/a-east-frozen" "$work/a-west-frozen" \
+  --team beta "$work/b-east-frozen" "$work/b-west-frozen" > "$work/first.json"
+cohort=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["cohort"]["cohort_sha256"])' < "$work/first.json")
+ballots compare --start 9327 --sender truthful --arm apart --cohort-sha256 "$cohort" \
+  --team alpha "$work/a-east-frozen" "$work/a-west-frozen" \
+  --team beta "$work/b-east-frozen" "$work/b-west-frozen"
+```
+
+`compare` counts **registered teams**, not distinct conventions. Two teams that choose the same actions still count twice if they have separate decks and receipts. A copied deck cannot count twice. The output reports both team and distinct-behavior counts. Keep the cohort digest separately to fix the evidence and order across conditions. The digest proves file consistency, not who answered or whether this was truly their first attempt.
+
+A frozen answer is reused wherever that exact observation recurs. Matrix entries are not independent trials. For a stochastic agent, capture independent complete cohorts if you need to estimate variation. These recordings cannot prove live adaptation to a new partner. Existing Joint Reopen action logs lack the exact projected prompt and first reply. An unrelated `{"pick":2}` response is not a ballot. Neither is a valid substitute for a fresh capture.

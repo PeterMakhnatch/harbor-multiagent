@@ -1,7 +1,6 @@
 import argparse
 import json
 import sys
-from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -81,15 +80,9 @@ def command(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
             meta["export"] = transfer.export(
                 args.export, transfer.native_inputs(game, teams)
             )
-    gap = Fraction(result["home_advantage"])
-    sign = "positive" if gap > 0 else "negative" if gap < 0 else "zero"
-    status = int(args.expect_gap is not None and args.expect_gap != sign)
-    if (
-        args.command == "score"
-        and args.require_equal_home
-        and not result["home_values_equal"]
-    ):
-        status = 1
+    status = matrix.gate(
+        result, args.expect_gap, args.command == "score" and args.require_equal_home
+    )
     return status, {
         "schema": "seatlab.convention-crossplay/v1",
         "closed_role_replay": result,

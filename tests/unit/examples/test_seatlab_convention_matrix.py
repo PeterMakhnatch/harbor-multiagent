@@ -28,6 +28,8 @@ def test_weighted_asymmetric_rectangular_crossplay() -> None:
     altered = GAME[0], GAME[1], [replace(GAME[2][0], weight=3), GAME[2][1]]
     assert fingerprint != evaluate(altered, [A, B, C])["decision_game_sha256"]
     assert result == {
+        "unit": "convention",
+        "distinct_behaviors": 3,
         "order": ["A", "B", "C"],
         "matrix": [["1", "0", "2/5"], ["2/5", "1", "3/5"], ["1", "0", "2/5"]],
         "home_mean": "4/5",
