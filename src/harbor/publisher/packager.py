@@ -3,6 +3,8 @@
 Shared logic used by both the publisher and the `harbor dataset add` command.
 """
 
+from __future__ import annotations
+
 import hashlib
 import tomllib
 from pathlib import Path

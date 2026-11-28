@@ -1,0 +1,32 @@
+schema_version = "1.4"
+
+[task]
+name = "harbor/dispatch-recall"
+description = "A loader commits one load to a warehouse bay after a depot teammate may report where it went."
+keywords = ["seats", "coordination", "handoffs"]
+
+[metadata]
+difficulty = "easy"
+category = "example"
+tags = ["seats", "handoffs"]
+
+[verifier]
+timeout_sec = 60.0
+
+[verifier.env]
+RECALL_RETAIN_CUT = "0"
+
+[agent]
+timeout_sec = 600.0
+
+[environment]
+build_timeout_sec = 600.0
+
+[environment.env]
+RECALL_SEED = ""
+RECALL_TRANSITION = "draw"
+RECALL_TIMING = "immediate"
+
+[agents.loader]
+
+[agents.depot]

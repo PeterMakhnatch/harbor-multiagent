@@ -4,6 +4,7 @@ import sys
 from fractions import Fraction
 from typing import Any
 
+from . import temporal
 from .core import BoundaryError, World, analyze, conflict_witness
 from .inputs import census, read_input
 from .joint import ARMS, qualify
@@ -76,6 +77,22 @@ def _arguments(argv: list[str] | None) -> argparse.Namespace:
         "--expect-each-needed",
         choices=("yes", "no"),
         help="check whether removing either source strictly lowers the attainable joint value",
+    )
+    timed = subs.add_parser(
+        "temporal",
+        help="separate timely precommit information from postcommit hindsight",
+    )
+    timed.add_argument(
+        "--files",
+        required=True,
+        nargs=4,
+        metavar=("EARLY_COMMIT", "EARLY_CLOSE", "LATE_COMMIT", "LATE_CLOSE"),
+        help="four matched finite world files; use - once for standard input",
+    )
+    timed.add_argument(
+        "--expect-timing-only",
+        choices=("yes", "no"),
+        help="check whether only arrival before commitment differs between arms",
     )
     for p in (paired, examples):
         p.add_argument(
@@ -154,19 +171,26 @@ def _paired(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
     }, matches
 
 
-def _joint(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
-    if args.files.count("-") > 1:
-        raise BoundaryError("at most one joint input can be standard input")
+def _arms(
+    names: tuple[str, ...], paths: list[str], label: str
+) -> tuple[dict[str, list[World]], int]:
+    if paths.count("-") > 1:
+        raise BoundaryError(f"at most one {label} input can be standard input")
     arms: dict[str, list[World]] = {}
     scale = None
-    for name, path in zip(ARMS, args.files, strict=True):
+    for name, path in zip(names, paths, strict=True):
         incoming, worlds = census(read_input(path))
         if type(incoming) is not int or (scale is not None and incoming != scale):
-            raise BoundaryError("joint inputs must use the same integer scale")
+            raise BoundaryError(f"{label} inputs must use the same integer scale")
         scale = incoming
         arms[name] = worlds
     if scale is None:
-        raise BoundaryError("missing joint inputs")
+        raise BoundaryError(f"missing {label} inputs")
+    return arms, scale
+
+
+def _joint(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
+    arms, scale = _arms(ARMS, args.files, "joint")
     joint = qualify(arms, scale)
     expected = args.expect_each_needed
     matches = expected is None or joint["each_source_adds_value_given_other"] == (
@@ -179,11 +203,25 @@ def _joint(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
     }, matches
 
 
+def _temporal(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
+    arms, scale = _arms(temporal.ARMS, args.files, "temporal")
+    report = temporal.qualify(arms, scale)
+    expected = args.expect_timing_only
+    matches = expected is None or report["timing_only_pattern"] == (expected == "yes")
+    return {
+        "qualification": report,
+        "expect_timing_only": expected,
+        "expectation_met": matches if expected else None,
+    }, matches
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _arguments(argv)
     try:
         if args.command == "joint":
             result, matches = _joint(args)
+        elif args.command == "temporal":
+            result, matches = _temporal(args)
         elif args.command == "compare":
             result, matches = _paired(args)
         else:

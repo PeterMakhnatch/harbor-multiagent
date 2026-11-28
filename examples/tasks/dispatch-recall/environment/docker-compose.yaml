@@ -1,0 +1,39 @@
+x-seat: &seat
+  build: ./seat
+  user: player
+  working_dir: /home/player
+  command: ["sleep", "infinity"]
+  init: true
+  network_mode: none
+  depends_on:
+    main:
+      condition: service_healthy
+
+services:
+  main:
+    command: ["python3", "/app/recall_server.py"]
+    working_dir: /app
+    init: true
+    network_mode: none
+    environment:
+      RECALL_SEED: "${RECALL_SEED:-}"
+      RECALL_TRANSITION: "${RECALL_TRANSITION:-draw}"
+      RECALL_TIMING: "${RECALL_TIMING:-immediate}"
+    volumes:
+      - loader-rpc:/run/recall/loader
+      - depot-rpc:/run/recall/depot
+    healthcheck:
+      test: ["CMD", "python3", "-c", "from pathlib import Path; assert all(Path(p).is_socket() for p in ['/run/recall/loader/rpc.sock','/run/recall/depot/rpc.sock','/run/recall-control/rpc.sock'])"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+  loader:
+    <<: *seat
+    volumes: ["loader-rpc:/run/recall-seat:ro"]
+  depot:
+    <<: *seat
+    volumes: ["depot-rpc:/run/recall-seat:ro"]
+
+volumes:
+  loader-rpc: {}
+  depot-rpc: {}
