@@ -14,6 +14,8 @@ By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 
 The native report compares the same calendar before and after a partner swap. It shows wins gained and lost, even when the average does not change. [Run the no-key control](examples/seatlab/partner_native/README.md#see-what-a-team-average-hides) before spending money on model seats.
 
+To see why repeats matter, run `python3.12 -BS -m examples.seatlab.partner_native retained-repeats` from this checkout. It reads two published native studies with 288 real teams. No installation, Docker daemon or model key is required.
+
 Try the scripted counterexample without Docker, an API key or a model:
 
 ```sh

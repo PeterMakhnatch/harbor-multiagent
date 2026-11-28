@@ -87,14 +87,24 @@ def panel(
     }
 
 
-def summarize(manifest: Record, registration: Record, roots: list[Path]) -> Record:
+def read_native(
+    manifest: Record, registration: Record, roots: list[Path]
+) -> dict[str, Record | None]:
     rows = collect.collect_registered(registration, roots)["cells"]
     names = range(len(manifest["names"]))
     pairs = [[f"p{i:02}-{j:02}" for j in names] for i in names]
     grouped = results._groups(pairs, registration, rows)
-    observations = {
+    return {
         row["ticket"]: row["observation"] if row["status"] == "usable" else None
         for group in grouped.values()
         for row in group
     }
-    return panel(manifest, registration, observations, source=NATIVE)
+
+
+def summarize(manifest: Record, registration: Record, roots: list[Path]) -> Record:
+    return panel(
+        manifest,
+        registration,
+        read_native(manifest, registration, roots),
+        source=NATIVE,
+    )

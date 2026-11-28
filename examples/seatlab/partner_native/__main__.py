@@ -27,11 +27,29 @@ def parser() -> argparse.ArgumentParser:
     modes.add_argument(
         "--team", action="append", type=_team, metavar="NAME=ROSTER.json"
     )
-    for name in ("audit", "score", "explain", "rehearse"):
+    commands.add_parser(
+        "retained-repeats",
+        help="Recompute repeat disagreement from published native team rewards.",
+    )
+    for name in (
+        "audit",
+        "score",
+        "explain",
+        "rehearse",
+        "compare-repeats",
+        "rehearse-repeats",
+    ):
         read = commands.add_parser(name)
         read.add_argument("--study", type=Path, required=True)
         read.add_argument("--pin", required=True)
-        if name in ("score", "explain"):
+        if name in ("compare-repeats", "rehearse-repeats"):
+            read.add_argument("--repeat-study", type=Path, required=True)
+            read.add_argument("--repeat-pin", required=True)
+        if name == "compare-repeats":
+            read.add_argument(
+                "--repeat-trials", type=Path, action="append", required=True
+            )
+        if name in ("score", "explain", "compare-repeats"):
             read.add_argument("--trials", type=Path, action="append", required=True)
     return cli
 
@@ -50,11 +68,29 @@ def _receipt(manifest: dict[str, Any], reg: dict[str, Any], pin: str) -> dict[st
 
 
 def command(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
+    if args.command == "retained-repeats":
+        from . import repeat_archives
+
+        return 0, repeat_archives.report()
     if args.command == "register":
         manifest, reg = plan.build(args.start, args.team, args.control)
         pin = plan.save(args.out, manifest, reg)
         return 0, _receipt(manifest, reg, pin)
     manifest, reg = plan.load(args.study, args.pin)
+    if args.command in ("compare-repeats", "rehearse-repeats"):
+        from . import repeat_driver
+
+        repeated, repeat_reg = plan.load(args.repeat_study, args.repeat_pin)
+        collected = args.command == "compare-repeats"
+        report = repeat_driver.compare(
+            manifest,
+            reg,
+            repeated,
+            repeat_reg,
+            roots=args.trials if collected else None,
+            repeat_roots=args.repeat_trials if collected else None,
+        )
+        return int(not report["complete"]), report
     if args.command == "audit":
         return 0, _receipt(manifest, reg, args.pin)
     if args.command == "rehearse":

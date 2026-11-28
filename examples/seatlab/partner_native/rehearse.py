@@ -281,7 +281,9 @@ def _offsetting_prediction(matrix: list[list[str]], diagnosis: Record) -> bool:
     )
 
 
-async def _rehearse(manifest: Record, registration: Record) -> Record:
+async def _rehearse(
+    manifest: Record, registration: Record
+) -> tuple[Record, dict[str, Record | None]]:
     pairs = _registered_pairs(registration)
     matrix = []
     observations: dict[str, Record | None] = {}
@@ -324,10 +326,17 @@ async def _rehearse(manifest: Record, registration: Record) -> Record:
         "native_trials_started": 0,
         "model_calls": 0,
         "scope": SCOPE,
-    }
+    }, observations
 
 
-def run(manifest: Record, registration: Record) -> Record:
+def run_observed(
+    manifest: Record, registration: Record
+) -> tuple[Record, dict[str, Record | None]]:
     if manifest.get("mode") not in SCRIPTED_MODES:
         raise ValueError("native rehearsal supports scripted controls only")
     return asyncio.run(_rehearse(manifest, registration))
+
+
+def run(manifest: Record, registration: Record) -> Record:
+    result, _ = run_observed(manifest, registration)
+    return result

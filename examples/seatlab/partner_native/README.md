@@ -71,3 +71,34 @@ partners score --study "$work/study" --pin "$pin" \
 Try `--control offsetting` in a **new** study directory. Register and rehearse it as above. Both east roles decode the same convention. Both west roles send the same report and request their inbox. One votes for its earlier available slot; the other votes for its later slot. The prediction is 3/6 for every team. Keeping east and changing west should reverse all 6 outcomes. Keeping west and changing east should change none. The rehearsal checks the matched outcomes as well as the averages. Its `diagnosis.source` is `scripted_native_worlds`. Only `explain` on collected trials reports `collected_native_trials`. Neither output contains raw reports, cards, case seeds or ticket IDs.
 
 For the [controlled two-stage benchmark](../partner_switch/README.md), the vote stage sees exactly the reports emitted by the selected partners. Each identical private observation gets one stored reply. The native experiment here permits fresh, stateful behavior on every trial instead. Scores from the two designs are not interchangeable. Neither command authenticates model identity.
+
+## Compare a partner swap with repeating the unchanged team
+
+A fresh model team can lose a calendar it won before, even when its partner stays the same. Start with two published studies. From the repository root, this needs only Python 3.12 or later. It does not use the network, a model or a Harbor installation:
+
+```sh
+python3.12 -BS -m examples.seatlab.partner_native retained-repeats
+```
+
+This reads the recorded grades of 192 real teams in a tool-assignment study and 96 in a scheduling-notice study. Neither study changes partners. They have separate reports. The comparison uses all four cross-condition pairs of rewards, not just trials that ran in the same repetition.
+
+For **your own partner comparison**, register the same roster, settings and start twice, *before* running either study. Do not copy the first registration. Each trial must have a new ticket and a new physical world. Keep the implementation, external owner, model route and model settings fixed outside Harbor as well. The files alone cannot verify them. For the `different` study above:
+
+```sh
+partners register --control different --start 9327 --out "$work/repeat" > "$work/repeat-issued.json"
+repeat_pin=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["study_sha256"])' < "$work/repeat-issued.json")
+compare=(--study "$work/study" --pin "$pin" --repeat-study "$work/repeat" --repeat-pin "$repeat_pin")
+partners rehearse-repeats "${compare[@]}"
+```
+
+The example uses Bash or Zsh. `rehearse-repeats` accepts only bundled scripts. For actual teams, emit each registration to separate directories and schedule both waves. Interleave their work to limit time-of-day differences. Keep their trial roots separate and retain every first attempt. Then read them:
+
+```sh
+partners compare-repeats "${compare[@]}" \
+  --trials "$work/lane-0/trials" --trials "$work/lane-1/trials" \
+  --repeat-trials "$work/repeat-lane-0/trials" --repeat-trials "$work/repeat-lane-1/trials"
+```
+
+`within_disagreement` compares the two fresh rewards for each unchanged pairing. `cross_disagreement` compares all four combinations of original and replacement rewards. `excess_disagreement` subtracts the first rate from the second. It uses **team reward only**. Different messages or decisions can earn the same reward. A negative observed value is possible. The sharp bounds cover missing binary rewards; they are not statistical confidence intervals. Do not infer causation, pool reused pairings, or treat six related calendars as a population.
+
+If both repetitions are independent draws under fixed conditions, there is a simple interpretation. Let `p` and `q` be the two pairings' win probabilities on **one** calendar. The expected cross rate is `p(1-q) + q(1-p)`. The expected within rate is `p(1-p) + q(1-q)`. Their difference is `(p-q)²`. This can reveal changes that cancel in average reward. Shared model state, changing providers, or a reused trajectory can break that interpretation.
