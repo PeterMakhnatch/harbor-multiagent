@@ -169,3 +169,16 @@ python3.12 -BS -m examples.seatlab.decision_boundary.revised_temporal --seed 7
 ```
 
 This calls the native `revised-dispatch` handlers and grades all 3 slots in both worlds and both schedules. It normalizes only random receipt values in the booker's actual replies, preserving their equality and order. The scheduled reporter sends the revision either before or after commitment. Unlike Dispatch Recall, the native world does not assign a delivery arm. Neither this comparison nor the private tables are records of model trials.
+
+## When is one more read worth its price?
+
+For an acknowledged handoff, compare committing now with making **one optional read before commit**. Use this when designing an agent's inbox, retrieval or memory interface. The [receiver-memory kit](../receiver_memory/README.md) supplies a native case in which the receiver can tell whether a note is stale, and two controls in which it cannot.
+
+```sh
+python3.12 -BS -m examples.seatlab.decision_boundary.read_budget \
+  before.json reply.json --price 1/4 --expect-selective yes
+```
+
+Use two files in the [finite world format](#inspect-your-own-finite-worlds). The first observation is what the receiver has *before* choosing to read. The second is only what the optional read returns. The receiver keeps its first observation. Both files must have the same physical actions, scores, scale, world names and masses. Verify separately that the task really offers this read before committing, and that making it does not change the physical outcome.
+
+For each class of identical first observations, the tool computes the extra physical reward that a read makes attainable. `adaptive` reads only when this gain exceeds `price`; it skips a tie. `--expect-selective yes` requires a strictly higher net utility than **both** always reading and never reading. `thresholds` gives the prior mass at each break-even price without exposing hidden worlds or answers. The price is in normalized reward units, not money, tokens or measured latency. The result qualifies a decision problem, not a receiver.
