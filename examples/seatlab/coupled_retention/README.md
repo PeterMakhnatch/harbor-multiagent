@@ -94,3 +94,5 @@ To run one scripted native voter, pipe the output of `packet --role east` into `
 Give each scripted receiver only its own table and observation. The table maps hashes of exact inputs to actions. Hashes do **not** keep low-entropy inputs secret. Keep both tables away from experimental model seats. The rules cover the registered finite inputs only. A new packet, missing rule, swapped role or extra rule fails; it cannot silently become a wrong decision. A successful score on a new game does not certify optimality there.
 
 The [Bespoke Seed to Profit trace](https://benchmarks.bespokelabs.ai/multi-agent-coordination-bench/#task-seed-to-profit) describes participants issuing incompatible final assignments. That motivates checking the pair of commitments. It does not establish a memory failure or validate this task as a proxy for that benchmark. No result here establishes how a frontier model would act.
+
+To test whether a good team can also work with an unfamiliar partner, use [the partner-swap check](../convention_crossplay/README.md). It freezes the same role tables and scores all original and mixed pairs.
