@@ -34,7 +34,9 @@ TASK = {
     **support.TASK,
     "digest": "sha256:b1139fff1518ef5a21b321eaeacd3bc56466d475b85d41f2ec6c7dccc3c99cef",
 }
-MODES = ("scripted-same", "scripted-different", "native-rosters")
+CONTROLS = ("same", "different", "offsetting")
+SCRIPTED_MODES = tuple(f"scripted-{control}" for control in CONTROLS)
+MODES = (*SCRIPTED_MODES, "native-rosters")
 CONTROL_NAMES = ("alpha", "beta")
 MAX_NAMES = 5
 CASES = 6
@@ -59,6 +61,8 @@ def _pairs(count: int) -> list[tuple[int, int]]:
 
 def _control_member(role: str, mode: str, index: int, active: str) -> dict[str, Any]:
     direction = "reverse" if mode == "scripted-different" and index == 1 else "forward"
+    if mode == "scripted-offsetting" and role == "west":
+        direction = ("forward-min", "forward-max")[index]
     return {
         "seat": role,
         "import_path": study.OWNER_IMPORT_PATH,
@@ -126,7 +130,7 @@ def build(
     require((teams is None) != (control is None), "select exactly one roster mode")
     seeds, active = _cohort(start)
     if teams is None:
-        mode = "scripted-" + as_choice(control, "control", ("same", "different"))
+        mode = "scripted-" + as_choice(control, "control", CONTROLS)
         names = list(CONTROL_NAMES)
         raws = [
             [_control_member(role, mode, i, active) for role in engine.ROLES]

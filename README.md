@@ -12,6 +12,8 @@ By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 
 **Test whether two agents can coordinate with a new partner.** Start with the [partner substitution benchmark](examples/seatlab/partner_switch/README.md). Each agent receives the replacement partner’s actual message before it votes. To register your own Harbor participants, use the [native operator guide](examples/seatlab/partner_native/README.md). Multiple workers can take different trials. A reservation or missing result does not count as a loss.
 
+The native report compares the same calendar before and after a partner swap. It shows wins gained and lost, even when the average does not change. [Run the no-key control](examples/seatlab/partner_native/README.md#see-what-a-team-average-hides) before spending money on model seats.
+
 Try the scripted counterexample without Docker, an API key or a model:
 
 ```sh

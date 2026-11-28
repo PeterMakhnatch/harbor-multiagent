@@ -11,11 +11,11 @@ from ... import native_owner_process as transport
 from ...joint_reopen import owner_game, scripted_owner
 from ...native_evidence import Record
 from ..partner_switch.engine import native
+from .diagnose import panel
+from .plan import CASES, SCRIPTED_MODES
 
 SCHEMA = "seatlab.partner-native-rehearsal/v1"
-MODES = ("scripted-same", "scripted-different")
 PAIRS = (("p00-00", "p00-01"), ("p01-00", "p01-01"))
-CASES = 6
 OWNER_SECONDS = 10.0
 WORLD_SECONDS = 60.0
 SCOPE = (
@@ -144,7 +144,7 @@ class _Role:
             raise ValueError("scripted role has incomplete decisions or receipts")
 
 
-def _verify_world(world: native._Meeting, seats: list[_Role]) -> int:
+def _verify_world(world: native._Meeting, seats: list[_Role]) -> Record:
     cut = world.freeze()
     try:
         observed = native._verify.evaluate(cut)
@@ -181,10 +181,10 @@ def _verify_world(world: native._Meeting, seats: list[_Role]) -> int:
     reward = observed["reward"]
     if type(reward) is not int or reward not in (0, 1):
         raise ValueError("native verifier did not return a binary reward")
-    return reward
+    return observed
 
 
-async def _episode(cell: Record, team: list[Record]) -> tuple[int, int]:
+async def _episode(cell: Record, team: list[Record]) -> tuple[Record, int]:
     world = native.Meeting(cell["seed"], cell["fixture"], cell["channel"], str(uuid4()))
     barriers = {phase: asyncio.Barrier(2) for phase in owner_game.WAIT_PHASES}
     seats = [
@@ -227,26 +227,90 @@ def _registered_pairs(registration: Record) -> list[list[list[Record]]]:
     return [[pairs[pair] for pair in row] for row in PAIRS]
 
 
+def _offsetting_prediction(matrix: list[list[str]], diagnosis: Record) -> bool:
+    if (
+        matrix != [["1/2", "1/2"], ["1/2", "1/2"]]
+        or not diagnosis["complete"]
+        or diagnosis["registered_worlds"] != 4 * CASES
+        or diagnosis["observed_worlds"] != 4 * CASES
+    ):
+        return False
+    names = diagnosis["names"]
+    expected = {
+        (anchor, role, partner)
+        for anchor in names
+        for partner in names
+        if anchor != partner
+        for role in owner_game.ROLES
+    }
+    contrasts = diagnosis["contrasts"]
+    if (
+        len(contrasts) != 4
+        or {
+            (contrast["anchor"], contrast["role"], contrast["new_partner"])
+            for contrast in contrasts
+        }
+        != expected
+    ):
+        return False
+    for contrast in contrasts:
+        counts = (
+            contrast["original_only"],
+            contrast["replacement_only"],
+            contrast["both_win"],
+            contrast["both_lose"],
+        )
+        predicted = (3, 3, 0, 0) if contrast["role"] == "east" else (0, 0, 3, 3)
+        if (
+            contrast["complete_pairs"] != CASES
+            or contrast["original_minus_replacement_bounds"] != ["0", "0"]
+            or counts != predicted
+        ):
+            return False
+    cells = diagnosis["matrix"]
+    if len(cells) != 2 or any(len(row) != 2 for row in cells):
+        return False
+    return all(
+        cell["observed"] == CASES
+        and cell["outcomes"]
+        == {"no_vote_pair": 0, "split_vote": 3, "same_unavailable": 0, "repaired": 3}
+        and cell["receipt_before_vote"]
+        == {"both": CASES, "east_only": 0, "west_only": 0, "neither": 0}
+        for row in cells
+        for cell in row
+    )
+
+
 async def _rehearse(manifest: Record, registration: Record) -> Record:
     pairs = _registered_pairs(registration)
     matrix = []
+    observations: dict[str, Record | None] = {}
     decisions = worlds = 0
     for row in pairs:
         rates = []
         for cells in row:
             wins = 0
             for cell in cells:
-                reward, count = await _episode(
+                observation, count = await _episode(
                     cell, registration["teams"][cell["team"]]
                 )
-                wins += reward
+                observations[cell["ticket"]] = observation
+                wins += observation["reward"]
                 decisions += count
                 worlds += 1
             rates.append(str(Fraction(wins, CASES)))
         matrix.append(rates)
     if worlds != 24 or decisions != 240:
         raise ValueError("native rehearsal did not execute all 240 private decisions")
+    diagnosis = panel(
+        manifest, registration, observations, source="scripted_native_worlds"
+    )
     mixed = "1/2" if manifest["mode"] == "scripted-different" else "1"
+    matched = (
+        _offsetting_prediction(matrix, diagnosis)
+        if manifest["mode"] == "scripted-offsetting"
+        else matrix == [["1", mixed], [mixed, "1"]]
+    )
     return {
         "schema": SCHEMA,
         "mode": manifest["mode"],
@@ -255,7 +319,8 @@ async def _rehearse(manifest: Record, registration: Record) -> Record:
         "matrix": matrix,
         "decisions": decisions,
         "worlds": worlds,
-        "matched_prediction": matrix == [["1", mixed], [mixed, "1"]],
+        "matched_prediction": matched,
+        "diagnosis": diagnosis,
         "native_trials_started": 0,
         "model_calls": 0,
         "scope": SCOPE,
@@ -263,6 +328,6 @@ async def _rehearse(manifest: Record, registration: Record) -> Record:
 
 
 def run(manifest: Record, registration: Record) -> Record:
-    if manifest.get("mode") not in MODES:
+    if manifest.get("mode") not in SCRIPTED_MODES:
         raise ValueError("native rehearsal supports scripted controls only")
     return asyncio.run(_rehearse(manifest, registration))

@@ -157,8 +157,10 @@ def test_native_home_mixed_and_neutral(start: int, directions: tuple[str, str]) 
             )
 
 
-def _view(stage: owner_game.Stage, *, card=None, inbox=None) -> owner_game.Object:
-    seat = owner_game.Seat("east", "F", card=card, inbox=inbox)
+def _view(
+    stage: owner_game.Stage, *, card=None, inbox=None, role: owner_game.Role = "east"
+) -> owner_game.Object:
+    seat = owner_game.Seat(role, "F", card=card, inbox=inbox)
     if stage == "endorse":
         seat.turns = 1
         choices = ("endorse:F", "stop")
@@ -169,6 +171,54 @@ def _view(stage: owner_game.Stage, *, card=None, inbox=None) -> owner_game.Objec
         seat.turns = 4 if inbox is None else 5
         choices = tuple(owner_game.vote_choices(seat))
     return owner_game.view(seat, stage, choices)
+
+
+@pytest.mark.parametrize("active", [("A", "B", "C"), ("B", "D", "E")])
+@pytest.mark.parametrize("indices", [(0, 1), (0, 2), (1, 2)])
+def test_west_own_card_policies(
+    active: tuple[str, ...], indices: tuple[int, int]
+) -> None:
+    card = tuple(active[i] for i in indices)
+    forward = _name("forward", active)
+    report = _view("report", role="west", card=card)
+    assert _choice(forward, _view("vote", role="west", card=card)) == "inbox"
+    for slot in card:
+        vote = _view("vote", role="west", card=card, inbox=(True, (slot,)))
+        assert _choice(forward, vote) == f"vote:{slot}"
+    for policy, expected in (("forward-min", card[0]), ("forward-max", card[1])):
+        name = _name(policy, active)
+        assert _choice(name, _view("endorse", role="west")) == "endorse:F"
+        assert _choice(name, _view("report", role="west")) == "card"
+        assert _choice(name, report) == _choice(forward, report)
+        assert _choice(name, _view("vote", role="west", card=card)) == "inbox"
+        for peer in active:
+            view = _view("vote", role="west", card=card, inbox=(True, (peer,)))
+            assert _choice(name, view) == f"vote:{expected}"
+
+
+@pytest.mark.parametrize("policy", ["forward-min", "forward-max"])
+def test_own_card_policies_reject_east_at_every_turn(policy: str) -> None:
+    card = ("A", "B")
+    for view in (
+        _view("endorse"),
+        _view("report"),
+        _view("report", card=card),
+        _view("vote", card=card),
+        _view("vote", card=card, inbox=(True, ("A",))),
+    ):
+        with pytest.raises(ValueError, match="west role"):
+            owner.reply(_encode(_request(_name(policy, ("A", "B", "C")), view)))
+
+
+@pytest.mark.parametrize("policy", ["forward-min", "forward-max"])
+@pytest.mark.parametrize("active", [("A", "C", "B"), ("A", "A", "B"), ("A", "B", "F")])
+def test_own_card_policies_reject_invalid_cycle(
+    policy: str, active: tuple[str, ...]
+) -> None:
+    with pytest.raises(ValueError):
+        owner.reply(
+            _encode(_request(_name(policy, active), _view("endorse", role="west")))
+        )
 
 
 @pytest.mark.parametrize("name,expected", [("forward", "A"), ("reverse", "B")])
@@ -270,7 +320,15 @@ def test_rejects_malformed_wire(data: bytes) -> None:
         {"turn": 4},
     ],
 )
-def test_rejects_invalid_vote_view(fields: dict[str, Any]) -> None:
-    view = _view("vote", card=("A", "B"), inbox=(True, ("A",)))
+@pytest.mark.parametrize(
+    "policy,role",
+    [("forward", "east"), ("forward-min", "west"), ("forward-max", "west")],
+)
+def test_rejects_invalid_vote_view(
+    fields: dict[str, Any], policy: str, role: owner_game.Role
+) -> None:
+    view = _view("vote", role=role, card=("A", "B"), inbox=(True, ("A",)))
     with pytest.raises(ValueError):
-        owner.reply(_encode(_request("seatlab-switch/forward-ABC", {**view, **fields})))
+        owner.reply(
+            _encode(_request(_name(policy, ("A", "B", "C")), {**view, **fields}))
+        )

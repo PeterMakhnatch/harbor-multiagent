@@ -128,7 +128,7 @@ def test_native_crossplay_layout_and_pinned_private_files(saved):
     assert plan.load(root, pin) == (manifest, registration)
 
 
-@pytest.mark.parametrize("control", ["same", "different"])
+@pytest.mark.parametrize("control", ["same", "different", "offsetting"])
 def test_control_registers_two_labels_with_public_model_bindings(tmp_path, control):
     manifest, registration = plan.build(START, None, control)
     active = "".join(engine.cases(START)[0].active)
@@ -139,6 +139,8 @@ def test_control_registers_two_labels_with_public_model_bindings(tmp_path, contr
         i, j = (int(index) for index in name[1:].split("-"))
         for index, member in zip((i, j), members, strict=True):
             direction = "reverse" if control == "different" and index else "forward"
+            if control == "offsetting" and member["seat"] == "west":
+                direction = ("forward-min", "forward-max")[index]
             assert member["model_name"] == f"seatlab-switch/{direction}-{active}"
             assert member["import_path"] == study.OWNER_IMPORT_PATH
             assert member["skip_model_parsing"] is True

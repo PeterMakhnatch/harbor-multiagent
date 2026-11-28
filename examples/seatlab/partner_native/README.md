@@ -30,7 +30,7 @@ Run the bundled owners against the native world and verifier without starting Ha
 partners rehearse --study "$work/study" --pin "$pin"
 ```
 
-The rehearsal accepts only the 2 bundled scripted controls. It does not run a program from a supplied participant roster or write trial results. The native collector will still report all registered trials as missing after a rehearsal.
+The rehearsal accepts only bundled scripted controls. It does not run a program from a supplied participant roster or write trial results. The native collector will still report all registered trials as missing after a rehearsal.
 
 For actual agents, replace `--control different` with `--team alpha=/absolute/alpha.json --team beta=/absolute/beta.json`. Each file is an existing [Joint Reopen participant roster](../../joint_reopen/README.md#register-a-private-study-for-your-own-harness). Both roles remain separate participants. An east participant keeps exactly the same config when the west partner changes, and vice versa. Names, model identifiers and file hashes do not prove independent implementations or which model served a request. Stock participants receive the ordinary task instructions. They do **not** automatically receive the 3 public labels or the one-slot restriction from the scripted design. Use a common, documented role adapter when equal information is part of the claim.
 
@@ -60,5 +60,14 @@ partners score --study "$work/study" --pin "$pin" \
 ```
 
 `score` returns `0` for complete registered evidence, `1` for incomplete evidence with a panel, and `2` for invalid input without a panel. It uses the existing native collector. It does not infer a zero from a missing trial, worker reservation, verifier error or ambiguous directory. With no results, each pairing has reward `null` and bounds `[0,1]`. The original-minus-mixed difference lies in `[-1,1]`. These are bounds from missing evidence, **not confidence intervals**. A complete result for one balanced cohort describes that cohort. It does not estimate independent model-to-model variation. For a new prospective cohort, choose a fresh start and a new registration.
+
+## See what a team average hides
+
+`partners explain --study "$work/study" --pin "$pin" --trials "$work/lane-0/trials" --trials "$work/lane-1/trials"` reads the same native results as `score`. The exit codes are the same. It answers two questions:
+
+1. **Which outcomes change when one role keeps its configuration but gets a new partner?** Each comparison matches the same 6 calendars. `original_only` counts wins that disappear. `replacement_only` counts wins that appear. Bounds give the range still possible when a trial is absent. A mixed team appears in more than one comparison. Do not add those comparisons.
+2. **What happened before the votes?** The matrix separates a missing vote, different votes, agreement on an unavailable slot, and a repaired booking. It also counts when the world returned an inbox before each role voted. An empty report still counts as a return. This is not proof the role used the message. An absent trial has no observed events.
+
+Try `--control offsetting` in a **new** study directory. Register and rehearse it as above. Both east roles decode the same convention. Both west roles send the same report and request their inbox. One votes for its earlier available slot; the other votes for its later slot. The prediction is 3/6 for every team. Keeping east and changing west should reverse all 6 outcomes. Keeping west and changing east should change none. The rehearsal checks the matched outcomes as well as the averages. Its `diagnosis.source` is `scripted_native_worlds`. Only `explain` on collected trials reports `collected_native_trials`. Neither output contains raw reports, cards, case seeds or ticket IDs.
 
 For the [controlled two-stage benchmark](../partner_switch/README.md), the vote stage sees exactly the reports emitted by the selected partners. Each identical private observation gets one stored reply. The native experiment here permits fresh, stateful behavior on every trial instead. Scores from the two designs are not interchangeable. Neither command authenticates model identity.

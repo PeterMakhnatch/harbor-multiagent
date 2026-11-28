@@ -13,7 +13,9 @@ if __name__ == "__main__":
 from examples.joint_reopen import owner_game, scripted_owner  # noqa: E402
 from examples.seatlab.partner_switch.control import choose  # noqa: E402
 
-NAME = re.compile(r"seatlab-switch/(forward|reverse)-([A-F]{3})")
+NAME = re.compile(
+    r"seatlab-switch/(forward-min|forward-max|forward|reverse)-([A-F]{3})"
+)
 
 
 def _report_packet(view: dict[str, Any], active: list[str]) -> dict[str, object]:
@@ -33,7 +35,10 @@ def _encode(packet: dict[str, object]) -> bytes:
     return json.dumps(packet, separators=(",", ":"), allow_nan=False).encode("ascii")
 
 
-def _decide(direction: int, active: list[str], view: dict[str, Any]) -> str:
+def _decide(policy: str, active: list[str], view: dict[str, Any]) -> str:
+    if policy in ("forward-min", "forward-max") and view["role"] != "west":
+        raise ValueError("own-card policies require the west role")
+    direction = -1 if policy == "reverse" else 1
     stage, card, inbox = view["stage"], view["card"], view["inbox"]
     incumbent = view["incumbent"]
     if incumbent in active:
@@ -71,6 +76,10 @@ def _decide(direction: int, active: list[str], view: dict[str, Any]) -> str:
         offered = set(owner_game.vote_choices(seat))
         if inbox is None:
             choice = "inbox"
+        elif policy == "forward-min":
+            choice = f"vote:{min(card)}"
+        elif policy == "forward-max":
+            choice = f"vote:{max(card)}"
         else:
             packet = _report_packet(view, active)
             sent = choose(direction, seat.role, _encode(packet))
@@ -102,7 +111,7 @@ def reply(data: bytes) -> dict[str, object]:
     match = NAME.fullmatch(name) if type(name) is str else None
     if match is None:
         raise ValueError("unsupported owner identifier")
-    direction = 1 if match[1] == "forward" else -1
+    policy = match[1]
     active = list(match[2])
     if active != sorted(set(active)):
         raise ValueError("public cycle must be sorted and distinct")
@@ -110,7 +119,7 @@ def reply(data: bytes) -> dict[str, object]:
     return {
         "schema": scripted_owner.REPLY_SCHEMA,
         "requested": name,
-        "choice": _decide(direction, active, view),
+        "choice": _decide(policy, active, view),
         "served_model": None,
     }
 

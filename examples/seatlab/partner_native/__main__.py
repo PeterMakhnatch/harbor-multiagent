@@ -23,15 +23,15 @@ def parser() -> argparse.ArgumentParser:
     reg.add_argument("--start", type=int, required=True)
     reg.add_argument("--out", type=Path, required=True)
     modes = reg.add_mutually_exclusive_group(required=True)
-    modes.add_argument("--control", choices=("same", "different"))
+    modes.add_argument("--control", choices=("same", "different", "offsetting"))
     modes.add_argument(
         "--team", action="append", type=_team, metavar="NAME=ROSTER.json"
     )
-    for name in ("audit", "score", "rehearse"):
+    for name in ("audit", "score", "explain", "rehearse"):
         read = commands.add_parser(name)
         read.add_argument("--study", type=Path, required=True)
         read.add_argument("--pin", required=True)
-        if name == "score":
+        if name in ("score", "explain"):
             read.add_argument("--trials", type=Path, action="append", required=True)
     return cli
 
@@ -62,6 +62,11 @@ def command(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
 
         check = rehearse.run(manifest, reg)
         return int(not check["matched_prediction"]), check
+    if args.command == "explain":
+        from . import diagnose
+
+        report = diagnose.summarize(manifest, reg, args.trials)
+        return int(not report["complete"]), report
     report = results.summarize(manifest, reg, args.trials)
     return int(not report["complete"]), report
 
