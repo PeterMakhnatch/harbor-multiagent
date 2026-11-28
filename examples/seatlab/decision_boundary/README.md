@@ -143,3 +143,29 @@ The command checks that each single source preserves the public distinctions. It
 `conditional_gains.first_given_second` is the best attainable value with both sources minus the value with only the second. The other field reverses the roles. Both differences must be strictly positive for `--expect-each-needed yes`. The separate interaction is `both − first − second + neither`. Its sign alone does not establish that both sources are necessary. An input that separates more worlds need not improve any decision. The values depend on the specified priors and payoff table; they do not measure participant skill. Exit 0 means the check passes, 1 means the expected result is false, and 2 means the inputs do not specify a matched comparison.
 
 See the [native 3-role warehouse](../joint_handoffs/README.md) for a complete control with two independently changing sources and a physical team reward.
+
+## Was a correction useful before the receiver committed?
+
+Use four censuses for the same hidden worlds and physical actions. Each observation is the receiver's history through its decision, or through a later read. Keep the committed action fixed when comparing later histories. Do not put the final grade, a case ID or another seat's information into any observation.
+
+```sh
+root=$(mktemp -d)
+python3.12 -BS -m examples.seatlab.dispatch_recall.temporal_export \
+  --seed 7 --sender truthful --out "$root/tables"
+python3.12 -BS -m examples.seatlab.decision_boundary temporal --files \
+  "$root/tables/early-commit.json" "$root/tables/early-close.json" \
+  "$root/tables/late-commit.json" "$root/tables/late-close.json" \
+  --expect-timing-only yes
+```
+
+The checker rejects a changed payoff, action set, world mass or scale. Each close history must start with its own decision history in every world. For the timing pattern to pass, early delivery must separate worlds **and** improve the best attainable decision. Early close must add no further distinction. Late close must recover the missing value. Both timings must end with equivalent information.
+
+The [two-seat Dispatch Recall task](../dispatch_recall/README.md) supplies those tables from its native engine. Repeat with `--sender silent`, a new output directory, and `--expect-timing-only no` for a control. `commit_gain` is a difference in attainable reward, not a measured improvement by agents. The check cannot establish that a channel caused a behavioral change.
+
+The same check works on an unmodified second task:
+
+```sh
+python3.12 -BS -m examples.seatlab.decision_boundary.revised_temporal --seed 7
+```
+
+This calls the native `revised-dispatch` handlers and grades all 3 slots in both worlds and both schedules. It normalizes only random receipt values in the booker's actual replies, preserving their equality and order. The scheduled reporter sends the revision either before or after commitment. Unlike Dispatch Recall, the native world does not assign a delivery arm. Neither this comparison nor the private tables are records of model trials.
